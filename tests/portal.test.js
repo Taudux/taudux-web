@@ -255,11 +255,11 @@ test("the portal never reports failures through the global operation channel", (
   assert.doesNotMatch(js, /reportarFallo/);
 });
 
-test("the navbar enables the portal link and points it at the portal page", () => {
+test("the navbar enables the account link and points it at the portal page", () => {
   const js = read("src/app/shared/navbar/navbar.js");
   assert.match(
     js,
-    /\{\s*texto:\s*"Portal",\s*href:\s*"\/app\/features\/portal\/",\s*habilitado:\s*true\s*\}/
+    /\{\s*texto:\s*"Mi cuenta",\s*href:\s*"\/app\/features\/portal\/",\s*habilitado:\s*true\s*\}/
   );
 });
 

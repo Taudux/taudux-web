@@ -3,12 +3,34 @@
   cargarse después de ese servicio.
 */
 
+/*
+  La jerarquía de 2 niveles vive en el campo `hijos`. Una entrada con `hijos`
+  es una cabecera de grupo pura (sin `href`/`habilitado` propios): al
+  renderizar se convierte en un acordeón que despliega sus hijos in-place
+  dentro del propio panel desplegable, nunca en una navegación a una página
+  índice (ver crearAcordeonMenu).
+*/
 const ENLACES_NAVEGACION_BASE = [
-  { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
-  { texto: "Portal", href: "/app/features/portal/", habilitado: true },
-  { texto: "Publicaciones", habilitado: false },
+  { texto: "Mi cuenta", href: "/app/features/portal/", habilitado: true },
+  {
+    texto: "Academy",
+    hijos: [
+      { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
+      { texto: "Notas", habilitado: false },
+    ],
+  },
+  { texto: "Noticias", habilitado: false },
+  {
+    texto: "Tools",
+    hijos: [
+      {
+        texto: "Transacciones financieras",
+        href: "/app/features/detector/detector.html",
+        habilitado: true,
+      },
+    ],
+  },
   { texto: "Proyectos", habilitado: false },
-  { texto: "Herramientas", habilitado: false },
 ];
 
 async function salirYVolver(evento) {
@@ -141,10 +163,11 @@ function conectarDesplegable({ menu, toggle, lista }) {
   return cerrar;
 }
 
-function crearItemMenu({ texto, href, alHacerClick, destacado, habilitado = true }) {
+function crearItemMenu({ texto, href, alHacerClick, destacado, habilitado = true, esHijo = false }) {
   if (!habilitado) {
     const item = document.createElement("span");
     item.className = "nav-menu__link nav-menu__link--disabled";
+    if (esHijo) item.classList.add("nav-menu__link--child");
     item.setAttribute("aria-disabled", "true");
     item.textContent = texto;
     return item;
@@ -154,9 +177,92 @@ function crearItemMenu({ texto, href, alHacerClick, destacado, habilitado = true
   enlace.href = href;
   enlace.className = "nav-menu__link floating-menu__link";
   if (destacado) enlace.classList.add("nav-menu__link--cta");
+  if (esHijo) enlace.classList.add("nav-menu__link--child");
   enlace.textContent = texto;
   if (alHacerClick) enlace.addEventListener("click", alHacerClick);
   return enlace;
+}
+
+/*
+  Combina el prefijo del contenedor padre (idLista del desplegable:
+  "menuNavegacionLista" en mobile, "menuCuentaLista" en la cuenta de
+  escritorio) con el texto normalizado del grupo, para que un mismo grupo
+  ("Academy", "Tools") no choque de id entre ambos paneles: los dos conviven
+  en el mismo documento y aria-controls exige unicidad.
+*/
+function idDePanelAcordeon(prefijoId, texto) {
+  const slug = texto
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return `${prefijoId}-acordeon-${slug}`;
+}
+
+/*
+  Grupo colapsable (Academy, Tools): a diferencia de crearItemMenu, el nodo
+  que devuelve es un contenedor con hijos reales en el DOM, no una hoja
+  aplanada. El toggle es un <button>, nunca un <a>: el listener de cierre
+  global en conectarDesplegable cierra el panel entero cuando el click viene
+  de un <a> (`evento.target.closest("a")`), y un botón no matchea ese
+  selector, así que expandir el grupo no cierra el desplegable completo.
+
+  `registroDeCierres` es un array local del panel que llama a esta función
+  (uno por cada punto de render: panel mobile, grupo de cuenta), NO el
+  `cerradoresDeDesplegables` global de arriba — ese resuelve la exclusión
+  mutua entre los paneles "site" y "account"; este resuelve la exclusión
+  mutua entre Academy y Tools dentro de un mismo panel.
+*/
+function crearAcordeonMenu({ texto, hijos }, { registroDeCierres, prefijoId }) {
+  const contenedor = document.createElement("div");
+  contenedor.className = "nav-menu__accordion";
+
+  const idPanel = idDePanelAcordeon(prefijoId, texto);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "nav-menu__link floating-menu__link nav-menu__accordion-toggle";
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-controls", idPanel);
+  // Mismo <span> que crearItemMenu para los ítems con badge: el texto
+  // suelto no se puede centrar con flex, necesita su propia caja (ver
+  // .nav-menu__link-label en navbar.css).
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "nav-menu__link-label";
+  etiqueta.textContent = texto;
+  toggle.appendChild(etiqueta);
+
+  const panel = document.createElement("div");
+  panel.className = "nav-menu__accordion-panel";
+  panel.id = idPanel;
+
+  const panelInterior = document.createElement("div");
+  panelInterior.className = "nav-menu__accordion-panel-inner";
+  hijos.forEach((hijo) => panelInterior.appendChild(crearItemMenu({ ...hijo, esHijo: true })));
+  panel.appendChild(panelInterior);
+
+  function establecerAbierto(abierto) {
+    contenedor.classList.toggle("nav-menu__accordion--open", abierto);
+    toggle.setAttribute("aria-expanded", String(abierto));
+  }
+
+  const cerrar = () => establecerAbierto(false);
+  registroDeCierres.push(cerrar);
+
+  // Arranca siempre cerrado; abrir este grupo cierra cualquier otro del
+  // mismo registro (exclusión mutua, un solo grupo abierto a la vez).
+  toggle.addEventListener("click", () => {
+    const abriendo = !contenedor.classList.contains("nav-menu__accordion--open");
+    if (abriendo) {
+      registroDeCierres.forEach((otroCerrar) => {
+        if (otroCerrar !== cerrar) otroCerrar();
+      });
+    }
+    establecerAbierto(abriendo);
+  });
+
+  contenedor.appendChild(toggle);
+  contenedor.appendChild(panel);
+  return contenedor;
 }
 
 function enlaceDeSesion(session) {
@@ -170,19 +276,6 @@ async function nombreParaMenu(session) {
   if (!session) return null;
   const nombre = await nombreUsuario(session);
   return nombre || "Mi cuenta";
-}
-
-function resolverEnlacesNavegacion(esAdministrador) {
-  return ENLACES_NAVEGACION_BASE.map((enlace) => {
-    if (enlace.texto === "Herramientas" && esAdministrador) {
-      return {
-        ...enlace,
-        href: "/app/features/detector/detector.html",
-        habilitado: true,
-      };
-    }
-    return enlace;
-  });
 }
 
 /*
@@ -202,6 +295,9 @@ function anclasDeLaPagina() {
 }
 
 function montarPanelNavegacion(lista, { anclas, enlaces }) {
+  // `enlaces` llega con `hijos` tal cual está en ENLACES_NAVEGACION_BASE: el
+  // dedupe y el render operan directo sobre ese array de nivel superior, sin
+  // aplanar (ver crearAcordeonMenu).
   const textosDeAnclas = new Set(anclas.map((ancla) => ancla.texto.toLowerCase()));
   /*
     "Herramientas" existe como ancla del landing y como enlace admin al
@@ -220,7 +316,17 @@ function montarPanelNavegacion(lista, { anclas, enlaces }) {
     lista.appendChild(divisor);
   }
 
-  enlacesSinRepetir.forEach((enlace) => lista.appendChild(crearItemMenu(enlace)));
+  // Registro propio de este panel: la exclusión mutua entre Academy y Tools
+  // no se comparte con el grupo de cuenta (otro punto de render, ver
+  // montarMenus) ni con cerradoresDeDesplegables (otro concern).
+  const registroDeCierres = [];
+  enlacesSinRepetir.forEach((enlace) => {
+    if (enlace.hijos && enlace.hijos.length) {
+      lista.appendChild(crearAcordeonMenu(enlace, { registroDeCierres, prefijoId: lista.id }));
+    } else {
+      lista.appendChild(crearItemMenu(enlace));
+    }
+  });
 }
 
 /*
@@ -253,9 +359,7 @@ async function montarMenus() {
   // de dejarlo invisible para siempre.
   try {
     const session = await obtenerSesion();
-    const esAdministrador = Boolean(session && await esAdmin(session));
-
-    const enlacesNavegacion = resolverEnlacesNavegacion(esAdministrador);
+    const enlacesNavegacion = ENLACES_NAVEGACION_BASE;
 
     const listaNavegacion = document.getElementById("menuNavegacionLista");
     if (listaNavegacion) {
@@ -288,8 +392,17 @@ async function montarMenus() {
     */
     const grupoNavegacion = document.createElement("div");
     grupoNavegacion.className = "nav-menu__group nav-menu__group--nav";
+    // Registro propio de este grupo: no comparte exclusión mutua con el
+    // panel mobile (montarPanelNavegacion arma el suyo).
+    const registroDeCierresCuenta = [];
     enlacesNavegacion.forEach((enlace) => {
-      grupoNavegacion.appendChild(crearItemMenu(enlace));
+      if (enlace.hijos && enlace.hijos.length) {
+        grupoNavegacion.appendChild(
+          crearAcordeonMenu(enlace, { registroDeCierres: registroDeCierresCuenta, prefijoId: lista.id })
+        );
+      } else {
+        grupoNavegacion.appendChild(crearItemMenu(enlace));
+      }
     });
     lista.appendChild(grupoNavegacion);
 
