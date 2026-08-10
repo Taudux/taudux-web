@@ -107,14 +107,29 @@ cubría— pero cada una se veía idéntica a una caída de producción.
   en los secrets de las edge functions.
 - Las sesiones usan `sessionStorage`, no `localStorage`: viven por pestaña y
   terminan al cerrarla.
-- **GA4 arranca con un Measurement ID placeholder** (`G-XXXXXXX` en
-  `src/app/core/analytics/ga4.js`) — no manda datos hasta reemplazarlo por el
-  ID real de la propiedad. Deliberadamente **no** se carga en
-  `reset-password/`, `confirm/` ni `oauth-callback/`: esas páginas pueden
-  llevar un token de sesión en la URL, y GA4 mandaría `location.href`
-  completo a Google como parte de su pageview automático.
+- **GA4 corre en producción con el ID real** (`G-JDE7X7GFE5`,
+  `src/app/core/analytics/ga4.js`, propiedad "Taudux" creada el 2026-08-07).
+  Deliberadamente **no** se carga en `reset-password/`, `confirm/` ni
+  `oauth-callback/`: esas páginas pueden llevar un token de sesión en la
+  URL, y GA4 mandaría `location.href` completo a Google como parte de su
+  pageview automático.
 - **`eventos_negocio` (migración `0027`) no tiene foreign key a
   `auth.users`, a propósito.** Registra altas/bajas de cuenta y debe
   sobrevivir al hard delete de `delete-account`; una FK haría que el propio
   trigger de baja abortara el borrado que está registrando. El `usuario_ref`
   queda como un uuid desnormalizado, sin PII.
+- **`perfiles.es_prueba` (migración `0028`) saca del conteo las cuentas con
+  las que se prueba el sitio.** Se marca a mano por query desde el SQL
+  Editor, nunca desde la app — no hay `grant update` para `authenticated`, a
+  propósito. **Hay que marcarla ANTES de borrar la cuenta**: después del
+  borrado `perfiles` ya no existe y no queda de dónde deducirlo. Y el borrado
+  de una cuenta marcada es **irreversible**: el trigger de baja hace
+  `delete from eventos_negocio where usuario_ref = old.id`, así que si se
+  marca por error una cuenta real y después se borra, sus dos eventos (alta y
+  baja) se pierden sin vuelta atrás. Además, la consulta que excluye estas
+  cuentas (`left join perfiles` + `es_prueba`) sólo da números correctos
+  desde el SQL Editor: `perfiles` tiene RLS de `auth.uid() = id`, así que
+  desde el cliente cualquier fila ajena vendría `NULL` y se contaría como
+  real sin ningún error visible — un futuro panel admin necesitaría una
+  función `security definer` o una policy propia, no puede portar esa query
+  tal cual.
