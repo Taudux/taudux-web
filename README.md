@@ -115,9 +115,10 @@ cubría— pero cada una se veía idéntica a una caída de producción.
   pageview automático.
 - **`eventos_negocio` (migración `0027`) no tiene foreign key a
   `auth.users`, a propósito.** Registra altas/bajas de cuenta y debe
-  sobrevivir al hard delete de `delete-account`; una FK haría que el propio
-  trigger de baja abortara el borrado que está registrando. El `usuario_ref`
-  queda como un uuid desnormalizado, sin PII.
+  sobrevivir al hard delete de `delete-account` (salvo cuentas marcadas
+  `es_prueba`, ver el bullet siguiente); una FK haría que el propio trigger
+  de baja abortara el borrado que está registrando. El `usuario_ref` queda
+  como un uuid desnormalizado, sin PII.
 - **`perfiles.es_prueba` (migración `0028`) saca del conteo las cuentas con
   las que se prueba el sitio.** Se marca a mano por query desde el SQL
   Editor, nunca desde la app — no hay `grant update` para `authenticated`, a
