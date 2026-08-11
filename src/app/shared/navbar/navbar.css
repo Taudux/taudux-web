@@ -15,9 +15,17 @@
       así que introduciría el mismo desajuste que esto viene a corregir.
     */
     padding-inline: max(2rem, calc((100% - var(--ancho-sitio)) / 2));
-    display: flex;
+    /*
+      Grilla de tres columnas, no flex con space-between: la columna del medio
+      queda centrada respecto de la barra entera, no del espacio que sobra
+      entre los laterales (que tienen anchos distintos). Las páginas internas
+      sólo tienen dos hijos y dejan la columna del medio vacía; por eso
+      .navbar__links fija grid-column: 3 en vez de confiar en el
+      auto-placement, que ahí la mandaría al centro.
+    */
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     border-bottom: 1px solid transparent;
     z-index: var(--z-navbar);
     transition:
@@ -92,6 +100,10 @@
   }
 
   .navbar__links {
+    /* Última columna siempre, incluso en las páginas internas donde no hay
+       columna del medio (ver el comentario de la grilla en .navbar). */
+    grid-column: 3;
+    justify-self: end;
     background-color: transparent;
     opacity: 0;
     visibility: hidden;
@@ -103,6 +115,42 @@
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
+  }
+
+  /*
+    Misión/Visión/Valores: la columna central del navbar del landing. Todavía
+    no tienen destino, así que son <span> apagados — sin el hover de pill que
+    sí tiene .navbar__link, para no prometer un click que no hace nada.
+  */
+  .navbar__principios {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    /*
+      Ocultos sobre el hero y revelados al pasarlo (clase que pone
+      actualizarEstadoVisualNavbar). Se apagan con opacity/visibility, nunca
+      sacándolos del flujo: así conservan su columna de la grilla y el logo y
+      el botón de cuenta no se corren de lugar cuando aparecen.
+    */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  }
+
+  .navbar--pasado-hero .navbar__principios {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .navbar__principio {
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    color: var(--color-text-subtle);
+    font-weight: 600;
+    cursor: default;
+    user-select: none;
   }
 
   .navbar__link:not(.button) {
@@ -261,6 +309,17 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    /* Los principios aparecen de golpe al pasar el hero, sin fundido ni
+       desplazamiento vertical. */
+    .navbar__principios {
+      transition: none;
+      transform: none;
+    }
+
+    .navbar--pasado-hero .navbar__principios {
+      transform: none;
+    }
+
     .nav-menu__toggle {
       transition: none;
     }
@@ -476,6 +535,14 @@
     /* La hamburguesa y el isotipo ya identifican la marca; el logo central
        solo le resta espacio a los dos controles reales en un ancho chico. */
     .navbar__brand {
+      display: none;
+    }
+
+    /* Mismo criterio: en un ancho chico, tres etiquetas que ni siquiera son
+       clickeables le quitan lugar a la hamburguesa y al menú de cuenta. Se
+       ocultan acá porque son <span> sin href, así que el selector de anclas
+       de abajo no las alcanza. */
+    .navbar__principios {
       display: none;
     }
 

@@ -61,6 +61,18 @@ function actualizarEstadoVisualNavbar() {
 
   const desplazado = window.scrollY > 60;
   navbar.classList.toggle("navbar--scrolled", desplazado);
+
+  /*
+    Misión/Visión/Valores no acompañan al hero: recién aparecen cuando el hero
+    terminó de salir de pantalla, o sea cuando la segunda sección toca el tope.
+    Se mide el borde inferior real del hero en cada frame en vez de comparar
+    contra un umbral fijo en píxeles, para que el corte siga siendo exacto si
+    el hero cambia de alto (rotar el teléfono, fuentes que cargan tarde).
+    Sin hero —cualquier página que no sea el landing— la clase nunca se activa.
+  */
+  const hero = document.querySelector(".hero");
+  const heroFueraDePantalla = Boolean(hero) && hero.getBoundingClientRect().bottom <= 0;
+  navbar.classList.toggle("navbar--pasado-hero", heroFueraDePantalla);
 }
 
 /* Cache para no repetir querySelectorAll en cada evento de scroll. */
