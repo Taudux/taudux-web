@@ -10,6 +10,7 @@ const RUTAS_AUTH = Object.freeze({
   forgotPassword: "/app/features/auth/forgot-password/",
   resetPassword: "/app/features/auth/reset-password/",
   oauthCallback: "/app/features/auth/oauth-callback/",
+  portal: "/app/features/portal/",
 });
 
 const CLAVE_DESTINO_AUTH = "taudux_auth_next";
@@ -182,6 +183,28 @@ async function iniciarSesionConGoogle() {
     provider: "google",
     options: {
       redirectTo: urlAbsolutaAuth(RUTAS_AUTH.oauthCallback),
+      queryParams: { prompt: "select_account" },
+    },
+  });
+  if (error) {
+    return { ok: false, codigo: error.code, mensaje: traducirErrorAuth(error) };
+  }
+  return { ok: true };
+}
+
+/*
+  Hermana de iniciarSesionConGoogle para el re-intento de borrado de cuenta de
+  una cuenta Google-only: mismo provider y mismo prompt, pero vuelve al portal
+  en vez de a oauth-callback. El portal no carga auth-callback-guard.js (ver
+  portal.reauth.js), así que puede canjear el ?code= él mismo sin pasar por
+  esa página intermedia — que además está hardcodeada a aterrizar siempre en
+  home (ver oauth-callback.js) y no sirve para retomar un flujo del portal.
+*/
+async function reautenticarConGoogle() {
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: urlAbsolutaAuth(RUTAS_AUTH.portal),
       queryParams: { prompt: "select_account" },
     },
   });

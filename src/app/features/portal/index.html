@@ -171,9 +171,9 @@
                 <button type="button" class="button button--outline portal__danger-button" id="botonMostrarEliminarCuenta">Eliminar cuenta</button>
 
                 <div class="portal__form" id="avisoSinContrasenaEliminar" hidden>
-                  <p class="portal__section-intro">Para eliminar tu cuenta necesitamos confirmar que eres tú con una contraseña. Tu cuenta todavía no tiene una: te enviaremos un enlace para crearla.</p>
+                  <p class="portal__section-intro">Para eliminar tu cuenta necesitamos confirmar que eres tú. Vuelve a entrar con Google para continuar.</p>
                   <div class="portal__form-actions">
-                    <button type="button" class="button button--outline" id="botonEnlaceEliminarCuenta" data-loading-text="Enviando…">Enviarme un enlace</button>
+                    <button type="button" class="button button--outline" id="botonReautenticarGoogle" data-loading-text="Redirigiendo…">Continuar con Google</button>
                   </div>
                   <p class="portal__field-note" id="avisoSinContrasenaEliminarEstado" role="status" aria-live="polite"></p>
                 </div>
@@ -258,6 +258,7 @@
   <script src="/app/features/portal/portal.secciones.js"></script>
   <script src="/app/features/portal/portal.perfil.js"></script>
   <script src="/app/features/portal/portal.correo.js"></script>
+  <script src="/app/features/portal/portal.reauth.js"></script>
   <script src="/app/features/portal/portal.js"></script>
 </body>
 

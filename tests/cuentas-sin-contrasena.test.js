@@ -96,12 +96,12 @@ test("el aviso de contraseña ausente nace hidden y reusa la clase portal__form"
   assert.match(html, /id="botonEnlaceContrasena"/);
 });
 
-test("el aviso de contraseña ausente en eliminar-cuenta nace hidden y reusa la clase portal__form", () => {
+test("el aviso de contraseña ausente en eliminar-cuenta nace hidden y ofrece reautenticarse con Google", () => {
   const html = read("src/app/features/portal/index.html");
   const bloque = html.match(/<div class="portal__form" id="avisoSinContrasenaEliminar"[^>]*>/);
   assert.ok(bloque, "avisoSinContrasenaEliminar not found");
   assert.match(bloque[0], /\bhidden\b/);
-  assert.match(html, /id="botonEnlaceEliminarCuenta"/);
+  assert.match(html, /id="botonReautenticarGoogle"/);
 });
 
 test("ambas regiones de resultado del envío son role=status, no role=alert: son confirmación, no error", () => {
@@ -139,9 +139,25 @@ test("configurarEliminarCuenta consulta puedeUsarContrasena antes de signInWithP
   assert.ok(deteccion < reauth, "la detección de proveedor debe ir antes de signInWithPassword");
 });
 
-test("el camino sin contraseña reusa recuperarContrasena, no un mecanismo de auth nuevo", () => {
+test("el cambio de contraseña sin contraseña actual reusa recuperarContrasena, no un mecanismo de auth nuevo", () => {
   const js = read("src/app/features/portal/portal.js");
-  assert.match(js, /await recuperarContrasena\(email\)/);
+  const configurador = js.match(/function configurarFormularioContrasena\(session\)\s*{[\s\S]*?\n  }/)[0];
+  assert.match(configurador, /configurarEnvioEnlaceContrasena\(/);
+  const enlace = js.match(/function configurarEnvioEnlaceContrasena\([^)]*\)\s*{[\s\S]*?\n  }/)[0];
+  assert.match(enlace, /await recuperarContrasena\(email\)/);
+});
+
+/*
+  El borrado de cuenta es distinto: ahí sí hace falta un mecanismo nuevo,
+  porque no hay forma de reusar recuperarContrasena() sin volver a exigir que
+  el usuario cree una contraseña sólo para poder irse (ver
+  tests/reauth-google-eliminar.test.js para el resto del contrato).
+*/
+test("eliminar cuenta sin contraseña reautentica con Google, no reusa recuperarContrasena", () => {
+  const js = read("src/app/features/portal/portal.js");
+  const cuerpo = js.match(/function configurarEliminarCuenta\(session\)\s*{[\s\S]*?\n  }/)[0];
+  assert.doesNotMatch(cuerpo, /recuperarContrasena\(/);
+  assert.match(cuerpo, /reautenticarConGoogle\(/);
 });
 
 /* Bloque D — cambiarContrasena marca user_metadata.tiene_contrasena, corrido
