@@ -708,6 +708,23 @@
     const session = await requerirSesion();
     if (!session) return;
 
+    /*
+      Volver de Google es volver a "Acceso y seguridad": de ahí salió el intento
+      de borrado, y ahí es donde el toast o el diálogo tienen sentido. Sin esto
+      la URL vuelve sin hash y resolverSeccionActiva() cae en la sección por
+      defecto (perfil), dejando al usuario en otro lado del portal. Se fija por
+      hash y no con mostrarSeccion() para que la URL y la sección visible no
+      queden desincronizadas ante el primer hashchange.
+
+      La condición no es la marca a secas: una marca vieja (viven 10 min) puede
+      sobrevivir a una carga normal del portal, y ésa se limpia en silencio sin
+      mover al usuario de sección ni pisarle el hash que haya pedido. Sólo un
+      retorno real de Google —error del proveedor o ?code=— reubica.
+    */
+    if (avisoReauth || conCodigoOauth) {
+      history.replaceState(null, "", `${window.location.pathname}#cuenta`);
+    }
+
     aplicarHash();
     window.addEventListener("hashchange", aplicarHash);
 

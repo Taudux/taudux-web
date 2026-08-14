@@ -304,6 +304,35 @@ test("el aviso de cancelación se emite después de revelar el contenido, no sob
   assert.ok(revelado < aviso, "el toast debe emitirse después de revelar el portal");
 });
 
+test("al volver de Google el portal abre en Acceso y seguridad, no en la sección por defecto", () => {
+  // El botón "Continuar con Google" vive sólo en esa sección: volver a otra deja
+  // el toast y el diálogo sobre un contexto que no es del que salió el usuario.
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  const fijado = cuerpo.search(/replaceState\([^)]*#cuenta/);
+  const aplicado = cuerpo.indexOf("aplicarHash()");
+  assert.ok(fijado >= 0, "debe fijarse el hash de la sección cuenta al volver de Google");
+  assert.ok(aplicado >= 0, "falta aplicarHash()");
+  assert.ok(fijado < aplicado, "fijar el hash después de aplicarlo no cambia nada");
+});
+
+test("una marca vieja sin retorno de Google no mueve al usuario de sección", () => {
+  // Las marcas viven 10 min y pueden sobrevivir a una carga normal del portal.
+  // Esa se limpia en silencio: reubicar ahí le pisaría el hash que haya pedido.
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  const condicion = cuerpo.match(/if \(([^)]*)\) \{\s*history\.replaceState\([^)]*#cuenta/);
+  assert.ok(condicion, "el salto de sección debe estar condicionado");
+  assert.doesNotMatch(
+    condicion[1],
+    /^\s*marcaReauth\s*$/,
+    "la marca sola incluye la carga normal que arrastra una marca vieja"
+  );
+  assert.match(
+    condicion[1],
+    /avisoReauth|conCodigoOauth/,
+    "debe exigir un retorno real de Google: error del proveedor o ?code="
+  );
+});
+
 test("el diálogo de confirmación se abre con el portal ya revelado, no sobre la pantalla de arranque", () => {
   const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
   const revelado = cuerpo.indexOf("contenido.hidden = false");
