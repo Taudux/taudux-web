@@ -355,6 +355,45 @@ test("un canje que no termina a tiempo muestra el fallo y frena la inicializaci�
   assert.ok(fallo < gate, "el fallo debe mostrarse antes de llegar al gate de sesión");
 });
 
+/* Bloque G — el fallo del canje ofrece salidas en vez de pedir una recarga a
+   mano. Son dos escenarios detrás del mismo timeout: el canje falló de verdad
+   (la salida es el login) o tardó más de 8s y terminó bien (la salida es
+   recargar, que recoge esa sesión). Un solo destino rompía uno de los dos. */
+
+test("el markup trae las salidas del fallo de reauth, ocultas", () => {
+  assert.match(PORTAL_HTML, /id="portalStartupActions"[^>]*hidden/);
+  assert.match(PORTAL_HTML, /id="botonReintentarReauth"/);
+  assert.match(
+    PORTAL_HTML,
+    /id="portalStartupActions"[\s\S]*?href="\/app\/features\/auth\/login\/"/,
+    "debe haber una salida explícita al login, no sólo el reintento"
+  );
+});
+
+test("las salidas viven fuera del bloque de arranque, que se escribe con textContent", () => {
+  // mostrarFalloReauth hace startup.textContent = mensaje, y eso borra todos los
+  // hijos: los botones adentro se perderían al mostrar el mensaje.
+  const arranque = PORTAL_HTML.indexOf('id="portalStartup"');
+  const cierre = PORTAL_HTML.indexOf("</div>", arranque);
+  const acciones = PORTAL_HTML.indexOf('id="portalStartupActions"');
+  assert.ok(arranque >= 0 && acciones >= 0, "faltan el bloque de arranque o las salidas");
+  assert.ok(acciones > cierre, "las salidas no pueden ser hijas de #portalStartup");
+});
+
+test("mostrarFalloReauth revela las salidas antes de mover el foco", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "function mostrarFalloReauth\\([^)]*\\)");
+  const revelado = cuerpo.search(/accionesStartup[^\n]*hidden\s*=\s*false/);
+  const foco = cuerpo.indexOf(".focus()");
+  assert.ok(revelado >= 0, "el fallo debe revelar las salidas");
+  assert.ok(foco >= 0, "falta el foco sobre el bloque de arranque");
+  assert.ok(revelado < foco, "revelar después de enfocar deja las salidas fuera del anuncio");
+});
+
+test("el mensaje del timeout ya no le pide al usuario recargar a mano", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  assert.doesNotMatch(cuerpo, /Recarga la página/, "para eso está el botón de reintento");
+});
+
 test("mostrarFalloReauth apaga el aria-busy del bloque de arranque", () => {
   const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "function mostrarFalloReauth\\([^)]*\\)");
   assert.match(cuerpo, /aria-busy"?,\s*"false"/);

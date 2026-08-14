@@ -43,6 +43,16 @@
         <p>Cargando tu portal.</p>
       </div>
 
+      <!-- Salidas del fallo de reauth con Google. Van fuera del bloque de
+           arranque porque mostrarFalloReauth() lo escribe con textContent y eso
+           borra sus hijos. Reusa .auth__actions (auth.css, ya cargado): mismo
+           recurso que oauth-callback muestra cuando el proveedor no deja una
+           sesión utilizable. -->
+      <div class="auth__actions" id="portalStartupActions" hidden>
+        <button type="button" class="button button--glow" id="botonReintentarReauth">Volver a intentar</button>
+        <a class="button button--outline" href="/app/features/auth/login/">Ir a iniciar sesión</a>
+      </div>
+
       <noscript>
         <p class="portal__noscript panel">Necesitas habilitar JavaScript para usar el portal de tu cuenta. Puedes <a href="/">volver al inicio</a>.</p>
       </noscript>

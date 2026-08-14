@@ -13,6 +13,7 @@
 
 (function () {
   const startup = document.getElementById("portalStartup");
+  const accionesStartup = document.getElementById("portalStartupActions");
   const contenido = document.getElementById("portalContent");
 
   function enlaces() {
@@ -479,7 +480,27 @@
     // El aria-busy queda en true desde el markup: dejarlo así sobre un mensaje
     // terminal le diría al lector de pantalla que todavía está cargando.
     startup.setAttribute("aria-busy", "false");
+    /*
+      Las salidas se revelan antes de mover el foco: así el bloque ya está
+      completo cuando el lector de pantalla lo anuncia, y los botones caen a
+      continuación en el orden de tabulación.
+    */
+    if (accionesStartup) accionesStartup.hidden = false;
     startup.focus();
+  }
+
+  /*
+    "Volver a intentar" recarga, y eso NO reintenta el canje: para cuando se
+    llega acá el ?code= ya salió de la URL y la marca ya se limpió. Lo que
+    recoge es el resultado de un canje que haya terminado tarde —el timeout es
+    de 8s, pero la sesión puede establecerse después—; si no hay ninguna, la
+    recarga termina en el login por requerirSesion(). Para el usuario, que
+    vuelve a intentar borrar su cuenta, ambos desenlaces son el camino correcto.
+  */
+  function configurarReintentoReauth() {
+    const boton = document.getElementById("botonReintentarReauth");
+    if (!boton) return;
+    boton.addEventListener("click", () => window.location.reload());
   }
 
   /*
@@ -663,9 +684,7 @@
       */
       if (!sesionReauth) {
         limpiarMarcaReauthEliminar();
-        mostrarFalloReauth(
-          "No pudimos completar la verificación con Google. Recarga la página para volver a intentarlo.",
-        );
+        mostrarFalloReauth("No pudimos completar la verificación con Google.");
         return;
       }
 
@@ -748,5 +767,6 @@
     }
   }
 
+  configurarReintentoReauth();
   inicializarPortal();
 })();
