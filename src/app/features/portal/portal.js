@@ -646,6 +646,13 @@
     }
 
     if (marcaReauth && conCodigoOauth) {
+      // El usuario no vino a cargar su portal: vino de confirmar su identidad
+      // con Google. El canje puede tardar (hasta el timeout de 8s), y "Cargando
+      // tu portal" no explica la espera ni conecta con el salto al login que
+      // puede venir después. El aria-busy del markup sigue en true a propósito:
+      // esto SIGUE siendo carga, así que el cambio es visual y no se anuncia.
+      if (startup) startup.textContent = "Verificando tu identidad con Google…";
+
       const sesionReauth = await esperarSesionTrasReauth();
       history.replaceState(null, "", window.location.pathname);
       /*

@@ -258,6 +258,15 @@ test("login.js reconoce el motivo y lo muestra como error", () => {
   assert.match(rama[0], /otra cuenta/, "el mensaje debe nombrar el motivo");
 });
 
+test("al volver de Google el arranque anuncia la verificación, no la carga del portal", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  const anuncio = cuerpo.search(/startup\.textContent\s*=\s*"[^"]*Google[^"]*"/);
+  const espera = cuerpo.indexOf("esperarSesionTrasReauth(");
+  assert.ok(anuncio >= 0, "el arranque debe decir que se está verificando con Google");
+  assert.ok(espera >= 0, "falta esperarSesionTrasReauth");
+  assert.ok(anuncio < espera, "anunciar después de esperar no le sirve a nadie");
+});
+
 test("mostrarFalloReauth sigue cubriendo el timeout del canje", () => {
   // Se sacó del camino de mismatch, pero el timeout no redirige: ahí el usuario
   // conserva su propia sesión y recargar es la salida correcta.
