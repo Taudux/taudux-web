@@ -654,6 +654,33 @@
         );
         return;
       }
+
+      /*
+        Validación temprana, antes de poblar o revelar nada. select_account deja
+        elegir una cuenta de Google distinta de la que pidió el borrado, y esa
+        sesión se establece de verdad: seguir de largo mostraría el perfil ajeno
+        y, peor, dejaría esa sesión viva. Un segundo intento de borrado
+        arrancaría desde ella, guardaría la marca con SU id, coincidiría al
+        volver y borraría la cuenta equivocada.
+
+        Por eso el mismatch no sólo aborta: cierra la sesión (scope local — es
+        una sesión legítima, no hay nada que revocar en el servidor, sólo no es
+        la que corresponde a este flujo) y lo dice con todas las letras. El
+        mensaje genérico anterior se leía como "no pasó nada", que es
+        justamente lo que hacía peligroso el segundo intento.
+
+        La comprobación se repite dentro de retomarEliminarCuentaTrasGoogle a
+        propósito: esta capa evita el estado inconsistente, aquella es el guard
+        pegado a la acción irreversible.
+      */
+      if (!reauthEliminarEsValida(marcaReauth, sesionReauth.user.id, Date.now())) {
+        limpiarMarcaReauthEliminar();
+        await cerrarSesion({ scope: "local" });
+        mostrarFalloReauth(
+          "Elegiste otra cuenta de Google, distinta de la que pediste eliminar. No borramos nada y cerramos esa sesión: vuelve a entrar con tu cuenta.",
+        );
+        return;
+      }
     }
 
     // Sin sesión, requerirSesion ya navegó al login con ?next=: no hay nada más

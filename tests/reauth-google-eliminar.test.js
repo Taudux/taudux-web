@@ -185,6 +185,53 @@ test("inicializarPortal sólo espera la sesión post-Google cuando hay marca de 
   assert.match(cuerpo, /retomarEliminarCuentaTrasGoogle\(/);
 });
 
+/*
+  Bloque E-bis — R1-001: volver de Google con OTRA cuenta.
+
+  select_account deja elegir una cuenta distinta de la que pidió el borrado, y
+  esa sesión se establece de verdad. Si el portal la puebla y la revela antes de
+  comparar el usuarioId, muestra el perfil ajeno y —peor— deja esa sesión viva:
+  un segundo intento de borrado arrancaría desde ella, guardaría la marca con
+  SU id, coincidiría al volver, y borraría la cuenta equivocada. Por eso la
+  comparación tiene que ocurrir antes de tocar nada, y el mismatch tiene que
+  cerrar la sesión, no sólo abortar el borrado.
+*/
+
+test("la marca se valida antes de traer el perfil, no después de revelar el portal", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  const validacion = cuerpo.indexOf("reauthEliminarEsValida(");
+  const perfil = cuerpo.indexOf("obtenerPerfil(");
+  assert.ok(validacion >= 0, "falta la validación temprana de la marca");
+  assert.ok(perfil >= 0, "falta obtenerPerfil");
+  assert.ok(validacion < perfil, "la marca debe validarse antes de traer el perfil de esa sesión");
+});
+
+test("la validación temprana corta antes del gate de sesión", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  const validacion = cuerpo.indexOf("reauthEliminarEsValida(");
+  const gate = cuerpo.indexOf("await requerirSesion(");
+  assert.ok(validacion >= 0 && gate >= 0, "faltan la validación o requerirSesion");
+  assert.ok(validacion < gate, "la validación debe ocurrir antes de requerirSesion");
+});
+
+test("volver con otra cuenta de Google cierra esa sesión en vez de dejarla activa", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  assert.match(
+    cuerpo,
+    /cerrarSesion\(\{\s*scope:\s*"local"\s*\}\)/,
+    "el mismatch debe cerrar la sesión que no corresponde",
+  );
+});
+
+test("el mensaje de cuenta distinta nombra el motivo en vez de decir sólo que no se pudo verificar", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  assert.match(
+    cuerpo,
+    /mostrarFalloReauth\(\s*\n?\s*"[^"]*otra cuenta[^"]*"/,
+    "el aviso debe decir que se eligió otra cuenta, no un genérico",
+  );
+});
+
 /* Bloque F — markup: el aviso ya no ofrece un enlace por correo, ofrece
    reautenticarse con Google. */
 
