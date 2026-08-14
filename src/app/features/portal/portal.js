@@ -632,9 +632,16 @@
         const cancelado =
           errorProveedor.codigo === "access_denied" ||
           /access_denied/.test(errorProveedor.descripcion || "");
+        /*
+          Textos cortos a propósito: un toast dura 3s (toast.js) y a velocidad
+          normal de lectura eso alcanza para unas 8 palabras. Las dos cosas que
+          el usuario necesita saber son qué falló y que su cuenta sigue ahí;
+          todo lo demás sobra y lo único que logra es que no llegue a leer ni
+          eso.
+        */
         avisoReauth = cancelado
-          ? "No completaste la verificación con Google, así que tu cuenta sigue activa."
-          : "No pudimos verificar tu identidad con Google. Tu cuenta sigue activa.";
+          ? "Verificación cancelada. Tu cuenta sigue activa."
+          : "No pudimos verificarte. Tu cuenta sigue activa.";
       }
     }
 
