@@ -672,13 +672,19 @@
         La comprobación se repite dentro de retomarEliminarCuentaTrasGoogle a
         propósito: esta capa evita el estado inconsistente, aquella es el guard
         pegado a la acción irreversible.
+
+        Se redirige al login en vez de quedarse con un mensaje acá: sin sesión
+        el portal no tiene nada que mostrar, y el navbar ya se montó con la
+        sesión ajena (montarMenus lee la sesión una sola vez al cargar — ver
+        navbar.js — y deja el nombre del perfil en el menú). Una carga de página
+        nueva lo arma de cero, sin sesión y sin datos de la otra cuenta.
+        `replace` y no `href`: un portal sin dueño no debe quedar en el
+        historial.
       */
       if (!reauthEliminarEsValida(marcaReauth, sesionReauth.user.id, Date.now())) {
         limpiarMarcaReauthEliminar();
         await cerrarSesion({ scope: "local" });
-        mostrarFalloReauth(
-          "Elegiste otra cuenta de Google, distinta de la que pediste eliminar. No borramos nada y cerramos esa sesión: vuelve a entrar con tu cuenta.",
-        );
+        window.location.replace(`${RUTAS_AUTH.login}?reauth=cuenta-distinta`);
         return;
       }
     }

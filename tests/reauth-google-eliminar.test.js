@@ -9,6 +9,7 @@ const read = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
 const AUTH_SERVICE_SOURCE = read("src/app/core/auth/auth.service.js");
 const PORTAL_JS_SOURCE = read("src/app/features/portal/portal.js");
 const PORTAL_HTML = read("src/app/features/portal/index.html");
+const LOGIN_JS_SOURCE = read("src/app/features/auth/login/login.js");
 
 const {
   CLAVE_REAUTH_ELIMINAR,
@@ -223,13 +224,45 @@ test("volver con otra cuenta de Google cierra esa sesión en vez de dejarla acti
   );
 });
 
-test("el mensaje de cuenta distinta nombra el motivo en vez de decir sólo que no se pudo verificar", () => {
+/*
+  Sin sesión, el lugar del usuario es el login: quedarse en un portal vacío lo
+  deja sin salida y —peor— con el navbar todavía montado con la sesión ajena
+  (montarMenus lee la sesión una sola vez al cargar, navbar.js:373, y pone el
+  nombre del perfil en el menú). Redirigir fuerza una carga nueva, y ahí el
+  navbar se arma sin sesión.
+*/
+
+test("el mismatch de cuenta manda al login con el motivo en la URL", () => {
   const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
-  assert.match(
-    cuerpo,
-    /mostrarFalloReauth\(\s*\n?\s*"[^"]*otra cuenta[^"]*"/,
-    "el aviso debe decir que se eligió otra cuenta, no un genérico",
-  );
+  assert.match(cuerpo, /window\.location\.replace\(/, "debe redirigir, no quedarse en el portal");
+  assert.match(cuerpo, /RUTAS_AUTH\.login/, "el destino es el login");
+  assert.match(cuerpo, /reauth=cuenta-distinta/, "el motivo viaja en la URL");
+});
+
+test("antes de redirigir se cierra la sesión y se limpia la marca", () => {
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  const limpieza = cuerpo.indexOf("limpiarMarcaReauthEliminar()");
+  const cierre = cuerpo.indexOf('cerrarSesion({ scope: "local" })');
+  const redireccion = cuerpo.indexOf("reauth=cuenta-distinta");
+  assert.ok(limpieza >= 0 && cierre >= 0 && redireccion >= 0, "faltan los tres pasos");
+  assert.ok(cierre < redireccion, "redirigir sin cerrar dejaría viva la sesión ajena");
+  assert.ok(limpieza < redireccion, "la marca debe limpiarse antes de irse");
+});
+
+test("login.js reconoce el motivo y lo muestra como error", () => {
+  assert.match(LOGIN_JS_SOURCE, /parametrosLogin\.get\("reauth"\)\s*===\s*"cuenta-distinta"/);
+  const rama = LOGIN_JS_SOURCE.match(/"cuenta-distinta"\s*\)\s*{[\s\S]*?\n}/);
+  assert.ok(rama, "no se encontró la rama del motivo");
+  assert.match(rama[0], /mostrarEstadoAuth\(/);
+  assert.match(rama[0], /"error"/, "es un error, no un success");
+  assert.match(rama[0], /otra cuenta/, "el mensaje debe nombrar el motivo");
+});
+
+test("mostrarFalloReauth sigue cubriendo el timeout del canje", () => {
+  // Se sacó del camino de mismatch, pero el timeout no redirige: ahí el usuario
+  // conserva su propia sesión y recargar es la salida correcta.
+  const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
+  assert.match(cuerpo, /mostrarFalloReauth\(/, "el estado terminal del timeout no debe eliminarse");
 });
 
 /* Bloque F — markup: el aviso ya no ofrece un enlace por correo, ofrece

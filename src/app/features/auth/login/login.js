@@ -12,6 +12,15 @@ if (parametrosLogin.get("confirmed") === "1") {
   mostrarEstadoAuth("Correo confirmado. Ya puedes iniciar sesión.", "success", false);
 } else if (parametrosLogin.get("password-reset") === "1") {
   mostrarEstadoAuth("Contraseña actualizada. Inicia sesión con tu nueva contraseña.", "success", false);
+} else if (parametrosLogin.get("reauth") === "cuenta-distinta") {
+  // El portal manda acá cuando la reautenticación con Google para eliminar la
+  // cuenta vuelve con OTRA cuenta del selector: cierra esa sesión y delega el
+  // aviso a esta pantalla, que es donde el usuario tiene que actuar.
+  mostrarEstadoAuth(
+    "Elegiste otra cuenta de Google, distinta de la que pediste eliminar. No borramos nada. Inicia sesión con la cuenta que quieres eliminar.",
+    "error",
+    false,
+  );
 } else if (errorEnlaceLogin) {
   // El guard no distingue "enlace expirado" de "callback mal aterrizado";
   // este mensaje cubre el caso donde igual se termina en login.
