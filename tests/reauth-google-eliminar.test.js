@@ -268,8 +268,11 @@ test("al volver de Google el arranque anuncia la verificación, no la carga del 
 });
 
 test("mostrarFalloReauth sigue cubriendo el timeout del canje", () => {
-  // Se sacó del camino de mismatch, pero el timeout no redirige: ahí el usuario
-  // conserva su propia sesión y recargar es la salida correcta.
+  // Se sacó del camino de mismatch. El timeout no redirige a propósito, pero no
+  // porque el usuario conserve su sesión: acá getSession() ya devolvió null —con
+  // sesión, esperarSesionTrasReauth la devuelve de entrada y nunca hay timeout—.
+  // El motivo es que el canje puede completarse después de los 8s, y entonces
+  // recargar sí la recupera; saltar al login le quitaría esa chance.
   const cuerpo = cuerpoDeFuncion(PORTAL_JS_SOURCE, "async function inicializarPortal\\(\\)");
   assert.match(cuerpo, /mostrarFalloReauth\(/, "el estado terminal del timeout no debe eliminarse");
 });
