@@ -47,6 +47,7 @@ function cargarNavbar() {
     `${read("src/app/shared/navbar/navbar.js")}
     this.crearItemMenu = crearItemMenu;
     this.crearAcordeonMenu = crearAcordeonMenu;
+    this.filtrarEnlacesPorRol = filtrarEnlacesPorRol;
     this.ENLACES_NAVEGACION_BASE = ENLACES_NAVEGACION_BASE;`,
     context
   );
@@ -67,14 +68,133 @@ test("Academy and Tools carry hijos but no href/habilitado of their own: they ar
   });
 });
 
-test("'Transacciones financieras' under Tools is enabled for everyone, no admin gating", () => {
+test("'Transacciones financieras' under Tools is enabled for everyone and has its own route", () => {
   const { ENLACES_NAVEGACION_BASE } = cargarNavbar();
 
   const tools = ENLACES_NAVEGACION_BASE.find((enlace) => enlace.texto === "Tools");
   const hijo = tools.hijos.find((hijo) => hijo.texto === "Transacciones financieras");
 
   assert.equal(hijo.habilitado, true);
-  assert.equal(hijo.href, "/app/features/detector/detector.html");
+  assert.equal(hijo.soloAdmin, undefined, "no debe esconderse: es para todos");
+  assert.equal(hijo.href, "/app/features/transactions/");
+  assert.doesNotMatch(hijo.href, /detector/, "ya no comparte ruta con el detector de IA");
+});
+
+/* Visibilidad por rol. El detector de IA volvió a su identidad y queda como
+   sección deshabilitada que sólo el admin ve; el resto ni se entera. */
+
+test("the AI detector is admin-only and disabled", () => {
+  const { ENLACES_NAVEGACION_BASE } = cargarNavbar();
+
+  const tools = ENLACES_NAVEGACION_BASE.find((enlace) => enlace.texto === "Tools");
+  const detector = tools.hijos.find((hijo) => /detector/i.test(hijo.texto));
+
+  assert.ok(detector, "falta la entrada del detector bajo Tools");
+  assert.equal(detector.soloAdmin, true);
+  assert.equal(detector.habilitado, false);
+  assert.equal(detector.href, "/app/features/detector/detector.html");
+});
+
+test("filtrarEnlacesPorRol drops soloAdmin entries for non-admins and keeps them for admins", () => {
+  const { filtrarEnlacesPorRol } = cargarNavbar();
+  const enlaces = [
+    { texto: "Público", href: "/publico", habilitado: true },
+    { texto: "Secreto", href: "/secreto", habilitado: false, soloAdmin: true },
+  ];
+
+  const paraCualquiera = filtrarEnlacesPorRol(enlaces, false).map((e) => e.texto);
+  const paraAdmin = filtrarEnlacesPorRol(enlaces, true).map((e) => e.texto);
+
+  assert.deepEqual(paraCualquiera, ["Público"]);
+  assert.deepEqual(paraAdmin, ["Público", "Secreto"]);
+});
+
+test("filtrarEnlacesPorRol reaches inside groups, not just the top level", () => {
+  const { filtrarEnlacesPorRol } = cargarNavbar();
+  const enlaces = [
+    {
+      texto: "Tools",
+      hijos: [
+        { texto: "Abierto", href: "/abierto", habilitado: true },
+        { texto: "Interno", href: "/interno", habilitado: false, soloAdmin: true },
+      ],
+    },
+  ];
+
+  const [grupo] = filtrarEnlacesPorRol(enlaces, false);
+
+  assert.deepEqual(grupo.hijos.map((h) => h.texto), ["Abierto"]);
+});
+
+test("filtrarEnlacesPorRol drops a group left with no children", () => {
+  // Una cabecera vacía es peor que ninguna: se despliega y no ofrece nada.
+  const { filtrarEnlacesPorRol } = cargarNavbar();
+  const enlaces = [
+    { texto: "Tools", hijos: [{ texto: "Interno", href: "/i", soloAdmin: true }] },
+  ];
+
+  assert.deepEqual(filtrarEnlacesPorRol(enlaces, false), []);
+});
+
+/* Visibilidad ante buscadores. Ninguna de las dos páginas de Tools debe
+   ofrecerse: el detector es sólo para admin y transactions va a recibir estados
+   de cuenta bancarios. */
+
+test("neither Tools page is offered to search engines", () => {
+  const paginas = {
+    "src/app/features/detector/detector.html": "detector",
+    "src/app/features/transactions/index.html": "transactions",
+  };
+
+  // Estar fuera del sitemap no impide indexar: no listar algo no le pide a
+  // nadie que lo ignore. El noindex es lo que de verdad lo evita.
+  Object.keys(paginas).forEach((archivo) => {
+    assert.match(
+      read(archivo),
+      /<meta\s+name="robots"\s+content="noindex">/,
+      `${archivo} debe llevar noindex`
+    );
+  });
+
+  // Sólo las <loc>: el sitemap tiene un comentario que nombra ambas rutas para
+  // explicar por qué no están, y eso no debe contar como que estén.
+  const ubicaciones = read("src/sitemap.xml").match(/<loc>[^<]*<\/loc>/g) || [];
+  Object.values(paginas).forEach((ruta) => {
+    assert.ok(
+      ubicaciones.every((loc) => !loc.includes(ruta)),
+      `/${ruta}/ no debe publicarse en el sitemap`
+    );
+  });
+});
+
+test("the navbar resolves the profile once and reuses it for both role and name", () => {
+  /*
+    obtenerPerfil() no cachea: cada llamada es una consulta a Supabase. El menú
+    necesita el rol (para filtrar) y el nombre, y el navbar se monta en TODAS las
+    páginas — pedirlos por separado duplicaría el tráfico en todo el sitio.
+  */
+  const fuente = read("src/app/shared/navbar/navbar.js");
+
+  // `await` a propósito: sin él, el conteo incluye las menciones en comentarios.
+  const llamadas = fuente.match(/await obtenerPerfil\(/g) || [];
+  assert.equal(llamadas.length, 1, "el perfil debe pedirse una sola vez");
+  assert.match(
+    fuente,
+    /nombreParaMenu\(\s*session\s*,\s*perfil\s*\)/,
+    "el nombre debe derivarse del perfil ya resuelto, no pedirlo de nuevo"
+  );
+});
+
+test("filtrarEnlacesPorRol does not mutate the shared base array", () => {
+  // ENLACES_NAVEGACION_BASE es un módulo compartido: filtrarlo en una página no
+  // puede dejar el menú recortado para la siguiente.
+  const { filtrarEnlacesPorRol, ENLACES_NAVEGACION_BASE } = cargarNavbar();
+  const tools = ENLACES_NAVEGACION_BASE.find((e) => e.texto === "Tools");
+  const hijosAntes = tools.hijos.length;
+
+  filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, false);
+
+  assert.equal(tools.hijos.length, hijosAntes, "el filtro debe devolver copias");
 });
 
 /* crearAcordeonMenu: estructura del grupo colapsable Academy/Tools. */

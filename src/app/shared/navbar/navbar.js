@@ -25,13 +25,44 @@ const ENLACES_NAVEGACION_BASE = [
     hijos: [
       {
         texto: "Transacciones financieras",
-        href: "/app/features/detector/detector.html",
+        href: "/app/features/transactions/",
         habilitado: true,
+      },
+      {
+        // Deshabilitado y sólo para admin: `habilitado: false` lo pinta en gris,
+        // `soloAdmin` decide quién llega a verlo siquiera.
+        texto: "Detector de imágenes IA",
+        href: "/app/features/detector/detector.html",
+        habilitado: false,
+        soloAdmin: true,
       },
     ],
   },
   { texto: "Proyectos", habilitado: false },
 ];
+
+/*
+  Los items `soloAdmin` desaparecen del menú para quien no lo sea, en vez de
+  pintarse en gris: anunciarle una sección que no le corresponde sólo genera
+  preguntas. Ojo, esto es cosmética — la URL sigue abriendo para cualquiera
+  porque el sitio es estático y no hay servidor que niegue nada. Sirve para
+  ordenar el menú, NO como control de acceso.
+
+  Devuelve copias: ENLACES_NAVEGACION_BASE es un módulo compartido entre los dos
+  paneles (mobile y cuenta), y filtrarlo en el lugar dejaría el menú recortado
+  para el siguiente montaje.
+*/
+function filtrarEnlacesPorRol(enlaces, esUsuarioAdmin) {
+  return enlaces
+    .filter((enlace) => !enlace.soloAdmin || esUsuarioAdmin)
+    .map((enlace) =>
+      enlace.hijos
+        ? { ...enlace, hijos: filtrarEnlacesPorRol(enlace.hijos, esUsuarioAdmin) }
+        : enlace
+    )
+    // Una cabecera que se quedó sin hijos se despliega y no ofrece nada.
+    .filter((enlace) => !enlace.hijos || enlace.hijos.length > 0);
+}
 
 async function salirYVolver(evento) {
   if (evento) evento.preventDefault();
@@ -284,9 +315,9 @@ function enlaceDeSesion(session) {
   return { texto: "Salir", href: "#", alHacerClick: salirYVolver };
 }
 
-async function nombreParaMenu(session) {
+async function nombreParaMenu(session, perfil) {
   if (!session) return null;
-  const nombre = await nombreUsuario(session);
+  const nombre = await nombreUsuario(session, perfil);
   return nombre || "Mi cuenta";
 }
 
@@ -312,9 +343,9 @@ function montarPanelNavegacion(lista, { anclas, enlaces }) {
   // aplanar (ver crearAcordeonMenu).
   const textosDeAnclas = new Set(anclas.map((ancla) => ancla.texto.toLowerCase()));
   /*
-    "Herramientas" existe como ancla del landing y como enlace admin al
-    detector. Si el ancla ya ocupa ese texto, el enlace del sitio se omite:
-    dos entradas con el mismo nombre y distinto destino son indistinguibles.
+    "Herramientas" puede existir a la vez como ancla del landing y como enlace
+    del sitio. Si el ancla ya ocupa ese texto, el enlace se omite: dos entradas
+    con el mismo nombre y distinto destino son indistinguibles.
   */
   const enlacesSinRepetir = enlaces.filter(
     (enlace) => !textosDeAnclas.has(enlace.texto.toLowerCase())
@@ -371,7 +402,17 @@ async function montarMenus() {
   // de dejarlo invisible para siempre.
   try {
     const session = await obtenerSesion();
-    const enlacesNavegacion = ENLACES_NAVEGACION_BASE;
+    /*
+      El perfil se resuelve una sola vez y de él salen las dos cosas que el menú
+      necesita: el rol (para filtrar) y el nombre. obtenerPerfil() no cachea, así
+      que pedirlo por separado costaría dos consultas en cada carga de página, y
+      el navbar se monta en todas.
+    */
+    const perfil = session ? await obtenerPerfil(session) : null;
+    const enlacesNavegacion = filtrarEnlacesPorRol(
+      ENLACES_NAVEGACION_BASE,
+      perfil?.rol === "admin"
+    );
 
     const listaNavegacion = document.getElementById("menuNavegacionLista");
     if (listaNavegacion) {
@@ -381,7 +422,7 @@ async function montarMenus() {
       });
     }
 
-    const nombreCuenta = await nombreParaMenu(session);
+    const nombreCuenta = await nombreParaMenu(session, perfil);
 
     const { menu, toggle, lista } = crearDesplegable({
       clase: "account",
@@ -400,7 +441,7 @@ async function montarMenus() {
     /*
       En mobile la navegación vive en la hamburguesa, así que este grupo se
       oculta por CSS. En desktop sigue siendo la única vía de navegación de las
-      páginas sin fila de enlaces (cursos, detector, privacidad).
+      páginas sin fila de enlaces (cursos, transacciones, privacidad).
     */
     const grupoNavegacion = document.createElement("div");
     grupoNavegacion.className = "nav-menu__group nav-menu__group--nav";

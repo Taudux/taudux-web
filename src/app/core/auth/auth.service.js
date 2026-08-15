@@ -327,8 +327,13 @@ async function esAdmin(session) {
   return perfil?.rol === "admin";
 }
 
-async function nombreUsuario(session) {
-  const perfil = await obtenerPerfil(session);
+/*
+  `perfilResuelto` evita una consulta de más a quien ya tenga el perfil en la
+  mano (el navbar lo necesita para el rol y para el nombre, y obtenerPerfil no
+  cachea). Omitirlo mantiene el comportamiento de siempre.
+*/
+async function nombreUsuario(session, perfilResuelto) {
+  const perfil = perfilResuelto === undefined ? await obtenerPerfil(session) : perfilResuelto;
   if (perfil?.nombre) return perfil.nombre;
   // Cuentas de Google: el metadata trae given_name/full_name/name, no
   // "nombre" (esa clave es propia del signup con contraseña).

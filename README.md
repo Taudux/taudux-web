@@ -25,7 +25,7 @@ sin la extensión `.html`.
 | Ruta | Qué hay |
 |---|---|
 | `src/app/core/` | Capa de datos y servicios, un directorio por dominio (`auth`, `cursos`, `perfil`, `categorias`, `supabase`, `telemetry`, `analytics`). Sufijo `.service.js`. |
-| `src/app/features/` | Una carpeta por área de la app (`auth`, `courses`, `portal`, `legal`, `home`, `detector`). |
+| `src/app/features/` | Una carpeta por área de la app (`auth`, `courses`, `portal`, `legal`, `home`, `transactions`, `detector`). |
 | `src/app/shared/` | Primitivas de presentación (`button`, `toast`, `confirm-dialog`, `navbar`, `panel`, `field`…). |
 | `supabase/migrations/` | 27 migraciones SQL, numeración contigua desde `0001`. |
 | `supabase/functions/` | Edge functions Deno, más `_shared/` reutilizable entre ellas. |

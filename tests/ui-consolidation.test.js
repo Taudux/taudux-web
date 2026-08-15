@@ -237,7 +237,7 @@ test("the navigation panel drops site links whose label already exists as an anc
     anclas: [{ texto: "Herramientas", href: "#herramientas" }],
     enlaces: [
       { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
-      { texto: "Herramientas", href: "/app/features/detector/detector.html", habilitado: true },
+      { texto: "Herramientas", href: "/app/features/transactions/", habilitado: true },
     ],
   });
 
@@ -276,7 +276,7 @@ test("when an anchor and a site link share a label, the anchor wins and the site
   context.montarPanelNavegacion(lista, {
     anclas: [{ texto: "Herramientas", href: "#herramientas" }],
     enlaces: [
-      { texto: "Herramientas", href: "/app/features/detector/detector.html", habilitado: true },
+      { texto: "Herramientas", href: "/app/features/transactions/", habilitado: true },
     ],
   });
 
@@ -298,7 +298,7 @@ test("mobile navigation lives only in the hamburger, and the legacy links panel 
   const css = read("src/app/shared/navbar/navbar.css");
   const js = read("src/app/shared/navbar/navbar.js");
 
-  /* En desktop el grupo sigue siendo la única navegación de cursos/detector/privacidad. */
+  /* En desktop el grupo sigue siendo la única navegación de cursos/transacciones/privacidad. */
   assert.match(js, /nav-menu__group--nav/);
   assert.match(css, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.nav-menu__group--nav\s*{[^}]*display:\s*none/);
   assert.doesNotMatch(css.split(/@media\s*\(max-width:\s*760px\)/)[0], /\.nav-menu__group--nav\s*{[^}]*display:\s*none/);
