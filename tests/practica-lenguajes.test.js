@@ -10,7 +10,7 @@ const {
   LENGUAJES_PRACTICA,
   normalizarIdLenguaje,
   resolverLenguajeActivo,
-} = require(path.join(ROOT, "src/app/features/practica/practica.lenguajes.js"));
+} = require(path.join(ROOT, "src/app/features/codigo/practica.lenguajes.js"));
 
 /*
   El catálogo de lenguajes es la única fuente de verdad de qué runtime baja el
@@ -80,7 +80,7 @@ test("ninguna dependencia externa del playground queda en una versión flotante"
     assert.doesNotMatch(url, /@latest|\/latest\//, `URL sin pinear: ${url}`);
   }
 
-  const html = read("src/app/features/practica/index.html");
+  const html = read("src/app/features/codigo/index.html");
   const externos = html.match(/https:\/\/cdn\.jsdelivr\.net\/[^"']+/g) || [];
   assert.ok(externos.length > 0, "la página debe cargar el editor desde el CDN");
   for (const url of externos) {

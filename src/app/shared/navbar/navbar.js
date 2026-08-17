@@ -18,6 +18,10 @@ const ENLACES_NAVEGACION_BASE = [
       { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
       // Ya existía como marcador de posición; ahora la sección existe.
       { texto: "Notas", href: "/app/features/notas/", habilitado: true },
+      // Va dentro de Academy y no en Tools: es para practicar lo que se
+      // estudia, no una utilidad suelta. La carpeta conserva el nombre
+      // interno `practica`; sólo lo público se llama Código.
+      { texto: "Código", href: "/app/features/codigo/", habilitado: true },
     ],
   },
   { texto: "Noticias", habilitado: false },

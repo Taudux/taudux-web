@@ -13,7 +13,7 @@ const {
   generarDatosSinteticos,
   inferirTipoColumna,
   normalizarNombreIdentificador,
-} = require(path.join(ROOT, "src/app/features/practica/practica.datos.js"));
+} = require(path.join(ROOT, "src/app/features/codigo/practica.datos.js"));
 
 /*
   Este módulo escribe SQL a partir de texto que pega el alumno. Lo que se blinda

@@ -286,7 +286,7 @@ function descargarCodigo() {
   if (!sesionActiva) {
     // Vuelve al lenguaje en el que estaba, no al playground genérico.
     window.location.href = urlLoginConDestino(
-      `/app/features/practica/#${lenguajeActivo.id}`,
+      `/app/features/codigo/#${lenguajeActivo.id}`,
     );
     return;
   }

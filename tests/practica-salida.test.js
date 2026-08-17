@@ -9,7 +9,7 @@ const {
   crearAcumuladorSalida,
   formatearCeldaSql,
   formatearTablaSql,
-} = require(path.join(ROOT, "src/app/features/practica/practica.salida.js"));
+} = require(path.join(ROOT, "src/app/features/codigo/practica.salida.js"));
 
 /*
   El caso central a blindar es el accidente que todo alumno comete el primer día:

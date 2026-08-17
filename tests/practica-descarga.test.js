@@ -13,8 +13,8 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "u
   función escondida.
 */
 
-const JS = read("src/app/features/practica/practica.js");
-const HTML = read("src/app/features/practica/index.html");
+const JS = read("src/app/features/codigo/practica.js");
+const HTML = read("src/app/features/codigo/index.html");
 
 function cuerpoDeFuncion(fuente, nombre) {
   const inicio = fuente.indexOf(`function ${nombre}(`);
@@ -76,7 +76,7 @@ test("un fallo al resolver la sesión deja el botón bloqueado, no abierto", () 
 test("el login devuelve al playground, en el lenguaje que estaba", () => {
   const cuerpo = cuerpoDeFuncion(JS, "descargarCodigo");
   assert.match(cuerpo, /urlLoginConDestino\(/);
-  assert.match(cuerpo, /\/app\/features\/practica\/#\$\{lenguajeActivo\.id\}/);
+  assert.match(cuerpo, /\/app\/features\/codigo\/#\$\{lenguajeActivo\.id\}/);
 });
 
 /*
@@ -106,7 +106,7 @@ test("cambiar de lenguaje no borra el candado", () => {
 });
 
 test("la nota desaparece cuando hay sesión", () => {
-  const css = read("src/app/features/practica/practica.css");
+  const css = read("src/app/features/codigo/practica.css");
   assert.match(css, /\.practica__nota-descarga\s*\{/);
   assert.match(css, /\.practica__descargar--bloqueado\s*\{/);
 });

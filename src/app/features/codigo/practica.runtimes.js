@@ -22,8 +22,8 @@
 */
 
 const RUTAS_WORKER_PRACTICA = {
-  python: "/app/features/practica/workers/python.worker.js",
-  sql: "/app/features/practica/workers/sql.worker.js",
+  python: "/app/features/codigo/workers/python.worker.js",
+  sql: "/app/features/codigo/workers/sql.worker.js",
 };
 
 function crearResultadoPractica(parcial = {}) {
