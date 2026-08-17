@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "areas": [
+    {
+      "slug": "machine-learning",
+      "titulo": "Machine Learning",
+      "resumen": "Cómo un modelo aprende de los datos: con respuestas conocidas de por medio, o sin ninguna.",
+      "hijos": [
+        {
+          "slug": "aprendizaje-supervisado",
+          "titulo": "Aprendizaje supervisado",
+          "resumen": "Aprender de ejemplos ya etiquetados para predecir la etiqueta de un caso nuevo.",
+          "notas": [
+            {
+              "slug": "que-es-el-aprendizaje-supervisado",
+              "titulo": "¿Qué es el aprendizaje supervisado?",
+              "resumen": "La idea completa en una página: datos con respuesta, función que la aproxima y error que se minimiza.",
+              "archivo": "machine-learning/aprendizaje-supervisado/que-es-el-aprendizaje-supervisado.md",
+              "etiquetas": ["fundamentos"],
+              "relacionadas": ["que-es-el-aprendizaje-no-supervisado", "regresion-lineal"]
+            }
+          ],
+          "hijos": [
+            {
+              "slug": "regresion",
+              "titulo": "Regresión",
+              "resumen": "Cuando lo que se predice es un número continuo.",
+              "notas": [
+                {
+                  "slug": "regresion-lineal",
+                  "titulo": "Regresión lineal",
+                  "resumen": "El modelo más simple que sirve de verdad, y la razón por la que sigue siendo la primera parada.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/regresion/regresion-lineal.md",
+                  "etiquetas": ["regresión", "modelos lineales"],
+                  "relacionadas": ["metricas-de-regresion", "regresion-logistica", "analisis-de-componentes-principales"]
+                },
+                {
+                  "slug": "metricas-de-regresion",
+                  "titulo": "Métricas de regresión",
+                  "resumen": "MAE, RMSE y R²: qué mide cada una y por qué elegir mal la métrica arruina el modelo.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/regresion/metricas-de-regresion.md",
+                  "etiquetas": ["regresión", "evaluación"],
+                  "relacionadas": []
+                }
+              ]
+            },
+            {
+              "slug": "clasificacion",
+              "titulo": "Clasificación",
+              "resumen": "Cuando lo que se predice es una categoría.",
+              "notas": [
+                {
+                  "slug": "regresion-logistica",
+                  "titulo": "Regresión logística",
+                  "resumen": "Un modelo lineal que devuelve probabilidades, y por qué no es una regresión.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/clasificacion/regresion-logistica.md",
+                  "etiquetas": ["clasificación", "modelos lineales"],
+                  "relacionadas": ["matriz-de-confusion"]
+                },
+                {
+                  "slug": "matriz-de-confusion",
+                  "titulo": "Matriz de confusión",
+                  "resumen": "Precisión, recall y el motivo por el que el accuracy miente con clases desbalanceadas.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/clasificacion/matriz-de-confusion.md",
+                  "etiquetas": ["clasificación", "evaluación"],
+                  "relacionadas": ["regresion-logistica", "metricas-de-regresion"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "aprendizaje-no-supervisado",
+          "titulo": "Aprendizaje no supervisado",
+          "resumen": "Encontrar estructura en datos que nadie etiquetó: grupos, ejes y patrones.",
+          "notas": [
+            {
+              "slug": "que-es-el-aprendizaje-no-supervisado",
+              "titulo": "¿Qué es el aprendizaje no supervisado?",
+              "resumen": "Qué se puede aprender sin respuestas y, sobre todo, cómo se sabe si el resultado sirve.",
+              "archivo": "machine-learning/aprendizaje-no-supervisado/que-es-el-aprendizaje-no-supervisado.md",
+              "etiquetas": ["fundamentos"],
+              "relacionadas": ["k-means", "que-es-el-aprendizaje-supervisado"]
+            }
+          ],
+          "hijos": [
+            {
+              "slug": "clustering",
+              "titulo": "Clustering",
+              "resumen": "Agrupar observaciones parecidas sin saber de antemano cuáles son los grupos.",
+              "notas": [
+                {
+                  "slug": "k-means",
+                  "titulo": "K-means",
+                  "resumen": "El algoritmo de agrupamiento más usado, sus supuestos ocultos y cómo elegir la k.",
+                  "archivo": "machine-learning/aprendizaje-no-supervisado/clustering/k-means.md",
+                  "etiquetas": ["clustering"],
+                  "relacionadas": ["clustering-jerarquico", "analisis-de-componentes-principales"]
+                },
+                {
+                  "slug": "clustering-jerarquico",
+                  "titulo": "Clustering jerárquico",
+                  "resumen": "Agrupar sin fijar k de antemano y leer el dendrograma sin engañarse.",
+                  "archivo": "machine-learning/aprendizaje-no-supervisado/clustering/clustering-jerarquico.md",
+                  "etiquetas": ["clustering"],
+                  "relacionadas": ["k-means"]
+                }
+              ]
+            },
+            {
+              "slug": "reduccion-de-dimensionalidad",
+              "titulo": "Reducción de dimensionalidad",
+              "resumen": "Describir los mismos datos con menos columnas sin perder lo que importa.",
+              "notas": [
+                {
+                  "slug": "analisis-de-componentes-principales",
+                  "titulo": "Análisis de componentes principales (PCA)",
+                  "resumen": "Rotar los datos hacia sus direcciones de mayor varianza, y qué significa realmente cada componente.",
+                  "archivo": "machine-learning/aprendizaje-no-supervisado/reduccion-de-dimensionalidad/analisis-de-componentes-principales.md",
+                  "etiquetas": ["reducción de dimensionalidad", "álgebra lineal"],
+                  "relacionadas": ["regresion-lineal", "k-means"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
