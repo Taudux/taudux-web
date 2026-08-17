@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="/app/shared/confirm-dialog/confirm-dialog.css">
   <link rel="stylesheet" href="/app/features/auth/auth.css">
   <link rel="stylesheet" href="/app/features/portal/portal.css">
+  <script defer src="/app/core/analytics/ga4.js"></script>
 </head>
 
 <body>
@@ -42,6 +43,16 @@
         <p>Cargando tu portal.</p>
       </div>
 
+      <!-- Salidas del fallo de reauth con Google. Van fuera del bloque de
+           arranque porque mostrarFalloReauth() lo escribe con textContent y eso
+           borra sus hijos. Reusa .auth__actions (auth.css, ya cargado): mismo
+           recurso que oauth-callback muestra cuando el proveedor no deja una
+           sesión utilizable. -->
+      <div class="auth__actions" id="portalStartupActions" hidden>
+        <button type="button" class="button button--glow" id="botonReintentarReauth">Volver a intentar</button>
+        <a class="button button--outline" href="/app/features/auth/login/">Ir a iniciar sesión</a>
+      </div>
+
       <noscript>
         <p class="portal__noscript panel">Necesitas habilitar JavaScript para usar el portal de tu cuenta. Puedes <a href="/">volver al inicio</a>.</p>
       </noscript>
@@ -51,8 +62,8 @@
           <aside class="portal__sidebar panel" aria-label="Secciones del portal">
             <nav class="portal__nav" id="portalNav">
               <a class="portal__nav-link" href="#perfil" data-seccion="perfil">Editar Perfil</a>
-              <a class="portal__nav-link" href="#cuenta" data-seccion="cuenta">Mi cuenta</a>
-              <a class="portal__nav-link" href="#correo" data-seccion="correo">Preferencias de correo</a>
+              <a class="portal__nav-link" href="#cuenta" data-seccion="cuenta">Acceso y seguridad</a>
+              <a class="portal__nav-link" href="#correo" data-seccion="correo">Preferencias de avisos</a>
               <a class="portal__nav-link" href="#plan" data-seccion="plan">
                 Mi plan
                 <span class="portal__nav-badge">Pronto</span>
@@ -95,13 +106,21 @@
             </section>
 
             <section class="portal__section panel panel--spacious" id="seccion-cuenta" data-seccion="cuenta" aria-labelledby="tituloCuenta" hidden>
-              <h2 class="portal__section-title" id="tituloCuenta">Mi cuenta</h2>
+              <h2 class="portal__section-title" id="tituloCuenta">Acceso y seguridad</h2>
               <p class="portal__section-intro">Aquí vas a ver el correo con el que entras y las opciones de acceso.</p>
 
               <div class="portal__field-group">
                 <label for="cuentaEmail">Correo</label>
                 <input class="field" type="email" id="cuentaEmail" name="email" readonly aria-readonly="true">
                 <p class="portal__field-note">El correo no se puede cambiar desde aquí. ¿Necesitas ayuda? <a href="/#contacto">Contáctanos</a>.</p>
+              </div>
+
+              <div class="portal__form" id="avisoSinContrasena" hidden>
+                <p class="portal__section-intro">Tu cuenta todavía no tiene contraseña porque entras con Google. Para crear una, te enviaremos un enlace a tu correo.</p>
+                <div class="portal__form-actions">
+                  <button type="button" class="button button--outline" id="botonEnlaceContrasena" data-loading-text="Enviando…">Enviarme un enlace</button>
+                </div>
+                <p class="portal__field-note" id="avisoSinContrasenaEstado" role="status" aria-live="polite"></p>
               </div>
 
               <form id="formContrasena" class="portal__form" novalidate>
@@ -161,6 +180,14 @@
                 <p class="portal__section-intro">Se borran tu cuenta y tu perfil de forma permanente. Esta acción no se puede deshacer.</p>
                 <button type="button" class="button button--outline portal__danger-button" id="botonMostrarEliminarCuenta">Eliminar cuenta</button>
 
+                <div class="portal__form" id="avisoSinContrasenaEliminar" hidden>
+                  <p class="portal__section-intro">Para eliminar tu cuenta necesitamos confirmar que eres tú. Vuelve a entrar con Google para continuar.</p>
+                  <div class="portal__form-actions">
+                    <button type="button" class="button button--outline" id="botonReautenticarGoogle" data-loading-text="Redirigiendo…">Continuar con Google</button>
+                  </div>
+                  <p class="portal__field-note" id="avisoSinContrasenaEliminarEstado" role="status" aria-live="polite"></p>
+                </div>
+
                 <form id="formEliminarCuenta" class="portal__form" novalidate hidden>
                   <p class="portal__status" id="eliminarCuentaStatus" role="alert" tabindex="-1" hidden></p>
 
@@ -183,8 +210,8 @@
             </section>
 
             <section class="portal__section panel panel--spacious" id="seccion-correo" data-seccion="correo" aria-labelledby="tituloCorreo" hidden>
-              <h2 class="portal__section-title" id="tituloCorreo">Preferencias de correo</h2>
-              <p class="portal__section-intro">Elige qué avisos quieres recibir por correo.</p>
+              <h2 class="portal__section-title" id="tituloCorreo">Preferencias de avisos</h2>
+              <p class="portal__section-intro">Elige qué avisos quieres recibir.</p>
 
               <form id="formCorreo" class="portal__form" novalidate>
                 <p class="portal__status" id="correoStatus" role="alert" tabindex="-1" hidden></p>
@@ -192,9 +219,9 @@
                 <div class="portal__field-group">
                   <label class="portal__checkbox" for="correoCursoNuevo">
                     <input type="checkbox" id="correoCursoNuevo" name="avisosCursoNuevo">
-                    <span>Avísame por correo cuando se publique un curso nuevo.</span>
+                    <span>Avísame en la app cuando se publique un curso nuevo.</span>
                   </label>
-                  <p class="portal__field-note">Puedes desactivarlo cuando quieras desde aquí o con el enlace al pie de cada correo.</p>
+                  <p class="portal__field-note">Puedes desactivarlo cuando quieras desde aquí. Necesitas tener la app instalada para recibir estos avisos.</p>
                 </div>
 
                 <div class="portal__form-actions">
@@ -232,6 +259,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app/core/supabase/supabase-client.js"></script>
   <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/core/auth/auth-identidades.js"></script>
   <script src="/app/core/perfil/perfil.service.js"></script>
   <script src="/app/features/auth/auth-ui.js"></script>
   <script src="/app/shared/navbar/navbar.js"></script>
@@ -240,6 +268,7 @@
   <script src="/app/features/portal/portal.secciones.js"></script>
   <script src="/app/features/portal/portal.perfil.js"></script>
   <script src="/app/features/portal/portal.correo.js"></script>
+  <script src="/app/features/portal/portal.reauth.js"></script>
   <script src="/app/features/portal/portal.js"></script>
 </body>
 

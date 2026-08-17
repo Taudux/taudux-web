@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/app/features/home/home.css">
   <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script defer src="/app/core/analytics/ga4.js"></script>
 </head>
 
 <body>
@@ -25,11 +26,18 @@
       <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo pequeño" class="navbar__logo">
     </a>
 
+    <!--
+      Misión/Visión/Valores todavía no tienen destino: van como <span> con
+      aria-disabled, nunca como <a> vacío, siguiendo la misma convención que
+      footer__link--pending y nav-menu__link--disabled.
+    -->
+    <div class="navbar__principios">
+      <span class="navbar__principio" aria-disabled="true">Misión</span>
+      <span class="navbar__principio" aria-disabled="true">Visión</span>
+      <span class="navbar__principio" aria-disabled="true">Valores</span>
+    </div>
+
     <div class="navbar__links navbar__links--visible">
-      <a href="#quienes-somos" class="navbar__link">¿Quiénes somos?</a>
-      <a href="#servicios" class="navbar__link">Servicios</a>
-      <a href="#herramientas" class="navbar__link">Herramientas</a>
-      <a href="#contacto" class="navbar__link">Contáctanos</a>
       <a href="/app/features/auth/login/" id="accessBtn" class="navbar__link button button--access">Acceder</a>
     </div>
   </nav>
@@ -69,8 +77,8 @@
 
   <main class="home">
   <section id="quienes-somos" class="home__section about">
-    <div id="particles-quienes" class="about__particles" aria-hidden="true"></div>
     <div class="about__content panel panel--spacious u-contenedor u-contenedor--contenido">
+      <div id="particles-quienes" class="about__particles" aria-hidden="true"></div>
       <h2 class="about__title">Soluciones inteligentes para un mundo digital</h2>
       <p class="about__description">
          Somos un equipo multidisciplinario de profesionales apasionados por la

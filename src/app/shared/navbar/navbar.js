@@ -3,21 +3,67 @@
   cargarse después de ese servicio.
 */
 
+/*
+  La jerarquía de 2 niveles vive en el campo `hijos`. Una entrada con `hijos`
+  es una cabecera de grupo pura (sin `href`/`habilitado` propios): al
+  renderizar se convierte en un acordeón que despliega sus hijos in-place
+  dentro del propio panel desplegable, nunca en una navegación a una página
+  índice (ver crearAcordeonMenu).
+*/
 const ENLACES_NAVEGACION_BASE = [
-  { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
-  /*
-    Va como "Práctica" y no dentro de "Herramientas" porque ese texto ya lo ocupa
-    un ancla del landing (#herramientas), y montarPanelNavegacion descarta el
-    enlace del sitio cuando un ancla usa el mismo nombre: el playground
-    desaparecería del menú sin error visible.
-  */
-  { texto: "Práctica", href: "/app/features/practica/", habilitado: true },
-  { texto: "Notas", href: "/app/features/notas/", habilitado: true },
-  { texto: "Portal", href: "/app/features/portal/", habilitado: true },
-  { texto: "Publicaciones", habilitado: false },
+  { texto: "Mi cuenta", href: "/app/features/portal/", habilitado: true },
+  {
+    texto: "Academy",
+    hijos: [
+      { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
+      // Ya existía como marcador de posición; ahora la sección existe.
+      { texto: "Notas", href: "/app/features/notas/", habilitado: true },
+    ],
+  },
+  { texto: "Noticias", habilitado: false },
+  {
+    texto: "Tools",
+    hijos: [
+      {
+        texto: "Transacciones financieras",
+        href: "/app/features/transactions/",
+        habilitado: true,
+      },
+      {
+        // Deshabilitado y sólo para admin: `habilitado: false` lo pinta en gris,
+        // `soloAdmin` decide quién llega a verlo siquiera.
+        texto: "Detector de imágenes IA",
+        href: "/app/features/detector/detector.html",
+        habilitado: false,
+        soloAdmin: true,
+      },
+    ],
+  },
   { texto: "Proyectos", habilitado: false },
-  { texto: "Herramientas", habilitado: false },
 ];
+
+/*
+  Los items `soloAdmin` desaparecen del menú para quien no lo sea, en vez de
+  pintarse en gris: anunciarle una sección que no le corresponde sólo genera
+  preguntas. Ojo, esto es cosmética — la URL sigue abriendo para cualquiera
+  porque el sitio es estático y no hay servidor que niegue nada. Sirve para
+  ordenar el menú, NO como control de acceso.
+
+  Devuelve copias: ENLACES_NAVEGACION_BASE es un módulo compartido entre los dos
+  paneles (mobile y cuenta), y filtrarlo en el lugar dejaría el menú recortado
+  para el siguiente montaje.
+*/
+function filtrarEnlacesPorRol(enlaces, esUsuarioAdmin) {
+  return enlaces
+    .filter((enlace) => !enlace.soloAdmin || esUsuarioAdmin)
+    .map((enlace) =>
+      enlace.hijos
+        ? { ...enlace, hijos: filtrarEnlacesPorRol(enlace.hijos, esUsuarioAdmin) }
+        : enlace
+    )
+    // Una cabecera que se quedó sin hijos se despliega y no ofrece nada.
+    .filter((enlace) => !enlace.hijos || enlace.hijos.length > 0);
+}
 
 async function salirYVolver(evento) {
   if (evento) evento.preventDefault();
@@ -47,6 +93,18 @@ function actualizarEstadoVisualNavbar() {
 
   const desplazado = window.scrollY > 60;
   navbar.classList.toggle("navbar--scrolled", desplazado);
+
+  /*
+    Misión/Visión/Valores no acompañan al hero: recién aparecen cuando el hero
+    terminó de salir de pantalla, o sea cuando la segunda sección toca el tope.
+    Se mide el borde inferior real del hero en cada frame en vez de comparar
+    contra un umbral fijo en píxeles, para que el corte siga siendo exacto si
+    el hero cambia de alto (rotar el teléfono, fuentes que cargan tarde).
+    Sin hero —cualquier página que no sea el landing— la clase nunca se activa.
+  */
+  const hero = document.querySelector(".hero");
+  const heroFueraDePantalla = Boolean(hero) && hero.getBoundingClientRect().bottom <= 0;
+  navbar.classList.toggle("navbar--pasado-hero", heroFueraDePantalla);
 }
 
 /* Cache para no repetir querySelectorAll en cada evento de scroll. */
@@ -149,10 +207,11 @@ function conectarDesplegable({ menu, toggle, lista }) {
   return cerrar;
 }
 
-function crearItemMenu({ texto, href, alHacerClick, destacado, habilitado = true }) {
+function crearItemMenu({ texto, href, alHacerClick, destacado, habilitado = true, esHijo = false }) {
   if (!habilitado) {
     const item = document.createElement("span");
     item.className = "nav-menu__link nav-menu__link--disabled";
+    if (esHijo) item.classList.add("nav-menu__link--child");
     item.setAttribute("aria-disabled", "true");
     item.textContent = texto;
     return item;
@@ -162,9 +221,92 @@ function crearItemMenu({ texto, href, alHacerClick, destacado, habilitado = true
   enlace.href = href;
   enlace.className = "nav-menu__link floating-menu__link";
   if (destacado) enlace.classList.add("nav-menu__link--cta");
+  if (esHijo) enlace.classList.add("nav-menu__link--child");
   enlace.textContent = texto;
   if (alHacerClick) enlace.addEventListener("click", alHacerClick);
   return enlace;
+}
+
+/*
+  Combina el prefijo del contenedor padre (idLista del desplegable:
+  "menuNavegacionLista" en mobile, "menuCuentaLista" en la cuenta de
+  escritorio) con el texto normalizado del grupo, para que un mismo grupo
+  ("Academy", "Tools") no choque de id entre ambos paneles: los dos conviven
+  en el mismo documento y aria-controls exige unicidad.
+*/
+function idDePanelAcordeon(prefijoId, texto) {
+  const slug = texto
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return `${prefijoId}-acordeon-${slug}`;
+}
+
+/*
+  Grupo colapsable (Academy, Tools): a diferencia de crearItemMenu, el nodo
+  que devuelve es un contenedor con hijos reales en el DOM, no una hoja
+  aplanada. El toggle es un <button>, nunca un <a>: el listener de cierre
+  global en conectarDesplegable cierra el panel entero cuando el click viene
+  de un <a> (`evento.target.closest("a")`), y un botón no matchea ese
+  selector, así que expandir el grupo no cierra el desplegable completo.
+
+  `registroDeCierres` es un array local del panel que llama a esta función
+  (uno por cada punto de render: panel mobile, grupo de cuenta), NO el
+  `cerradoresDeDesplegables` global de arriba — ese resuelve la exclusión
+  mutua entre los paneles "site" y "account"; este resuelve la exclusión
+  mutua entre Academy y Tools dentro de un mismo panel.
+*/
+function crearAcordeonMenu({ texto, hijos }, { registroDeCierres, prefijoId }) {
+  const contenedor = document.createElement("div");
+  contenedor.className = "nav-menu__accordion";
+
+  const idPanel = idDePanelAcordeon(prefijoId, texto);
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "nav-menu__link floating-menu__link nav-menu__accordion-toggle";
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-controls", idPanel);
+  // Mismo <span> que crearItemMenu para los ítems con badge: el texto
+  // suelto no se puede centrar con flex, necesita su propia caja (ver
+  // .nav-menu__link-label en navbar.css).
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "nav-menu__link-label";
+  etiqueta.textContent = texto;
+  toggle.appendChild(etiqueta);
+
+  const panel = document.createElement("div");
+  panel.className = "nav-menu__accordion-panel";
+  panel.id = idPanel;
+
+  const panelInterior = document.createElement("div");
+  panelInterior.className = "nav-menu__accordion-panel-inner";
+  hijos.forEach((hijo) => panelInterior.appendChild(crearItemMenu({ ...hijo, esHijo: true })));
+  panel.appendChild(panelInterior);
+
+  function establecerAbierto(abierto) {
+    contenedor.classList.toggle("nav-menu__accordion--open", abierto);
+    toggle.setAttribute("aria-expanded", String(abierto));
+  }
+
+  const cerrar = () => establecerAbierto(false);
+  registroDeCierres.push(cerrar);
+
+  // Arranca siempre cerrado; abrir este grupo cierra cualquier otro del
+  // mismo registro (exclusión mutua, un solo grupo abierto a la vez).
+  toggle.addEventListener("click", () => {
+    const abriendo = !contenedor.classList.contains("nav-menu__accordion--open");
+    if (abriendo) {
+      registroDeCierres.forEach((otroCerrar) => {
+        if (otroCerrar !== cerrar) otroCerrar();
+      });
+    }
+    establecerAbierto(abriendo);
+  });
+
+  contenedor.appendChild(toggle);
+  contenedor.appendChild(panel);
+  return contenedor;
 }
 
 function enlaceDeSesion(session) {
@@ -174,23 +316,10 @@ function enlaceDeSesion(session) {
   return { texto: "Salir", href: "#", alHacerClick: salirYVolver };
 }
 
-async function nombreParaMenu(session) {
+async function nombreParaMenu(session, perfil) {
   if (!session) return null;
-  const nombre = await nombreUsuario(session);
+  const nombre = await nombreUsuario(session, perfil);
   return nombre || "Mi cuenta";
-}
-
-function resolverEnlacesNavegacion(esAdministrador) {
-  return ENLACES_NAVEGACION_BASE.map((enlace) => {
-    if (enlace.texto === "Herramientas" && esAdministrador) {
-      return {
-        ...enlace,
-        href: "/app/features/detector/detector.html",
-        habilitado: true,
-      };
-    }
-    return enlace;
-  });
 }
 
 /*
@@ -210,11 +339,14 @@ function anclasDeLaPagina() {
 }
 
 function montarPanelNavegacion(lista, { anclas, enlaces }) {
+  // `enlaces` llega con `hijos` tal cual está en ENLACES_NAVEGACION_BASE: el
+  // dedupe y el render operan directo sobre ese array de nivel superior, sin
+  // aplanar (ver crearAcordeonMenu).
   const textosDeAnclas = new Set(anclas.map((ancla) => ancla.texto.toLowerCase()));
   /*
-    "Herramientas" existe como ancla del landing y como enlace admin al
-    detector. Si el ancla ya ocupa ese texto, el enlace del sitio se omite:
-    dos entradas con el mismo nombre y distinto destino son indistinguibles.
+    "Herramientas" puede existir a la vez como ancla del landing y como enlace
+    del sitio. Si el ancla ya ocupa ese texto, el enlace se omite: dos entradas
+    con el mismo nombre y distinto destino son indistinguibles.
   */
   const enlacesSinRepetir = enlaces.filter(
     (enlace) => !textosDeAnclas.has(enlace.texto.toLowerCase())
@@ -228,7 +360,17 @@ function montarPanelNavegacion(lista, { anclas, enlaces }) {
     lista.appendChild(divisor);
   }
 
-  enlacesSinRepetir.forEach((enlace) => lista.appendChild(crearItemMenu(enlace)));
+  // Registro propio de este panel: la exclusión mutua entre Academy y Tools
+  // no se comparte con el grupo de cuenta (otro punto de render, ver
+  // montarMenus) ni con cerradoresDeDesplegables (otro concern).
+  const registroDeCierres = [];
+  enlacesSinRepetir.forEach((enlace) => {
+    if (enlace.hijos && enlace.hijos.length) {
+      lista.appendChild(crearAcordeonMenu(enlace, { registroDeCierres, prefijoId: lista.id }));
+    } else {
+      lista.appendChild(crearItemMenu(enlace));
+    }
+  });
 }
 
 /*
@@ -261,9 +403,17 @@ async function montarMenus() {
   // de dejarlo invisible para siempre.
   try {
     const session = await obtenerSesion();
-    const esAdministrador = Boolean(session && await esAdmin(session));
-
-    const enlacesNavegacion = resolverEnlacesNavegacion(esAdministrador);
+    /*
+      El perfil se resuelve una sola vez y de él salen las dos cosas que el menú
+      necesita: el rol (para filtrar) y el nombre. obtenerPerfil() no cachea, así
+      que pedirlo por separado costaría dos consultas en cada carga de página, y
+      el navbar se monta en todas.
+    */
+    const perfil = session ? await obtenerPerfil(session) : null;
+    const enlacesNavegacion = filtrarEnlacesPorRol(
+      ENLACES_NAVEGACION_BASE,
+      perfil?.rol === "admin"
+    );
 
     const listaNavegacion = document.getElementById("menuNavegacionLista");
     if (listaNavegacion) {
@@ -273,7 +423,7 @@ async function montarMenus() {
       });
     }
 
-    const nombreCuenta = await nombreParaMenu(session);
+    const nombreCuenta = await nombreParaMenu(session, perfil);
 
     const { menu, toggle, lista } = crearDesplegable({
       clase: "account",
@@ -292,12 +442,21 @@ async function montarMenus() {
     /*
       En mobile la navegación vive en la hamburguesa, así que este grupo se
       oculta por CSS. En desktop sigue siendo la única vía de navegación de las
-      páginas sin fila de enlaces (cursos, detector, privacidad).
+      páginas sin fila de enlaces (cursos, transacciones, privacidad).
     */
     const grupoNavegacion = document.createElement("div");
     grupoNavegacion.className = "nav-menu__group nav-menu__group--nav";
+    // Registro propio de este grupo: no comparte exclusión mutua con el
+    // panel mobile (montarPanelNavegacion arma el suyo).
+    const registroDeCierresCuenta = [];
     enlacesNavegacion.forEach((enlace) => {
-      grupoNavegacion.appendChild(crearItemMenu(enlace));
+      if (enlace.hijos && enlace.hijos.length) {
+        grupoNavegacion.appendChild(
+          crearAcordeonMenu(enlace, { registroDeCierres: registroDeCierresCuenta, prefijoId: lista.id })
+        );
+      } else {
+        grupoNavegacion.appendChild(crearItemMenu(enlace));
+      }
     });
     lista.appendChild(grupoNavegacion);
 

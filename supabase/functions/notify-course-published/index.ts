@@ -3,19 +3,17 @@ import {
   PAGINA_DESTINATARIOS,
   PRESUPUESTO_MS_DEFAULT,
   allowedOrigin,
-  construirLotePush,
-  construirLoteResend,
   debePausar,
   esEmailValido,
   esTokenExpoValido,
   resolverModoAutorizacion,
   siguienteCursor,
-  tokensNoRegistrados,
-  trocearLotePush,
 } from "./anuncios.mjs";
+import { enviarEmail } from "../_shared/enviarEmail.ts";
+import { enviarPush } from "../_shared/enviarPush.ts";
+import { paraEmail, paraPush } from "../_shared/plantillas/nuevoCurso.ts";
 
 const RESEND_BATCH_DELAY_MS = 600;
-const EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send";
 
 function corsHeaders(origin) {
   const result = { "Content-Type": "application/json; charset=utf-8", "Vary": "Origin" };
@@ -33,59 +31,6 @@ function firstRow(data) {
 
 function emptyCounters() {
   return { claimed: 0, sent: 0, paused: 0, failures: 0, recipients: 0 };
-}
-
-async function enviarLote(dependencies, resendApiKey, mensajes) {
-  try {
-    const response = await dependencies.fetchImpl("https://api.resend.com/emails/batch", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(mensajes),
-    });
-    if (!response.ok) {
-      return { ok: false, reason: `resend_batch_failed_${response.status}`.slice(0, 160) };
-    }
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: "resend_request_exception" };
-  }
-}
-
-// Expo caps a request at 100 messages, so a page that yields more tokens than
-// that goes out in several chunks. A partial failure stops the page: the cursor
-// has not advanced yet, so the retry replays this page from its start.
-async function enviarLotePush(dependencies, mensajes) {
-  const tandas = trocearLotePush(mensajes);
-  const muertos = [];
-  for (const tanda of tandas) {
-    let response;
-    try {
-      response = await dependencies.fetchImpl(EXPO_PUSH_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tanda),
-      });
-    } catch {
-      return { ok: false, reason: "expo_request_exception", muertos };
-    }
-    if (!response.ok) {
-      return { ok: false, reason: `expo_push_failed_${response.status}`.slice(0, 160), muertos };
-    }
-    let cuerpo = null;
-    try {
-      cuerpo = await response.json();
-    } catch {
-      // A 2xx we cannot parse still delivered the batch. Losing the tickets only
-      // costs us this round of dead-token cleanup, so it is not worth a retry.
-      cuerpo = null;
-    }
-    muertos.push(...tokensNoRegistrados(tanda, cuerpo));
-    await dependencies.sleep(RESEND_BATCH_DELAY_MS);
-  }
-  return { ok: true, muertos };
 }
 
 // Dropping tokens Expo reported as gone is housekeeping, not part of delivering
@@ -109,6 +54,33 @@ async function olvidarTokensMuertos(serviceClient, dependencies, tokens) {
   }
 }
 
+// The bundle every queue transition RPC keys its update by. Missing p_canal
+// here was exactly the 2026-08-04 incident: a push job's transition matched
+// zero rows against the SQL default of 'email', read as failure, and the
+// five-minute staleness reclaim kept resending it — attempt_count hit 201.
+function argsDelClaim(job) {
+  return {
+    p_curso_id: job.curso_id,
+    p_claim_token: job.claim_token,
+    p_claim_generation: job.claim_generation,
+    p_canal: job.canal,
+  };
+}
+
+// The primary failure (recipients lookup, send, or cursor advance) always
+// counts as one. If the bookkeeping retry call itself also fails too, that's
+// a second, distinct failure: the row is now stuck until the next staleness
+// reclaim, not just scheduled for a normal backoff retry.
+async function fallar(serviceClient, job, counters, motivo) {
+  const retry = await serviceClient.rpc("reintentar_curso_anuncio", {
+    ...argsDelClaim(job),
+    p_sanitized_error: motivo,
+  });
+  counters.failures = 1;
+  if (retry.error || retry.data !== true) counters.failures++;
+  return { counters, stop: true };
+}
+
 async function procesarAnuncio(serviceClient, dependencies, job, contexto) {
   const { inicio, presupuestoMs, siteUrl, remitente, resendApiKey } = contexto;
   const counters = emptyCounters();
@@ -122,12 +94,7 @@ async function procesarAnuncio(serviceClient, dependencies, job, contexto) {
 
   for (;;) {
     if (debePausar(dependencies.now() - inicio, presupuestoMs)) {
-      const pausa = await serviceClient.rpc("pausar_curso_anuncio", {
-        p_curso_id: job.curso_id,
-        p_claim_token: job.claim_token,
-        p_claim_generation: job.claim_generation,
-        p_canal: job.canal,
-      });
+      const pausa = await serviceClient.rpc("pausar_curso_anuncio", argsDelClaim(job));
       counters.paused = 1;
       if (pausa.error || pausa.data !== true) counters.failures++;
       return { counters, stop: true };
@@ -138,16 +105,7 @@ async function procesarAnuncio(serviceClient, dependencies, job, contexto) {
       limite: PAGINA_DESTINATARIOS,
     });
     if (page.error) {
-      const retry = await serviceClient.rpc("reintentar_curso_anuncio", {
-        p_curso_id: job.curso_id,
-        p_claim_token: job.claim_token,
-        p_claim_generation: job.claim_generation,
-        p_sanitized_error: "recipients_lookup_failed",
-        p_canal: job.canal,
-      });
-      counters.failures = 1;
-      if (retry.error || retry.data !== true) counters.failures++;
-      return { counters, stop: true };
+      return fallar(serviceClient, job, counters, "recipients_lookup_failed");
     }
 
     const destinatarios = Array.isArray(page.data) ? page.data : [];
@@ -162,74 +120,46 @@ async function procesarAnuncio(serviceClient, dependencies, job, contexto) {
     if (validos.length > 0) {
       let resultado;
       if (esPush) {
-        const mensajes = construirLotePush({
+        const mensajes = validos.map((destinatario) => paraPush({
           titulo: job.titulo,
           cursoId: job.curso_id,
-          destinatarios: validos,
-          siteUrl,
-        });
-        resultado = await enviarLotePush(dependencies, mensajes);
+          destinatario,
+        }));
+        resultado = await enviarPush(dependencies, mensajes);
         await olvidarTokensMuertos(serviceClient, dependencies, resultado.muertos ?? []);
       } else {
-        const mensajes = construirLoteResend({
+        const mensajes = validos.map((destinatario) => paraEmail({
           titulo: job.titulo,
-          cursoId: job.curso_id,
-          destinatarios: validos,
+          destinatario,
           siteUrl,
           remitente,
-        });
-        resultado = await enviarLote(dependencies, resendApiKey, mensajes);
+        }));
+        resultado = await enviarEmail(dependencies, resendApiKey, mensajes);
         await dependencies.sleep(RESEND_BATCH_DELAY_MS);
       }
       if (!resultado.ok) {
-        const retry = await serviceClient.rpc("reintentar_curso_anuncio", {
-          p_curso_id: job.curso_id,
-          p_claim_token: job.claim_token,
-          p_claim_generation: job.claim_generation,
-          p_sanitized_error: resultado.reason,
-          p_canal: job.canal,
-        });
-        counters.failures = 1;
-        if (retry.error || retry.data !== true) counters.failures++;
-        return { counters, stop: true };
+        return fallar(serviceClient, job, counters, resultado.reason);
       }
       counters.recipients += validos.length;
     }
 
     const nuevoCursor = siguienteCursor(destinatarios, cursor);
     const avance = await serviceClient.rpc("avanzar_curso_anuncio", {
-      p_curso_id: job.curso_id,
-      p_claim_token: job.claim_token,
-      p_claim_generation: job.claim_generation,
+      ...argsDelClaim(job),
       p_ultimo: nuevoCursor,
       p_enviados: validos.length,
-      p_canal: job.canal,
     });
     if (avance.error || avance.data !== true) {
       // Si el cursor no quedó persistido, seguir en memoria haría que la
       // próxima invocación retome desde el valor viejo de la BD y reenvíe
       // esta página entera. Cortamos acá, igual que ante un fallo de Resend:
       // el reintento parte del mismo punto que ya está guardado.
-      const retry = await serviceClient.rpc("reintentar_curso_anuncio", {
-        p_curso_id: job.curso_id,
-        p_claim_token: job.claim_token,
-        p_claim_generation: job.claim_generation,
-        p_sanitized_error: "advance_cursor_failed",
-        p_canal: job.canal,
-      });
-      counters.failures = 1;
-      if (retry.error || retry.data !== true) counters.failures++;
-      return { counters, stop: true };
+      return fallar(serviceClient, job, counters, "advance_cursor_failed");
     }
     cursor = nuevoCursor;
 
     if (isLastPage) {
-      const completar = await serviceClient.rpc("completar_curso_anuncio", {
-        p_curso_id: job.curso_id,
-        p_claim_token: job.claim_token,
-        p_claim_generation: job.claim_generation,
-        p_canal: job.canal,
-      });
+      const completar = await serviceClient.rpc("completar_curso_anuncio", argsDelClaim(job));
       counters.sent = 1;
       if (completar.error || completar.data !== true) counters.failures++;
       return { counters, stop: false };

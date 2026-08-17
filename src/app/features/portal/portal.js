@@ -13,6 +13,7 @@
 
 (function () {
   const startup = document.getElementById("portalStartup");
+  const accionesStartup = document.getElementById("portalStartupActions");
   const contenido = document.getElementById("portalContent");
 
   function enlaces() {
@@ -172,10 +173,62 @@
     form.elements.confirmar.value = "";
   }
 
+  /*
+    Cuenta sin identidad email (entró sólo con Google): no hay "contraseña
+    actual" que pedir. En vez de inventar un mecanismo de re-autenticación
+    nuevo, se reusa recuperarContrasena() — el mismo correo que ya manda
+    forgot-password/ — para que el usuario cree una contraseña y a partir de
+    ahí use el portal como cualquier cuenta con contraseña. No baja el piso de
+    seguridad: es la misma prueba de control del buzón que forgot-password ya
+    exige hoy para tomar cualquier cuenta con contraseña.
+  */
+  function configurarEnvioEnlaceContrasena({ boton, estado, email }) {
+    if (!boton || !estado) return;
+
+    boton.addEventListener("click", async () => {
+      const textoOriginal = boton.textContent;
+      boton.disabled = true;
+      boton.textContent = boton.dataset.loadingText || "Enviando…";
+      try {
+        const resultado = await recuperarContrasena(email);
+        estado.textContent = resultado.ok
+          ? `Te enviamos un enlace a ${email}. Ábrelo para crear tu contraseña.`
+          : resultado.mensaje;
+        if (!resultado.ok) mostrarToast(resultado.mensaje, "error");
+      } finally {
+        boton.textContent = textoOriginal;
+        boton.disabled = false;
+      }
+    });
+  }
+
+  /*
+    El resto de esta función (requisitos, coincidencia y el submit con
+    signInWithPassword) queda sin ramificar a propósito: con tieneContrasena
+    en false el form nunca se muestra y su campo actual queda disabled, así
+    que ese código simplemente no llega a ejecutarse por interacción del
+    usuario. Ramificarlo también duplicaría lógica sin necesidad.
+  */
   function configurarFormularioContrasena(session) {
     const form = document.getElementById("formContrasena");
     const estado = document.getElementById("contrasenaStatus");
     if (!form || !estado) return;
+
+    const aviso = document.getElementById("avisoSinContrasena");
+    const tieneContrasena = puedeUsarContrasena(session.user);
+
+    form.hidden = !tieneContrasena;
+    form.elements.actual.required = tieneContrasena;
+    form.elements.actual.disabled = !tieneContrasena;
+    if (aviso) aviso.hidden = tieneContrasena;
+
+    if (!tieneContrasena) {
+      configurarEnvioEnlaceContrasena({
+        boton: document.getElementById("botonEnlaceContrasena"),
+        estado: document.getElementById("avisoSinContrasenaEstado"),
+        email: session.user.email,
+      });
+    }
 
     configurarRequisitosContrasena(
       document.getElementById("contrasenaNueva"),
@@ -277,6 +330,13 @@
     correo tipeado en el diálogo. El toast del diálogo se emite recién cuando la
     promesa resuelve, porque el top layer del <dialog> taparía cualquier toast
     lanzado antes.
+
+    Una cuenta sin identidad email no tiene esa primera barrera para dar: en su
+    lugar se reautentica volviendo a entrar con Google (reautenticarConGoogle,
+    auth.service.js). El diálogo de tipeo del correo se abre recién al volver
+    — retomarEliminarCuentaTrasGoogle(), llamada desde inicializarPortal() —
+    para que el borrado siga exigiendo pasar por el proveedor antes de la
+    confirmación, no antes.
   */
   function configurarEliminarCuenta(session) {
     const boton = document.getElementById("botonMostrarEliminarCuenta");
@@ -284,10 +344,47 @@
     const estado = document.getElementById("eliminarCuentaStatus");
     if (!boton || !form || !estado) return;
 
+    const aviso = document.getElementById("avisoSinContrasenaEliminar");
+    const botonGoogle = document.getElementById("botonReautenticarGoogle");
+    const estadoGoogle = document.getElementById("avisoSinContrasenaEliminarEstado");
+    const tieneContrasena = puedeUsarContrasena(session.user);
+
+    form.elements.contrasena.required = tieneContrasena;
+    form.elements.contrasena.disabled = !tieneContrasena;
+
+    if (!tieneContrasena && botonGoogle) {
+      botonGoogle.addEventListener("click", async () => {
+        establecerBotonOcupado(botonGoogle, true);
+        try {
+          sessionStorage.setItem(
+            CLAVE_REAUTH_ELIMINAR,
+            JSON.stringify(marcaDeReauthEliminar(session.user.id, Date.now())),
+          );
+        } catch {
+          // Storage bloqueado: el intento sigue, pero al volver no habrá marca
+          // que retomar (ver reauthEliminarEsValida) — falla a no hacer nada,
+          // nunca a borrar sin confirmación.
+        }
+
+        const resultado = await reautenticarConGoogle();
+        // Con éxito el navegador ya se fue a Google; solo se llega acá si falló.
+        if (!resultado.ok) {
+          if (estadoGoogle) estadoGoogle.textContent = resultado.mensaje;
+          mostrarToast(resultado.mensaje, "error");
+          establecerBotonOcupado(botonGoogle, false);
+        }
+      });
+    }
+
     boton.addEventListener("click", () => {
-      form.hidden = false;
       boton.hidden = true;
-      form.elements.contrasena.focus();
+      if (tieneContrasena) {
+        form.hidden = false;
+        form.elements.contrasena.focus();
+      } else if (aviso) {
+        aviso.hidden = false;
+        if (botonGoogle) botonGoogle.focus();
+      }
     });
 
     form.addEventListener("submit", async (evento) => {
@@ -346,6 +443,136 @@
     configurarFormularioContrasena(session);
     configurarCierreSesion();
     configurarEliminarCuenta(session);
+  }
+
+  function leerMarcaReauthEliminar() {
+    try {
+      return JSON.parse(sessionStorage.getItem(CLAVE_REAUTH_ELIMINAR));
+    } catch {
+      return null;
+    }
+  }
+
+  function limpiarMarcaReauthEliminar() {
+    try {
+      sessionStorage.removeItem(CLAVE_REAUTH_ELIMINAR);
+    } catch {
+      // La marca es una mejora de navegación: no debe romper el portal si el
+      // storage está bloqueado.
+    }
+  }
+
+  function tieneCodigoOauthEnUrl() {
+    return new URLSearchParams(window.location.search).has("code");
+  }
+
+  /*
+    Estado terminal para un retorno de Google que no llegó a producir sesión.
+    Reusa el bloque de arranque (ya es role="status" y focusable) en vez de un
+    toast: sin sesión no hay portal que revelar detrás, y un toast sobre una
+    pantalla vacía se lee como un error suelto. Mismo recurso que
+    mostrarFalloOauth() en oauth-callback.js.
+  */
+  function mostrarFalloReauth(mensaje) {
+    if (!startup) return;
+    startup.textContent = mensaje;
+    startup.hidden = false;
+    // El aria-busy queda en true desde el markup: dejarlo así sobre un mensaje
+    // terminal le diría al lector de pantalla que todavía está cargando.
+    startup.setAttribute("aria-busy", "false");
+    /*
+      Las salidas se revelan antes de mover el foco: así el bloque ya está
+      completo cuando el lector de pantalla lo anuncia, y los botones caen a
+      continuación en el orden de tabulación.
+    */
+    if (accionesStartup) accionesStartup.hidden = false;
+    startup.focus();
+  }
+
+  /*
+    "Volver a intentar" recarga, y eso NO reintenta el canje: para cuando se
+    llega acá el ?code= ya salió de la URL y la marca ya se limpió. Lo que
+    recoge es el resultado de un canje que haya terminado tarde —el timeout es
+    de 8s, pero la sesión puede establecerse después—; si no hay ninguna, la
+    recarga termina en el login por requerirSesion(). Para el usuario, que
+    vuelve a intentar borrar su cuenta, ambos desenlaces son el camino correcto.
+  */
+  function configurarReintentoReauth() {
+    const boton = document.getElementById("botonReintentarReauth");
+    if (!boton) return;
+    boton.addEventListener("click", () => window.location.reload());
+  }
+
+  /*
+    El ?code= de Google llega directo al portal (no pasa por oauth-callback.js:
+    ver portal.reauth.js) y el cliente lo canjea solo (detectSessionInUrl:
+    true), pero el canje es asíncrono. Sin esperarlo, requerirSesion() puede
+    correr una fracción de segundo antes de que la sesión exista y mandar al
+    usuario a login, perdiendo el intento de borrado. Mismo patrón de espera
+    que esperarSesionOauth() en oauth-callback.js, acotado a 8s.
+  */
+  async function esperarSesionTrasReauth() {
+    const sesionExistente = await obtenerSesion();
+    if (sesionExistente) return sesionExistente;
+
+    let resolverSesion;
+    const sesionDetectada = new Promise((resolve) => {
+      resolverSesion = resolve;
+    });
+    const { data } = supabaseClient.auth.onAuthStateChange((evento, session) => {
+      if (session && evento === "SIGNED_IN") resolverSesion(session);
+    });
+
+    try {
+      return await Promise.race([
+        sesionDetectada,
+        new Promise((resolve) => setTimeout(() => resolve(null), 8000)),
+      ]);
+    } finally {
+      data.subscription.unsubscribe();
+    }
+  }
+
+  /*
+    Retoma el borrado de cuenta tras volver de reautenticarse con Google. La
+    marca se borra siempre, sea cual sea el resultado: es de un solo uso, así
+    que un refresh posterior de la página no vuelve a abrir el diálogo.
+
+    Una marca inválida (venció, o el usuarioId no coincide porque
+    select_account dejó elegir otra cuenta) no dispara ningún error ruidoso
+    por sí sola aparte del toast: nunca se llega a mostrar el diálogo de
+    confirmación, así que no hay ningún borrado en juego.
+  */
+  async function retomarEliminarCuentaTrasGoogle(session, marca) {
+    limpiarMarcaReauthEliminar();
+
+    if (!reauthEliminarEsValida(marca, session.user.id, Date.now())) {
+      mostrarToast(
+        "No pudimos confirmar tu identidad con esa cuenta de Google. Intenta eliminar tu cuenta de nuevo.",
+        "error",
+      );
+      return;
+    }
+
+    const confirmado = await confirmarConTexto({
+      titulo: "Eliminar cuenta",
+      mensaje: `Se eliminarán tu cuenta (${session.user.email}) y tu perfil de forma permanente. Esta acción no se puede deshacer.`,
+      textoEsperado: session.user.email,
+      etiquetaEntrada: "Escribe tu correo para confirmar:",
+      etiquetaConfirmar: "Eliminar cuenta",
+    });
+    if (!confirmado) return;
+
+    const resultado = await eliminarCuenta();
+    if (!resultado.ok) {
+      mostrarToast(resultado.mensaje, "error");
+      return;
+    }
+
+    // La cuenta ya no existe: el signOut solo limpia la sesión local, y si
+    // fallara igual hay que sacar al usuario de un portal sin dueño.
+    await cerrarSesion({ scope: "local" });
+    window.location.href = "/";
   }
 
   // El perfil llega de la BD en snake_case (avisos_curso_nuevo); el núcleo
@@ -408,10 +635,114 @@
   }
 
   async function inicializarPortal() {
+    // Se lee una sola vez: tanto la espera pre-sesión como el retomo
+    // post-sesión de más abajo dependen de esta misma marca y del mismo
+    // ?code=, así que no tiene sentido volver a consultarlos.
+    const marcaReauth = leerMarcaReauthEliminar();
+    const conCodigoOauth = tieneCodigoOauthEnUrl();
+    let avisoReauth = null;
+
+    if (marcaReauth && !conCodigoOauth) {
+      // Volver sin ?code= y con marca pendiente son dos situaciones distintas:
+      // el proveedor devolvió un error (cancelación incluida), o es una carga
+      // normal del portal arrastrando una marca vieja. Sólo la primera merece
+      // aviso; la segunda se limpia en silencio, como antes.
+      limpiarMarcaReauthEliminar();
+      const errorProveedor = parametrosErrorAuth();
+      if (errorProveedor) {
+        const cancelado =
+          errorProveedor.codigo === "access_denied" ||
+          /access_denied/.test(errorProveedor.descripcion || "");
+        /*
+          Textos cortos a propósito: un toast dura 3s (toast.js) y a velocidad
+          normal de lectura eso alcanza para unas 8 palabras. Las dos cosas que
+          el usuario necesita saber son qué falló y que su cuenta sigue ahí;
+          todo lo demás sobra y lo único que logra es que no llegue a leer ni
+          eso.
+        */
+        avisoReauth = cancelado
+          ? "Verificación cancelada. Tu cuenta sigue activa."
+          : "No pudimos verificarte. Tu cuenta sigue activa.";
+      }
+    }
+
+    if (marcaReauth && conCodigoOauth) {
+      // El usuario no vino a cargar su portal: vino de confirmar su identidad
+      // con Google. El canje puede tardar (hasta el timeout de 8s), y "Cargando
+      // tu portal" no explica la espera ni conecta con el salto al login que
+      // puede venir después. El aria-busy del markup sigue en true a propósito:
+      // esto SIGUE siendo carga, así que el cambio es visual y no se anuncia.
+      if (startup) startup.textContent = "Verificando tu identidad con Google…";
+
+      const sesionReauth = await esperarSesionTrasReauth();
+      history.replaceState(null, "", window.location.pathname);
+      /*
+        Sin sesión tras el canje no se sigue de largo: requerirSesion() mandaría
+        al login sin explicar nada y el usuario perdería el intento sin saber
+        por qué terminó en la pantalla de acceso. Se frena acá con un estado
+        terminal que sí se entiende.
+      */
+      if (!sesionReauth) {
+        limpiarMarcaReauthEliminar();
+        mostrarFalloReauth("No pudimos completar la verificación con Google.");
+        return;
+      }
+
+      /*
+        Validación temprana, antes de poblar o revelar nada. select_account deja
+        elegir una cuenta de Google distinta de la que pidió el borrado, y esa
+        sesión se establece de verdad: seguir de largo mostraría el perfil ajeno
+        y, peor, dejaría esa sesión viva. Un segundo intento de borrado
+        arrancaría desde ella, guardaría la marca con SU id, coincidiría al
+        volver y borraría la cuenta equivocada.
+
+        Por eso el mismatch no sólo aborta: cierra la sesión (scope local — es
+        una sesión legítima, no hay nada que revocar en el servidor, sólo no es
+        la que corresponde a este flujo) y lo dice con todas las letras. El
+        mensaje genérico anterior se leía como "no pasó nada", que es
+        justamente lo que hacía peligroso el segundo intento.
+
+        La comprobación se repite dentro de retomarEliminarCuentaTrasGoogle a
+        propósito: esta capa evita el estado inconsistente, aquella es el guard
+        pegado a la acción irreversible.
+
+        Se redirige al login en vez de quedarse con un mensaje acá: sin sesión
+        el portal no tiene nada que mostrar, y el navbar ya se montó con la
+        sesión ajena (montarMenus lee la sesión una sola vez al cargar — ver
+        navbar.js — y deja el nombre del perfil en el menú). Una carga de página
+        nueva lo arma de cero, sin sesión y sin datos de la otra cuenta.
+        `replace` y no `href`: un portal sin dueño no debe quedar en el
+        historial.
+      */
+      if (!reauthEliminarEsValida(marcaReauth, sesionReauth.user.id, Date.now())) {
+        limpiarMarcaReauthEliminar();
+        await cerrarSesion({ scope: "local" });
+        window.location.replace(`${RUTAS_AUTH.login}?reauth=cuenta-distinta`);
+        return;
+      }
+    }
+
     // Sin sesión, requerirSesion ya navegó al login con ?next=: no hay nada más
     // que hacer en esta página, ni siquiera revelar el contenido.
     const session = await requerirSesion();
     if (!session) return;
+
+    /*
+      Volver de Google es volver a "Acceso y seguridad": de ahí salió el intento
+      de borrado, y ahí es donde el toast o el diálogo tienen sentido. Sin esto
+      la URL vuelve sin hash y resolverSeccionActiva() cae en la sección por
+      defecto (perfil), dejando al usuario en otro lado del portal. Se fija por
+      hash y no con mostrarSeccion() para que la URL y la sección visible no
+      queden desincronizadas ante el primer hashchange.
+
+      La condición no es la marca a secas: una marca vieja (viven 10 min) puede
+      sobrevivir a una carga normal del portal, y ésa se limpia en silencio sin
+      mover al usuario de sección ni pisarle el hash que haya pedido. Sólo un
+      retorno real de Google —error del proveedor o ?code=— reubica.
+    */
+    if (avisoReauth || conCodigoOauth) {
+      history.replaceState(null, "", `${window.location.pathname}#cuenta`);
+    }
 
     aplicarHash();
     window.addEventListener("hashchange", aplicarHash);
@@ -426,7 +757,16 @@
       startup.hidden = true;
       startup.setAttribute("aria-busy", "false");
     }
+
+    // Los dos avisos van después de revelar el portal: un toast o un diálogo
+    // lanzados antes se dibujarían sobre la pantalla de arranque, sin contexto
+    // detrás.
+    if (avisoReauth) mostrarToast(avisoReauth, "error");
+    if (marcaReauth && conCodigoOauth) {
+      await retomarEliminarCuentaTrasGoogle(session, marcaReauth);
+    }
   }
 
+  configurarReintentoReauth();
   inicializarPortal();
 })();

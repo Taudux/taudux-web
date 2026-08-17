@@ -10,8 +10,8 @@
 
 const SECCIONES_PORTAL = [
   { id: "perfil", etiqueta: "Editar Perfil", disponible: true },
-  { id: "cuenta", etiqueta: "Mi cuenta", disponible: true },
-  { id: "correo", etiqueta: "Preferencias de correo", disponible: true },
+  { id: "cuenta", etiqueta: "Acceso y seguridad", disponible: true },
+  { id: "correo", etiqueta: "Preferencias de avisos", disponible: true },
   { id: "plan", etiqueta: "Mi plan", disponible: false },
   { id: "pagos", etiqueta: "Pagos", disponible: false },
 ];

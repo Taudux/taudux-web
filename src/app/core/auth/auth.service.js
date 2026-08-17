@@ -10,6 +10,7 @@ const RUTAS_AUTH = Object.freeze({
   forgotPassword: "/app/features/auth/forgot-password/",
   resetPassword: "/app/features/auth/reset-password/",
   oauthCallback: "/app/features/auth/oauth-callback/",
+  portal: "/app/features/portal/",
 });
 
 const CLAVE_DESTINO_AUTH = "taudux_auth_next";
@@ -191,6 +192,28 @@ async function iniciarSesionConGoogle() {
   return { ok: true };
 }
 
+/*
+  Hermana de iniciarSesionConGoogle para el re-intento de borrado de cuenta de
+  una cuenta Google-only: mismo provider y mismo prompt, pero vuelve al portal
+  en vez de a oauth-callback. El portal no carga auth-callback-guard.js (ver
+  portal.reauth.js), así que puede canjear el ?code= él mismo sin pasar por
+  esa página intermedia — que además está hardcodeada a aterrizar siempre en
+  home (ver oauth-callback.js) y no sirve para retomar un flujo del portal.
+*/
+async function reautenticarConGoogle() {
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: urlAbsolutaAuth(RUTAS_AUTH.portal),
+      queryParams: { prompt: "select_account" },
+    },
+  });
+  if (error) {
+    return { ok: false, codigo: error.code, mensaje: traducirErrorAuth(error) };
+  }
+  return { ok: true };
+}
+
 async function cerrarSesion({ scope = "global" } = {}) {
   const { error } = await supabaseClient.auth.signOut({ scope });
   if (error) {
@@ -252,8 +275,19 @@ async function verificarEnlaceCorreo(tokenHash, tipo) {
   return { ok: true, data };
 }
 
+/*
+  data.tiene_contrasena queda en user_metadata porque identities NO se
+  actualiza acá: Supabase sólo agrega una identidad "email" al hacer signUp o
+  al vincular un proveedor explícitamente, nunca al llamar updateUser con
+  password sobre una cuenta OAuth-only. Sin esta marca, una cuenta Google que
+  recién creó su contraseña seguiría viéndose "sin contraseña" para siempre
+  (ver auth-identidades.js), porque identities seguiría listando sólo google.
+*/
 async function cambiarContrasena(nuevaPassword) {
-  const { error } = await supabaseClient.auth.updateUser({ password: nuevaPassword });
+  const { error } = await supabaseClient.auth.updateUser({
+    password: nuevaPassword,
+    data: { tiene_contrasena: true },
+  });
   if (error) {
     return { ok: false, codigo: error.code, mensaje: traducirErrorAuth(error) };
   }
@@ -293,8 +327,13 @@ async function esAdmin(session) {
   return perfil?.rol === "admin";
 }
 
-async function nombreUsuario(session) {
-  const perfil = await obtenerPerfil(session);
+/*
+  `perfilResuelto` evita una consulta de más a quien ya tenga el perfil en la
+  mano (el navbar lo necesita para el rol y para el nombre, y obtenerPerfil no
+  cachea). Omitirlo mantiene el comportamiento de siempre.
+*/
+async function nombreUsuario(session, perfilResuelto) {
+  const perfil = perfilResuelto === undefined ? await obtenerPerfil(session) : perfilResuelto;
   if (perfil?.nombre) return perfil.nombre;
   // Cuentas de Google: el metadata trae given_name/full_name/name, no
   // "nombre" (esa clave es propia del signup con contraseña).

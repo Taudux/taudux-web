@@ -237,7 +237,7 @@ test("the navigation panel drops site links whose label already exists as an anc
     anclas: [{ texto: "Herramientas", href: "#herramientas" }],
     enlaces: [
       { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
-      { texto: "Herramientas", href: "/app/features/detector/detector.html", habilitado: true },
+      { texto: "Herramientas", href: "/app/features/transactions/", habilitado: true },
     ],
   });
 
@@ -246,15 +246,18 @@ test("the navigation panel drops site links whose label already exists as an anc
   assert.equal(etiquetas.filter((texto) => texto === "Herramientas").length, 1);
 });
 
-test("dedupe by label intentionally hides the admin tools link behind a same-named anchor on the landing page", () => {
+test("when an anchor and a site link share a label, the anchor wins and the site link is dropped", () => {
   /*
-    Trade-off aceptado: en el landing, un admin que abre la hamburguesa ve
-    "Herramientas" apuntando al ancla de sección (#herramientas), no al link
-    real a detector.html — quedan con el mismo texto y el dedupe por texto
-    descarta el segundo. El acceso a detector.html sigue disponible desde el
-    menú de cuenta en desktop y desde la hamburguesa de cualquier otra página,
-    que no tiene ese ancla. Este test documenta que la pérdida es intencional,
-    no una regresión a corregir.
+    Contrato del dedupe: ante el mismo texto gana el ancla de sección y se
+    descarta el enlace de sitio, aunque apunten a destinos distintos. La
+    alternativa —mostrar dos entradas con idéntico nombre y distinto
+    destino— es indistinguible para quien lee el menú.
+
+    Hoy ninguna página dispara este caso: el landing dejó de tener anclas
+    cuando el navbar pasó a Misión/Visión/Valores, y ningún texto de
+    ENLACES_NAVEGACION_BASE coincide con un ancla existente. El test se
+    conserva porque la regla sigue viva en montarPanelNavegacion y volvería a
+    aplicar apenas se agregue un ancla que choque con un enlace del sitio.
   */
   const context = {
     window: { addEventListener() {}, scrollY: 0 },
@@ -273,7 +276,7 @@ test("dedupe by label intentionally hides the admin tools link behind a same-nam
   context.montarPanelNavegacion(lista, {
     anclas: [{ texto: "Herramientas", href: "#herramientas" }],
     enlaces: [
-      { texto: "Herramientas", href: "/app/features/detector/detector.html", habilitado: true },
+      { texto: "Herramientas", href: "/app/features/transactions/", habilitado: true },
     ],
   });
 
@@ -295,7 +298,7 @@ test("mobile navigation lives only in the hamburger, and the legacy links panel 
   const css = read("src/app/shared/navbar/navbar.css");
   const js = read("src/app/shared/navbar/navbar.js");
 
-  /* En desktop el grupo sigue siendo la única navegación de cursos/detector/privacidad. */
+  /* En desktop el grupo sigue siendo la única navegación de cursos/transacciones/privacidad. */
   assert.match(js, /nav-menu__group--nav/);
   assert.match(css, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.nav-menu__group--nav\s*{[^}]*display:\s*none/);
   assert.doesNotMatch(css.split(/@media\s*\(max-width:\s*760px\)/)[0], /\.nav-menu__group--nav\s*{[^}]*display:\s*none/);
@@ -304,6 +307,82 @@ test("mobile navigation lives only in the hamburger, and the legacy links panel 
   assert.doesNotMatch(fuente, /navbar__links--mobile-open/);
   assert.doesNotMatch(fuente, /navbar__toggle/);
   assert.doesNotMatch(css, /--z-mobile-menu|--z-mobile-toggle/);
+});
+
+test("the landing navbar shows Misión/Visión/Valores as disabled spans, not anchors", () => {
+  const html = read("src/index.html");
+
+  /*
+    Sin destino todavía, así que <span aria-disabled> y no <a href="#">:
+    misma convención que footer__link--pending y nav-menu__link--disabled.
+    Un <a> vacío promete una navegación que no ocurre y además entraría en
+    anclasDeLaPagina() / el cache de navbar__link--active.
+  */
+  ["Misión", "Visión", "Valores"].forEach((texto) => {
+    assert.match(
+      html,
+      new RegExp(`<span class="navbar__principio" aria-disabled="true">${texto}</span>`),
+      `${texto} debe ser un span deshabilitado`
+    );
+  });
+
+  /* Las cuatro anclas viejas del navbar ya no existen. */
+  ["#quienes-somos", "#servicios", "#herramientas", "#contacto"].forEach((ancla) => {
+    assert.doesNotMatch(
+      html,
+      new RegExp(`<a href="${ancla}" class="navbar__link">`),
+      `el navbar ya no debe enlazar ${ancla}`
+    );
+  });
+
+  /*
+    Pero la sección #contacto sigue existiendo: /#contacto es un deep-link
+    vivo desde detalle-curso.html y desde el portal.
+  */
+  assert.match(html, /id="contacto"/);
+});
+
+test("the landing navbar principles stay hidden over the hero and appear past it", () => {
+  const css = read("src/app/shared/navbar/navbar.css");
+  const js = read("src/app/shared/navbar/navbar.js");
+
+  /* Ocultos en la regla base; sólo los revela la clase de "pasé el hero". */
+  assert.match(css, /\.navbar__principios\s*{[^}]*visibility:\s*hidden/);
+  assert.match(css, /\.navbar--pasado-hero\s+\.navbar__principios\s*{[^}]*visibility:\s*visible/);
+
+  /*
+    El corte se calcula contra el borde inferior real del hero, no contra un
+    umbral fijo en píxeles: un número hardcodeado se desincroniza apenas el
+    hero cambia de alto.
+  */
+  assert.match(js, /navbar--pasado-hero/);
+  assert.match(js, /\.hero[\s\S]{0,200}getBoundingClientRect\(\)\.bottom/);
+
+  /*
+    Ocultos con visibility y no con display:none: tienen que seguir ocupando
+    su columna de la grilla para que el logo y el botón de cuenta no se muevan
+    cuando aparecen.
+  */
+  const bloque = css.match(/\.navbar__principios\s*{[^}]*}/)[0];
+  assert.doesNotMatch(bloque, /display:\s*none/);
+});
+
+test("the landing navbar principles are hidden on mobile", () => {
+  const css = read("src/app/shared/navbar/navbar.css");
+
+  /*
+    Son <span> sin href, así que el selector que oculta las anclas
+    (.navbar__link[href^="#"]) no las alcanza: necesitan su propia regla
+    dentro del bloque de 760px, o le comerían espacio a la hamburguesa.
+  */
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*760px\)[\s\S]*?\.navbar__principios\s*{[^}]*display:\s*none/
+  );
+  assert.doesNotMatch(
+    css.split(/@media\s*\(max-width:\s*760px\)/)[0],
+    /\.navbar__principios\s*{[^}]*display:\s*none/
+  );
 });
 
 test("live source contains no references to removed pages", () => {

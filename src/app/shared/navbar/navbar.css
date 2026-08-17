@@ -15,9 +15,17 @@
       así que introduciría el mismo desajuste que esto viene a corregir.
     */
     padding-inline: max(2rem, calc((100% - var(--ancho-sitio)) / 2));
-    display: flex;
+    /*
+      Grilla de tres columnas, no flex con space-between: la columna del medio
+      queda centrada respecto de la barra entera, no del espacio que sobra
+      entre los laterales (que tienen anchos distintos). Las páginas internas
+      sólo tienen dos hijos y dejan la columna del medio vacía; por eso
+      .navbar__links fija grid-column: 3 en vez de confiar en el
+      auto-placement, que ahí la mandaría al centro.
+    */
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     border-bottom: 1px solid transparent;
     z-index: var(--z-navbar);
     transition:
@@ -92,6 +100,10 @@
   }
 
   .navbar__links {
+    /* Última columna siempre, incluso en las páginas internas donde no hay
+       columna del medio (ver el comentario de la grilla en .navbar). */
+    grid-column: 3;
+    justify-self: end;
     background-color: transparent;
     opacity: 0;
     visibility: hidden;
@@ -103,6 +115,42 @@
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
+  }
+
+  /*
+    Misión/Visión/Valores: la columna central del navbar del landing. Todavía
+    no tienen destino, así que son <span> apagados — sin el hover de pill que
+    sí tiene .navbar__link, para no prometer un click que no hace nada.
+  */
+  .navbar__principios {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    /*
+      Ocultos sobre el hero y revelados al pasarlo (clase que pone
+      actualizarEstadoVisualNavbar). Se apagan con opacity/visibility, nunca
+      sacándolos del flujo: así conservan su columna de la grilla y el logo y
+      el botón de cuenta no se corren de lugar cuando aparecen.
+    */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  }
+
+  .navbar--pasado-hero .navbar__principios {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .navbar__principio {
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    color: var(--color-text-subtle);
+    font-weight: 600;
+    cursor: default;
+    user-select: none;
   }
 
   .navbar__link:not(.button) {
@@ -261,6 +309,17 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    /* Los principios aparecen de golpe al pasar el hero, sin fundido ni
+       desplazamiento vertical. */
+    .navbar__principios {
+      transition: none;
+      transform: none;
+    }
+
+    .navbar--pasado-hero .navbar__principios {
+      transform: none;
+    }
+
     .nav-menu__toggle {
       transition: none;
     }
@@ -272,14 +331,39 @@
     .nav-menu__toggle--account.nav-menu__toggle--pulsing::before {
       animation: none;
     }
+
+    /*
+      Mostrar/ocultar el panel del acordeón sin animación: la transición de
+      grid-template-rows y la rotación de la flecha se desactivan, el cambio
+      de estado queda instantáneo.
+    */
+    .nav-menu__accordion-toggle::after {
+      transition: none;
+    }
+
+    .nav-menu__accordion-panel {
+      transition: none;
+    }
   }
 
   .nav-menu__list {
     position: absolute;
     top: 100%;
     right: 0;
-    min-width: 150px;
+    /*
+      160px: ajustado a los ítems que se ven siempre — el más ancho de ellos
+      ("Proyectos") mide 79px de texto, y las flechas de los acordeones
+      entran cómodas. "Transacciones financieras" (201px de texto) se parte
+      en dos líneas, igual que ya se partía a 220px: ensanchar el panel para
+      él sería pagar ancho permanente por un ítem que sólo aparece con Tools
+      desplegado, y ni siquiera evitaría el salto de línea.
+    */
+    min-width: 160px;
     margin-top: 8px;
+    /* El menú creció de 5 a 8 entradas con la jerarquía de 2 niveles; sin
+       este tope, en mobile podía desbordar el viewport. */
+    max-block-size: min(70vh, 480px);
+    overflow-y: auto;
   }
 
   .nav-menu__group {
@@ -294,6 +378,30 @@
     font-weight: 700;
     font-size: 0.85rem;
     overflow-wrap: anywhere;
+    text-align: center;
+  }
+
+  /*
+    Centrado del texto de los ítems del menú. `.floating-menu__link` es la
+    clase base del componente compartido (floating-menu.css, que carga antes
+    que este archivo); se pisa acá, no ahí, porque el centrado es una
+    decisión de ESTE menú, no algo que un futuro consumidor del componente
+    compartido necesariamente quiera.
+
+    Sin padding lateral asimétrico a propósito: TODOS los ítems del menú
+    (con flecha o sin ella, de primer nivel o hijos de un acordeón) centran
+    contra el mismo ancho, así comparten un único eje vertical. La flecha de
+    los acordeones no lo rompe porque es position:absolute y no ocupa lugar
+    en el flujo (ver .nav-menu__accordion-toggle::after).
+  */
+  .floating-menu__link {
+    text-align: center;
+  }
+
+  .nav-menu__link-label {
+    display: block;
+    width: 100%;
+    text-align: center;
   }
 
   .nav-menu__divider {
@@ -325,6 +433,98 @@
     opacity: 0.55;
     cursor: default;
     user-select: none;
+    text-align: center;
+  }
+
+  /*
+    `.nav-menu__link--child` (Cursos/Notas bajo Academy, Transacciones
+    financieras bajo Tools) NO lleva indentación a propósito: cualquier
+    padding lateral asimétrico corre el centro del texto y rompe el eje
+    único que comparten todos los ítems del menú. La jerarquía se comunica
+    por otra vía — los hijos sólo existen en el DOM cuando su acordeón está
+    desplegado. La clase se conserva como marcador semántico (la agrega
+    crearItemMenu con `esHijo`), no como gancho de estilo.
+  */
+
+  /*
+    Academy y Tools son acordeones: al clickearlos, el grupo se despliega
+    in-place dentro del propio panel desplegable en vez de navegar a una
+    página índice. El toggle es un <button> (nunca un <a>) para no disparar
+    el cierre global del panel (ver el comentario sobre .closest("a") en
+    navbar.js).
+  */
+  .nav-menu__accordion {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .nav-menu__accordion-toggle {
+    /* position: relative, mismo motivo que .nav-menu__link--disabled: la
+       flecha se posiciona absoluta para que el texto centre contra el
+       ancho real de la fila. */
+    position: relative;
+    width: 100%;
+    font: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  /*
+    Flecha de expansión: pegada al borde derecho vía position: absolute (no
+    flex) por la misma razón que el badge — así no le come ancho al texto
+    centrado. Rota 90° cuando el toggle está abierto; translateY(-50%) tiene
+    que repetirse en la regla de abajo porque `transform` no acumula entre
+    reglas, sólo la última declaración aplica.
+  */
+  .nav-menu__accordion-toggle::after {
+    content: "▸";
+    position: absolute;
+    inset-inline-end: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: transform 0.2s ease;
+  }
+
+  .nav-menu__accordion-toggle[aria-expanded="true"]::after {
+    transform: translateY(-50%) rotate(90deg);
+  }
+
+  /*
+    Técnica del "grid accordion trick": el contenedor externo anima
+    grid-template-rows entre 0fr y 1fr (una altura que no se conoce de
+    antemano no se puede animar en height directamente); el wrapper interno
+    necesita overflow: hidden y min-height: 0 para que el contenido no se
+    filtre ni le imponga una altura mínima al 0fr mientras está cerrado.
+  */
+  .nav-menu__accordion-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.2s ease;
+  }
+
+  .nav-menu__accordion--open .nav-menu__accordion-panel {
+    grid-template-rows: 1fr;
+  }
+
+  /*
+    display: flex; flex-direction: column es lo que hace que sus hijos
+    (<a class="nav-menu__link...">, <span class="nav-menu__link--disabled">)
+    pasen a ser block-level ("blockificados" por ser ítems flex) y se apilen
+    uno por fila con ancho predecible. Sin esto, un <a>/<span> es inline por
+    default: "Cursos" quedaba con ancho shrink-to-fit en vez de ocupar la
+    fila, y el <span class="nav-menu__link-label"> de "Notas" (que SÍ es
+    display:block) resolvía su width:100% contra este contenedor entero en
+    vez de contra el padding-box de su propio <span> padre inline — por eso
+    el badge de "Notas" quedaba superpuesto con el texto mientras que
+    "Noticias" (dentro de .nav-menu__group--nav, que ya es flex) se veía
+    bien. Mismo patrón que .nav-menu__group/.nav-menu__accordion.
+  */
+  .nav-menu__accordion-panel-inner {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
   }
 
   @media (max-width: 760px) {
@@ -335,6 +535,14 @@
     /* La hamburguesa y el isotipo ya identifican la marca; el logo central
        solo le resta espacio a los dos controles reales en un ancho chico. */
     .navbar__brand {
+      display: none;
+    }
+
+    /* Mismo criterio: en un ancho chico, tres etiquetas que ni siquiera son
+       clickeables le quitan lugar a la hamburguesa y al menú de cuenta. Se
+       ocultan acá porque son <span> sin href, así que el selector de anclas
+       de abajo no las alcanza. */
+    .navbar__principios {
       display: none;
     }
 
