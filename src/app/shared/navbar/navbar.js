@@ -5,6 +5,14 @@
 
 const ENLACES_NAVEGACION_BASE = [
   { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
+  /*
+    Va como "Práctica" y no dentro de "Herramientas" porque ese texto ya lo ocupa
+    un ancla del landing (#herramientas), y montarPanelNavegacion descarta el
+    enlace del sitio cuando un ancla usa el mismo nombre: el playground
+    desaparecería del menú sin error visible.
+  */
+  { texto: "Práctica", href: "/app/features/practica/", habilitado: true },
+  { texto: "Notas", href: "/app/features/notas/", habilitado: true },
   { texto: "Portal", href: "/app/features/portal/", habilitado: true },
   { texto: "Publicaciones", habilitado: false },
   { texto: "Proyectos", habilitado: false },
