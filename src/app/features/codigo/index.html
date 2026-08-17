@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="Practica Python, SQL y R directamente en tu navegador, sin instalar nada. Intérpretes reales, gratis, de Taudux." />
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Práctica de programación | Taudux</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/features/codigo/practica.css">
+</head>
+
+<body>
+  <nav class="navbar navbar--scrolled" aria-label="Navegación principal">
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <a href="#" id="accessBtn" class="navbar__link button button--access">Acceder</a>
+    </div>
+  </nav>
+
+  <main class="practica">
+    <div class="practica__container u-contenedor u-contenedor--medio">
+      <header class="practica__header">
+        <p class="practica__eyebrow">Taudux Academy / Práctica</p>
+        <h1 class="practica__title">Practica sin instalar nada</h1>
+        <p class="practica__intro">
+          Python, SQL y R corriendo de verdad dentro de tu navegador. No es una
+          simulación: son los intérpretes reales, así que tu código se ejecuta en
+          tu propia máquina y nada de lo que escribas sale de esta pestaña.
+        </p>
+      </header>
+
+      <noscript>
+        <p class="practica__noscript panel">
+          El playground necesita JavaScript habilitado para ejecutar código.
+          Puedes <a href="/">volver al inicio</a> mientras tanto.
+        </p>
+      </noscript>
+
+      <div class="practica__lenguajes" id="practicaLenguajes" role="tablist" aria-label="Elige un lenguaje"></div>
+
+      <section class="practica__datos panel" id="practicaDatos" aria-labelledby="practicaDatosTitulo" hidden>
+        <header class="practica__datos-cabecera">
+          <h2 class="practica__datos-titulo" id="practicaDatosTitulo">Tus datos</h2>
+          <p class="practica__datos-intro">
+            Crea una tabla con tus propios datos y consúltala abajo. Pega lo que
+            tengas en Excel o genera datos de prueba.
+          </p>
+        </header>
+
+        <div class="practica__modos" role="tablist" aria-label="Cómo cargar los datos">
+          <button type="button" class="practica__modo" data-modo="pegar" role="tab">Pegar mis datos</button>
+          <button type="button" class="practica__modo" data-modo="generar" role="tab">Generar datos</button>
+        </div>
+
+        <div class="practica__campo">
+          <label for="practicaTablaNombre">Nombre de la tabla</label>
+          <input type="text" class="field" id="practicaTablaNombre" value="ventas" autocomplete="off">
+        </div>
+
+        <div id="practicaModoPegar">
+          <div class="practica__campo">
+            <label for="practicaPegado">Pega aquí tus datos</label>
+            <textarea class="field field--textarea" id="practicaPegado" rows="7" spellcheck="false"
+              placeholder="producto,region,monto&#10;Consultoria,Norte,15000&#10;Soporte,Sur,3200"></textarea>
+            <small>
+              La primera fila son los nombres de las columnas. Funciona con lo que
+              copies de Excel, o con texto separado por comas o punto y coma.
+            </small>
+          </div>
+        </div>
+
+        <div id="practicaModoGenerar" hidden>
+          <div class="practica__campo">
+            <span class="practica__etiqueta">Columnas</span>
+            <div id="practicaColumnasSinteticas" class="practica__columnas"></div>
+            <button type="button" class="button button--outline" id="practicaAgregarColumna">Agregar columna</button>
+          </div>
+
+          <div class="practica__campo practica__campo--corto">
+            <label for="practicaFilasSinteticas">Cuántas filas</label>
+            <input type="number" class="field" id="practicaFilasSinteticas" value="50" min="1" max="5000">
+          </div>
+        </div>
+
+        <div class="practica__datos-acciones">
+          <button type="button" class="button button--glow" id="practicaCrearTabla">Crear la tabla</button>
+          <button type="button" class="button button--outline" id="practicaVerSql">Ver el SQL</button>
+          <button type="button" class="button button--outline" id="practicaRegenerar">Otros datos</button>
+          <button type="button" class="button button--outline" id="practicaVaciarBase">Vaciar la base</button>
+        </div>
+
+        <p class="practica__datos-estado" id="practicaDatosEstado" role="status" aria-live="polite" hidden></p>
+        <div class="practica__vista-previa" id="practicaVistaPrevia"></div>
+        <p class="practica__tablas-actuales" id="practicaTablasActuales"></p>
+      </section>
+
+      <section class="practica__taller" aria-label="Editor y resultados">
+        <div class="practica__columna panel">
+          <div class="practica__barra">
+            <button type="button" class="button button--glow" id="practicaEjecutar">Ejecutar</button>
+            <button type="button" class="button button--outline" id="practicaDetener" disabled>Detener</button>
+            <button type="button" class="button button--outline practica__restaurar" id="practicaRestaurar">Restaurar ejemplo</button>
+            <button type="button" class="button button--outline" id="practicaDescargar">Descargar</button>
+            <span class="practica__atajo" aria-hidden="true">Ctrl + Enter</span>
+          </div>
+          <p class="practica__nota-descarga" id="practicaNotaDescarga">
+            Descargar tu código es gratis: solo necesitas una cuenta.
+            <a href="/app/features/auth/signup/">Crear cuenta</a>
+          </p>
+          <div class="practica__editor" id="practicaEditor"></div>
+        </div>
+
+        <div class="practica__columna panel">
+          <p class="practica__estado" id="practicaEstado" role="status" aria-live="polite" hidden></p>
+          <pre class="practica__consola" id="practicaConsola" tabindex="0" aria-label="Salida de tu programa"></pre>
+          <div class="practica__resultados" id="practicaResultados" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <footer class="practica__notas">
+        <p>
+          La primera ejecución de cada lenguaje descarga su intérprete y tarda unos
+          segundos; después queda en caché. Tu código se guarda solo en este
+          navegador.
+        </p>
+      </footer>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.44.0/src-min-noconflict/ace.js"></script>
+  <script src="/app/features/codigo/practica.lenguajes.js"></script>
+  <script src="/app/features/codigo/practica.salida.js"></script>
+  <script src="/app/features/codigo/practica.datos.js"></script>
+  <script src="/app/features/codigo/practica.runtimes.js"></script>
+  <script src="/app/features/codigo/practica.datos.ui.js"></script>
+  <script src="/app/features/codigo/practica.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,576 @@
+/* Área de notas: índice por secciones, mapa de conocimiento y vista de lectura. */
+
+@layer features {
+  .notas {
+    min-height: 100vh;
+    padding-block: calc(var(--navbar-height) + 2rem) 4rem;
+    padding-inline: 2rem;
+    background-color: var(--color-background);
+  }
+
+  .notas__header {
+    margin-bottom: 2rem;
+  }
+
+  .notas__eyebrow {
+    color: var(--color-accent);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  .notas__title {
+    font-size: clamp(1.9rem, 4vw, 2.7rem);
+    margin-bottom: 0.75rem;
+  }
+
+  .notas__intro {
+    color: var(--color-text-muted);
+    max-inline-size: var(--ancho-lectura);
+    line-height: 1.7;
+  }
+
+  .notas__noscript {
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Barra: migas + acciones                                           */
+  /* ---------------------------------------------------------------- */
+
+  .notas__barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 1rem;
+    margin-bottom: 1.5rem;
+    border-block-end: var(--border-subtle);
+  }
+
+  .notas__migas-lista {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    list-style: none;
+  }
+
+  /* El separador es decorativo: va en CSS para que no lo lea un lector de
+     pantalla ni se copie al seleccionar el texto de las migas. */
+  .notas__miga + .notas__miga::before {
+    content: "/";
+    margin-inline-end: 0.4rem;
+    color: var(--color-border);
+  }
+
+  .notas__miga-enlace {
+    color: var(--color-text-subtle);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+
+  .notas__miga-enlace:hover {
+    color: var(--color-accent);
+  }
+
+  .notas__miga-actual {
+    color: var(--color-text);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .notas__acciones {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .notas__vistas {
+    display: flex;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    padding: 0.2rem;
+  }
+
+  .notas__vista {
+    padding: 0.45rem 1.1rem;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: color var(--transition-fast), background var(--transition-fast);
+  }
+
+  .notas__vista:hover {
+    color: var(--color-text);
+  }
+
+  .notas__vista--activa {
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    color: var(--color-accent);
+  }
+
+  .notas__vista:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .notas__buscar {
+    inline-size: 16rem;
+    padding-block: 0.6rem;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Estado de error                                                   */
+  /* ---------------------------------------------------------------- */
+
+  .notas__estado {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
+  }
+
+  .notas__estado-mensaje {
+    color: var(--color-error-text);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Tarjetas del índice                                               */
+  /* ---------------------------------------------------------------- */
+
+  .notas__grupo + .notas__grupo {
+    margin-top: 2.5rem;
+  }
+
+  .notas__grupo-titulo {
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+    margin-bottom: 1rem;
+  }
+
+  .notas__grilla {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: 1rem;
+  }
+
+  .notas__tarjeta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1.4rem;
+    text-decoration: none;
+    color: inherit;
+    transition: transform var(--transition-fast), border-color var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  .notas__tarjeta:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    box-shadow: var(--glow-accent);
+  }
+
+  .notas__tarjeta:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /*
+    Franja lateral que distingue de un vistazo lo que lleva más adentro de lo
+    que ya es el destino final. Es la misma señal que el grafo da con el punto
+    interior de las hojas.
+  */
+  .notas__tarjeta--nota {
+    border-inline-start: 3px solid color-mix(in srgb, var(--color-text-subtle) 60%, transparent);
+  }
+
+  .notas__tarjeta--tema,
+  .notas__tarjeta--area {
+    border-inline-start: 3px solid var(--color-accent);
+  }
+
+  .notas__tarjeta-encabezado {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .notas__tarjeta-titulo {
+    font-size: 1.05rem;
+    line-height: 1.35;
+  }
+
+  .notas__tarjeta-conteo {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    color: var(--color-text-subtle);
+    white-space: nowrap;
+  }
+
+  .notas__tarjeta-resumen {
+    color: var(--color-text-muted);
+    font-size: 0.92rem;
+    line-height: 1.6;
+  }
+
+  .notas__tarjeta-ruta {
+    font-size: 0.75rem;
+    color: var(--color-text-subtle);
+    margin-top: auto;
+    padding-top: 0.4rem;
+  }
+
+  .notas__etiquetas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    list-style: none;
+  }
+
+  .notas__etiqueta {
+    padding: 0.2rem 0.6rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    font-size: 0.7rem;
+    color: var(--color-text-subtle);
+  }
+
+  .notas__vacio,
+  .notas__resultados-encabezado {
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Grafo                                                             */
+  /* ---------------------------------------------------------------- */
+
+  .notas__grafo-marco {
+    /*
+      Alto explícito: el canvas se dimensiona leyendo clientHeight del marco, y
+      un contenedor que se ajusta a su contenido daría cero. min() evita que en
+      una pantalla baja el mapa empuje todo lo demás fuera de la vista.
+    */
+    block-size: min(68vh, 640px);
+    border: var(--border-subtle);
+    border-radius: var(--radius-panel);
+    background:
+      radial-gradient(circle at 50% 45%,
+        color-mix(in srgb, var(--color-accent) 8%, transparent),
+        transparent 62%),
+      var(--color-background-deep);
+    overflow: hidden;
+  }
+
+  .notas__grafo-lienzo {
+    display: block;
+  }
+
+  .notas__grafo-ayuda {
+    margin-top: 0.9rem;
+    font-size: 0.82rem;
+    color: var(--color-text-subtle);
+    text-align: center;
+  }
+
+  /*
+    La versión navegable con teclado del mapa. No se oculta con display:none ni
+    con visibility:hidden porque entonces dejaría de ser enfocable, que es
+    justamente lo que aporta.
+  */
+  .notas__grafo-lista {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    list-style: none;
+  }
+
+  .notas__grafo-lista a {
+    display: inline-block;
+    padding: 0.4rem 0.9rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: 0.8rem;
+  }
+
+  .notas__grafo-lista a:hover,
+  .notas__grafo-lista a:focus-visible {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Lectura                                                           */
+  /* ---------------------------------------------------------------- */
+
+  .notas__lectura {
+    max-inline-size: var(--ancho-lectura);
+  }
+
+  .notas__lectura-cabecera {
+    margin-bottom: 2rem;
+  }
+
+  .notas__lectura-titulo {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.25;
+    margin-bottom: 0.75rem;
+  }
+
+  .notas__lectura-resumen {
+    color: var(--color-text-muted);
+    font-size: 1.02rem;
+    line-height: 1.65;
+    margin-bottom: 0.9rem;
+  }
+
+  .notas__lectura-aviso {
+    color: var(--color-text-subtle);
+  }
+
+  .notas__lectura-aviso--error {
+    color: var(--color-error-text);
+  }
+
+  .notas__indice {
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    border-inline-start: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0 var(--radius-field) var(--radius-field) 0;
+  }
+
+  .notas__indice-titulo {
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+    margin-bottom: 0.6rem;
+  }
+
+  .notas__indice-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    list-style: none;
+  }
+
+  .notas__indice-item--nivel-3 {
+    padding-inline-start: 1rem;
+  }
+
+  .notas__indice-lista a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: 0.88rem;
+  }
+
+  .notas__indice-lista a:hover {
+    color: var(--color-accent);
+  }
+
+  .notas__relacionadas {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-block-start: var(--border-subtle);
+  }
+
+  .notas__relacionadas-titulo {
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+    margin-bottom: 1rem;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Prosa renderizada desde markdown                                  */
+  /* ---------------------------------------------------------------- */
+
+  /*
+    Estos selectores son de elemento y no de clase porque el HTML lo genera el
+    renderizador de markdown, que no pone clases. Van todos anidados bajo
+    .notas__prosa para que no se escapen al resto de la página.
+  */
+  .notas__prosa {
+    line-height: 1.75;
+    color: var(--color-text-muted);
+  }
+
+  .notas__prosa > * + * {
+    margin-top: 1.15rem;
+  }
+
+  .notas__prosa h2 {
+    font-size: 1.25rem;
+    color: var(--color-text);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .notas__prosa h3 {
+    font-size: 1.05rem;
+    color: var(--color-text);
+    margin-top: 1.9rem;
+  }
+
+  .notas__prosa strong {
+    color: var(--color-text);
+  }
+
+  .notas__prosa a {
+    color: var(--color-accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  .notas__prosa ul,
+  .notas__prosa ol {
+    padding-inline-start: 1.4rem;
+  }
+
+  .notas__prosa li + li {
+    margin-top: 0.5rem;
+  }
+
+  .notas__prosa blockquote {
+    padding: 0.9rem 1.2rem;
+    border-inline-start: 3px solid var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+    border-radius: 0 var(--radius-field) var(--radius-field) 0;
+    color: var(--color-text);
+  }
+
+  .notas__prosa blockquote > * + * {
+    margin-top: 0.8rem;
+  }
+
+  .notas__prosa code {
+    padding: 0.15rem 0.4rem;
+    border-radius: 5px;
+    background: var(--color-field);
+    font-size: 0.88em;
+  }
+
+  .notas__prosa pre {
+    padding: 1.1rem 1.25rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    background: var(--color-background-deep);
+    overflow-x: auto;
+  }
+
+  /* Dentro de un bloque, el fondo y el relleno los pone el <pre>. */
+  .notas__prosa pre code {
+    padding: 0;
+    background: none;
+    font-size: 0.86rem;
+    line-height: 1.6;
+  }
+
+  .notas__prosa-crudo {
+    padding: 1.25rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    background: var(--color-background-deep);
+    white-space: pre-wrap;
+    font-size: 0.86rem;
+  }
+
+  .notas__tabla-scroll {
+    overflow-x: auto;
+  }
+
+  .notas__tabla-scroll:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .notas__prosa table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  .notas__prosa th,
+  .notas__prosa td {
+    padding: 0.65rem 0.9rem;
+    border: 1px solid var(--color-border);
+    text-align: start;
+  }
+
+  .notas__prosa th {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--color-text);
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+  }
+
+  /*
+    Una fórmula en bloque más ancha que la columna de lectura no puede desbordar
+    la página: KaTeX genera .katex-display y acá se le permite scrollear sola.
+  */
+  .notas__prosa .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 0.4rem;
+  }
+
+  /* Un [[wikilink]] cuyo destino no existe. En producción no debería verse
+     nunca —el test del manifiesto lo impide—, así que si aparece, es una señal
+     de que algo se publicó sin pasar por las pruebas. */
+  .notas__enlace-roto {
+    color: var(--color-warning);
+    border-block-end: 1px dashed currentColor;
+    cursor: help;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Pantallas angostas                                                */
+  /* ---------------------------------------------------------------- */
+
+  @media (max-width: 760px) {
+    .notas {
+      padding-inline: 1.25rem;
+    }
+
+    .notas__barra {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .notas__acciones {
+      inline-size: 100%;
+    }
+
+    .notas__buscar {
+      inline-size: 100%;
+    }
+
+    .notas__grafo-marco {
+      block-size: min(60vh, 460px);
+    }
+  }
+}

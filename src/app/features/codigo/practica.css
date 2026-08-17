@@ -1,0 +1,458 @@
+/* Playground de práctica: selector de lenguaje, editor y consola. */
+
+@layer features {
+  .practica {
+    min-height: 100vh;
+    padding-block: calc(var(--navbar-height) + 2rem) 4rem;
+    padding-inline: 2rem;
+    background-color: var(--color-background);
+  }
+
+  .practica__header {
+    margin-bottom: 2rem;
+  }
+
+  .practica__eyebrow {
+    color: var(--color-accent);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  .practica__title {
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    margin-bottom: 0.75rem;
+  }
+
+  .practica__intro {
+    color: var(--color-text-muted);
+    line-height: 1.7;
+    max-inline-size: 60ch;
+  }
+
+  .practica__noscript {
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Selector de lenguaje ------------------------------------------- */
+
+  .practica__lenguajes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .practica__lenguaje {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    padding: 0.7rem 1.2rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-button);
+    background-color: var(--color-field);
+    color: var(--color-text-muted);
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  }
+
+  .practica__lenguaje:hover {
+    color: var(--color-text);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+
+  .practica__lenguaje:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .practica__lenguaje--activo {
+    color: var(--color-text);
+    border-color: var(--color-accent);
+    box-shadow: var(--glow-accent);
+  }
+
+  .practica__lenguaje-nombre {
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .practica__lenguaje-version {
+    font-size: 0.75rem;
+    color: var(--color-text-subtle);
+  }
+
+  /* Taller: editor + resultados ------------------------------------ */
+
+  /*
+    Dos columnas en escritorio, apiladas en móvil. minmax(0, 1fr) y no 1fr: sin
+    el mínimo en 0, una tabla ancha de SQL estira su columna y desborda la
+    página entera en vez de hacer scroll dentro de su caja.
+  */
+  .practica__taller {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .practica__columna {
+    padding: 1rem;
+    min-inline-size: 0;
+  }
+
+  .practica__barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .practica__atajo {
+    margin-inline-start: auto;
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+  }
+
+  /*
+    Sin sesión el botón sigue visible y clickeable: esconderlo no convertiría a
+    nadie, porque nadie extraña lo que no vio. Se atenúa para que se lea como una
+    función bloqueada, no como una deshabilitada por un error.
+  */
+  .practica__descargar--bloqueado {
+    opacity: 0.65;
+  }
+
+  .practica__nota-descarga {
+    margin-bottom: 1rem;
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+  }
+
+  .practica__nota-descarga a {
+    color: var(--color-accent);
+  }
+
+  .practica__editor {
+    inline-size: 100%;
+    block-size: 26rem;
+    border-radius: var(--radius-field);
+    overflow: hidden;
+  }
+
+  /* Consola y resultados ------------------------------------------- */
+
+  .practica__estado {
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+  }
+
+  .practica__estado--exito {
+    color: var(--color-success);
+  }
+
+  .practica__estado--aviso {
+    color: var(--color-warning);
+  }
+
+  .practica__estado--error {
+    color: var(--color-error-text);
+  }
+
+  .practica__consola {
+    block-size: 26rem;
+    margin: 0;
+    padding: 1rem;
+    border-radius: var(--radius-field);
+    background-color: var(--color-background-deep);
+    border: var(--border-subtle);
+    color: var(--color-text-muted);
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    /*
+      La salida de un programa no se reformatea: pre-wrap conserva la
+      indentación y el alineado de columnas de un print, pero corta las líneas
+      largas para que la consola nunca empuje la página a lo ancho.
+    */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+  }
+
+  .practica__consola:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .practica__salida--stderr {
+    color: var(--color-error-text);
+  }
+
+  .practica__salida--aviso {
+    color: var(--color-warning);
+  }
+
+  .practica__salida--valor {
+    color: var(--color-accent);
+  }
+
+  .practica__resultados {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Una tabla ancha hace scroll dentro de su caja, nunca en el body. */
+  .practica__tabla-scroll {
+    overflow-x: auto;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+  }
+
+  .practica__tabla {
+    border-collapse: collapse;
+    inline-size: 100%;
+    font-size: 0.85rem;
+  }
+
+  .practica__tabla th,
+  .practica__tabla td {
+    padding: 0.5rem 0.85rem;
+    text-align: start;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .practica__tabla th {
+    background-color: var(--color-field);
+    color: var(--color-text);
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .practica__tabla td {
+    color: var(--color-text-muted);
+    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
+  }
+
+  .practica__tabla tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .practica__tabla-pie {
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+  }
+
+  .practica__grafico {
+    inline-size: 100%;
+    block-size: auto;
+    border-radius: var(--radius-field);
+    background-color: #fff;
+  }
+
+  .practica__notas {
+    margin-top: 2rem;
+    color: var(--color-text-subtle);
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+
+  /* Panel de datos (solo SQL) -------------------------------------- */
+
+  .practica__datos {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .practica__datos-titulo {
+    font-size: 1.2rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .practica__datos-intro {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+  }
+
+  .practica__modos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .practica__modo {
+    padding: 0.5rem 1rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    background-color: transparent;
+    color: var(--color-text-subtle);
+    font-family: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .practica__modo:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .practica__modo--activo {
+    border-color: var(--color-accent);
+    color: var(--color-text);
+  }
+
+  .practica__campo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .practica__campo--corto {
+    max-inline-size: 12rem;
+  }
+
+  .practica__campo small {
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+
+  .practica__etiqueta {
+    font-size: 0.9rem;
+  }
+
+  .practica__columnas {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  /*
+    El botón de quitar se mantiene en un ancho fijo para que los campos de todas
+    las filas queden alineados aunque los nombres cambien de largo.
+  */
+  .practica__columna-sintetica {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.5rem;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .practica__quitar-columna {
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    background-color: transparent;
+    color: var(--color-text-subtle);
+    block-size: 100%;
+    cursor: pointer;
+  }
+
+  .practica__quitar-columna:hover {
+    color: var(--color-error-text);
+    border-color: var(--color-error);
+  }
+
+  .practica__quitar-columna:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .practica__datos-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .practica__datos-estado {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .practica__datos-estado--exito {
+    color: var(--color-success);
+  }
+
+  .practica__datos-estado--aviso {
+    color: var(--color-warning);
+  }
+
+  .practica__datos-estado--error {
+    color: var(--color-error-text);
+  }
+
+  /* El tipo inferido va bajo el nombre, en la misma celda del encabezado. */
+  .practica__tipo-columna {
+    display: block;
+    color: var(--color-accent);
+    font-family: var(--font-body);
+    font-size: 0.65rem;
+    letter-spacing: 0;
+    text-transform: none;
+    opacity: 0.85;
+  }
+
+  .practica__tablas-actuales {
+    margin-top: 0.75rem;
+    color: var(--color-text-subtle);
+    font-size: 0.85rem;
+  }
+
+  .practica__chip-tabla {
+    display: inline-block;
+    margin-inline-end: 0.4rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-field);
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  @media (max-width: 900px) {
+    .practica {
+      padding-inline: 1.25rem;
+    }
+
+    .practica__columna-sintetica {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.5rem;
+    }
+
+    .practica__taller {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .practica__editor,
+    .practica__consola {
+      block-size: 20rem;
+    }
+
+    .practica__atajo {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .practica__lenguaje {
+      transition: none;
+    }
+  }
+}

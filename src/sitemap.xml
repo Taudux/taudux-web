@@ -15,10 +15,21 @@
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
+  <url>
+    <loc>https://taudux.com/app/features/codigo/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://taudux.com/app/features/notas/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
   <!-- Fuera del sitemap a propósito: /app/features/detector/ es sólo para admin
        y /app/features/transactions/ recibirá estados de cuenta bancarios.
        Ninguna se ofrece a buscadores; ambas llevan además meta robots noindex,
        que es lo que de verdad impide la indexación. -->
+
   <url>
     <loc>https://taudux.com/app/features/legal/privacidad.html</loc>
     <changefreq>yearly</changefreq>
