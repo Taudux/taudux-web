@@ -8,6 +8,36 @@ AGENTS.md
 .atl/
 openspec/
 
+# Estados de cuenta y cualquier PDF de prueba: NUNCA al repo.
+# El extractor corre contra estados de cuenta bancarios reales y este
+# repositorio es público. Un commit es permanente: sacar un archivo después
+# exige reescribir el historial, y si ya se pusheó hay que darlo por expuesto.
+# Ojo: `git add -f` salta esta regla; contra eso no hay archivo que valga.
+*.pdf
+
+# El extractor NO se versiona. Decisión del 2026-08-16, reafirmada el 2026-08-18.
+#
+# Se ignora el directorio entero, no sólo su entorno: hasta hoy el código estaba
+# apenas "untracked", así que un `git add -A` distraído lo habría subido a un
+# repositorio público. Una decisión que vive en un documento y no en la
+# herramienta es una trampa esperando, y un commit es permanente.
+#
+# EL COSTO, ACEPTADO: los regex por banco y los umbrales calibrados de
+# core/patrones.py no tienen respaldo ni historial. Un disco roto se los lleva,
+# igual que a openspec/. entorno-calibrado.txt registra las versiones con las
+# que la calibración funciona — pero también vive sólo en este disco.
+#
+# El despliegue NO depende de esta regla: `gcloud run deploy --source` usa
+# .gcloudignore, que existe y es explícito justamente para no heredar de acá.
+extractor/
+
+# Entorno de Python del extractor
+extractor/__pycache__/
+extractor/**/__pycache__/
+*.pyc
+.venv/
+venv/
+
 # Supabase local state
 supabase/.temp/
 
