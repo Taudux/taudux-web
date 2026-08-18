@@ -93,10 +93,31 @@
             Formato PDF, hasta 25 MB. El archivo se procesa y se descarta: no se
             almacena.
           </p>
+          <!-- Se elige el producto antes que el archivo, y a propósito: los dos
+               extractores leen los montos por posición contra umbrales
+               distintos, así que enviar el estado al que no es devuelve una
+               tabla completa con las cifras en la columna equivocada. El
+               servidor ataja el caso evidente, pero la elección es de quien
+               sube. -->
+          <fieldset class="transacciones__producto">
+            <legend class="transacciones__producto-titulo">¿Qué estado de cuenta es?</legend>
+
+            <label class="transacciones__producto-opcion">
+              <input type="radio" name="producto" value="credito" checked>
+              <span>Tarjeta de crédito BBVA</span>
+            </label>
+
+            <label class="transacciones__producto-opcion">
+              <input type="radio" name="producto" value="debito">
+              <span>Cuenta de débito BBVA</span>
+            </label>
+          </fieldset>
+
           <input type="file" id="archivo" class="transacciones__archivo" accept="application/pdf,.pdf"
             aria-describedby="archivoAyuda">
           <p class="transacciones__ayuda" id="archivoAyuda">
-            Hoy reconocemos estados de cuenta de tarjeta de crédito BBVA.
+            Hoy reconocemos estados de cuenta de BBVA, de tarjeta de crédito y de
+            cuenta de débito.
           </p>
         </section>
 

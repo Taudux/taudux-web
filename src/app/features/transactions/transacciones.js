@@ -138,8 +138,23 @@
     if (detalle) registrar(String(detalle));
   }
 
+  const radiosProducto = () =>
+    document.querySelectorAll('input[name="producto"]');
+
+  // Qué producto está elegido. El `checked` del HTML garantiza que siempre haya
+  // uno, pero si alguien lo quitara, quedarse sin valor haría que el servidor
+  // resuelva por su cuenta — y su valor por defecto es crédito, que es
+  // justamente la clasificación equivocada para un estado de débito.
+  function productoElegido() {
+    const marcado = document.querySelector('input[name="producto"]:checked');
+    return marcado ? marcado.value : "credito";
+  }
+
   function ocuparInput(ocupado) {
     $("archivo").disabled = ocupado;
+    // Los radios se apagan con el archivo: cambiar el producto a mitad de un
+    // envío dejaría la pantalla diciendo una cosa y el servidor procesando otra.
+    radiosProducto().forEach((radio) => { radio.disabled = ocupado; });
     $("contenido").setAttribute("aria-busy", String(ocupado));
   }
 
@@ -165,6 +180,7 @@
 
       const cuerpo = new FormData();
       cuerpo.append("archivo", archivo);
+      cuerpo.append("producto", productoElegido());
 
       const respuesta = await fetch(`${API}/api/extraer`, {
         method: "POST",
