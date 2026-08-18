@@ -2,22 +2,28 @@
 <html lang="es">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Fuera de buscadores a propósito: acá se subirán estados de cuenta
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Fuera de buscadores a propósito: acá se abren estados de cuenta
        bancarios. No basta con omitirla del sitemap — no listar una página no
        le pide a nadie que la ignore; el noindex sí. Mismo criterio que
-       portal/ y las páginas de auth. -->
+       portal/ y las páginas de auth.
+       Lo blinda tests/navbar-jerarquia.test.js, test "neither Tools page is
+       offered to search engines": si este meta desaparece, la suite falla. -->
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="/assets/images/1.png">
   <title>Transacciones financieras | Taudux</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
   <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
   <link rel="stylesheet" href="/app/shared/button/button.css">
   <link rel="stylesheet" href="/app/shared/panel/panel.css">
-  <link rel="stylesheet" href="/app/shared/coming-soon/coming-soon.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/features/transactions/transacciones.css">
+  <script defer src="/app/core/analytics/ga4.js"></script>
 </head>
 
 <body>
@@ -30,14 +36,103 @@
     </div>
   </nav>
 
-  <main class="coming-soon">
-    <div class="coming-soon__card panel panel--spacious">
-      <h1 class="coming-soon__title">Transacciones financieras</h1>
-      <p class="coming-soon__description">
-        Estamos construyendo esta herramienta. Muy pronto vas a poder usarla
-        desde aquí.
-      </p>
-      <div class="coming-soon__placeholder">Próximamente.</div>
+  <main class="transacciones">
+    <div class="transacciones__container u-contenedor u-contenedor--medio">
+      <header class="transacciones__header">
+        <h1 class="transacciones__title">Transacciones financieras</h1>
+        <p class="transacciones__intro">
+          Convertí tu estado de cuenta en una tabla de movimientos, lista para
+          revisar o exportar.
+        </p>
+      </header>
+
+      <!-- Arranque. Mismo patrón que las pantallas de cursos: el loader es
+           decorativo (aria-hidden) y el anuncio para lectores de pantalla vive
+           en un nodo aparte, visualmente oculto. -->
+      <section class="transacciones__startup panel panel--spacious" id="startup" role="status" aria-live="polite"
+        aria-busy="true" tabindex="-1">
+        <div class="transacciones__startup-loader" id="startupLoader" aria-hidden="true"></div>
+        <p class="transacciones__startup-announcement" id="startupMensaje">Cargando…</p>
+        <p class="transacciones__startup-visible" id="startupVisible" aria-hidden="true">Cargando…</p>
+
+        <div class="transacciones__startup-error" id="startupError" hidden>
+          <h2 class="transacciones__subtitle">No pudimos preparar el analizador</h2>
+          <p class="transacciones__startup-message" id="startupErrorMensaje"></p>
+          <div class="transacciones__startup-actions">
+            <button type="button" class="button button--glow" id="btnReintentar">Volver a intentar</button>
+          </div>
+        </div>
+      </section>
+
+      <noscript>
+        <p class="transacciones__noscript panel panel--spacious">
+          Esta herramienta analiza tu estado de cuenta dentro del navegador, así
+          que necesita JavaScript. Activalo y volvé a cargar la página.
+        </p>
+      </noscript>
+
+      <!-- Sin sesión no se muestra el formulario: la API rechaza igual, y
+           ofrecer un campo que va a fallar es peor que explicar por qué. -->
+      <section class="transacciones__login panel panel--spacious" id="necesitaSesion" hidden
+        tabindex="-1">
+        <h2 class="transacciones__subtitle">Iniciá sesión para usar la herramienta</h2>
+        <p class="transacciones__ayuda">
+          Analizar un estado de cuenta requiere una cuenta de Taudux. Es gratis.
+        </p>
+        <p class="transacciones__startup-actions">
+          <a class="button button--glow" id="enlaceLogin" href="/app/features/auth/login.html">
+            Iniciar sesión
+          </a>
+        </p>
+      </section>
+
+      <div id="contenido" hidden>
+        <section class="transacciones__carga panel panel--spacious">
+          <h2 class="transacciones__subtitle">Elegí tu estado de cuenta</h2>
+          <p class="transacciones__ayuda">
+            Formato PDF, hasta 25 MB. El archivo se procesa y se descarta: no se
+            almacena.
+          </p>
+          <input type="file" id="archivo" class="transacciones__archivo" accept="application/pdf,.pdf"
+            aria-describedby="archivoAyuda">
+          <p class="transacciones__ayuda" id="archivoAyuda">
+            Hoy reconocemos estados de cuenta de tarjeta de crédito BBVA.
+          </p>
+        </section>
+
+        <!-- role="alert" no es decorativo: navbar.js escucha
+             taudux:operation-error y emite un toast genérico SALVO que haya un
+             [role="alert"] visible. Sin esto, un fallo mostraría dos mensajes. -->
+        <section class="transacciones__error panel panel--spacious" id="errorLectura" role="alert"
+          aria-live="assertive" tabindex="-1" hidden>
+          <h2 class="transacciones__subtitle">No pudimos leer ese archivo</h2>
+          <p class="transacciones__startup-message" id="errorLecturaMensaje"></p>
+        </section>
+
+        <section class="transacciones__resultado" id="resultado" hidden>
+          <div class="transacciones__resumen">
+            <div class="transacciones__dato panel">
+              <p class="transacciones__dato-etiqueta">Movimientos</p>
+              <p class="transacciones__dato-valor" id="datoFilas">—</p>
+            </div>
+            <div class="transacciones__dato panel">
+              <p class="transacciones__dato-etiqueta">Cargos</p>
+              <p class="transacciones__dato-valor" id="datoCargos">—</p>
+            </div>
+            <div class="transacciones__dato panel">
+              <p class="transacciones__dato-etiqueta">Abonos</p>
+              <p class="transacciones__dato-valor" id="datoAbonos">—</p>
+            </div>
+          </div>
+
+          <div class="transacciones__tabla-scroll" id="contenedorTabla"></div>
+        </section>
+
+        <details class="transacciones__detalles">
+          <summary class="transacciones__detalles-titulo">Detalles técnicos</summary>
+          <pre class="transacciones__log" id="log"></pre>
+        </details>
+      </div>
     </div>
   </main>
 
@@ -45,6 +140,8 @@
   <script src="/app/core/supabase/supabase-client.js"></script>
   <script src="/app/core/auth/auth.service.js"></script>
   <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="/app/features/transactions/transacciones.js"></script>
 </body>
 
 </html>

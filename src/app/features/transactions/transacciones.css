@@ -1,0 +1,341 @@
+/* Vista "Transacciones financieras": el estado de cuenta se analiza en el
+   navegador y su contenido nunca sale de la pestaña. */
+
+@layer features {
+  .transacciones {
+    min-block-size: 100vh;
+    padding-block-start: var(--navbar-height);
+    padding-block-end: 4rem;
+    background-color: var(--color-background);
+  }
+
+  .transacciones__container {
+    padding-inline: 2rem;
+  }
+
+  /* Una regla base con display le gana al [hidden] del navegador, así que hay
+     que devolvérselo explícitamente. Mismo contragolpe que en portal.css. */
+  .transacciones__startup[hidden],
+  .transacciones__startup-loader[hidden],
+  .transacciones__startup-error[hidden],
+  .transacciones__error[hidden],
+  .transacciones__login[hidden],
+  .transacciones__resultado[hidden] {
+    display: none;
+  }
+
+  .transacciones__login {
+    display: grid;
+    gap: 0.75rem;
+    justify-items: start;
+  }
+
+  .transacciones__header {
+    padding-block: 3rem 2rem;
+  }
+
+  .transacciones__title {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.9rem, 4vw, 2.6rem);
+    background: var(--gradient-heading);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  .transacciones__intro {
+    max-inline-size: 52ch;
+    margin: 0;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+  }
+
+  .transacciones__subtitle {
+    margin: 0 0 0.5rem;
+    font-size: 1.15rem;
+  }
+
+  .transacciones__ayuda {
+    margin: 0;
+    color: var(--color-text-subtle);
+    font-size: 0.9rem;
+  }
+
+  /* --- Arranque ---------------------------------------------------------- */
+
+  .transacciones__startup {
+    display: grid;
+    place-items: center;
+    gap: 1.25rem;
+    inline-size: 100%;
+    min-block-size: clamp(12rem, 38vh, 22rem);
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .transacciones__startup-loader {
+    position: relative;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    border: 2px solid color-mix(in srgb, var(--color-accent) 18%, transparent);
+    border-top-color: var(--color-accent);
+    border-right-color: var(--color-accent-dark);
+    border-radius: var(--radius-pill);
+    box-shadow: 0 0 1rem color-mix(in srgb, var(--color-accent) 18%, transparent);
+    animation: transacciones-loader-spin 1.1s linear infinite;
+  }
+
+  .transacciones__startup-loader::before {
+    content: "";
+    position: absolute;
+    inset: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+    border-bottom-color: var(--color-accent);
+    border-left-color: var(--color-accent-dark);
+    border-radius: inherit;
+  }
+
+  .transacciones__startup-loader::after {
+    content: "";
+    position: absolute;
+    inset: 50%;
+    inline-size: 0.4rem;
+    block-size: 0.4rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+    transform: translate(-50%, -50%);
+  }
+
+  /* El loader es decorativo y va aria-hidden; el anuncio real para lectores de
+     pantalla vive acá, fuera de la vista pero dentro del árbol accesible. */
+  .transacciones__startup-announcement {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .transacciones__startup-visible {
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+
+  .transacciones__startup-error {
+    display: grid;
+    justify-items: start;
+    gap: 1rem;
+    inline-size: min(100%, 42rem);
+    text-align: start;
+  }
+
+  .transacciones__startup--error {
+    border-color: color-mix(in srgb, var(--color-error) 38%, transparent);
+  }
+
+  .transacciones__startup-message {
+    margin: 0;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .transacciones__startup--error .transacciones__startup-message,
+  .transacciones__error .transacciones__startup-message {
+    color: var(--color-error-text);
+  }
+
+  .transacciones__startup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .transacciones__noscript {
+    color: var(--color-text-muted);
+  }
+
+  /* --- Carga y error ----------------------------------------------------- */
+
+  .transacciones__carga {
+    display: grid;
+    gap: 0.75rem;
+    justify-items: start;
+  }
+
+  .transacciones__archivo {
+    inline-size: 100%;
+    padding: 1rem;
+    background: var(--color-field);
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+  }
+
+  .transacciones__archivo:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .transacciones__error {
+    margin-block-start: 1.5rem;
+    border-color: color-mix(in srgb, var(--color-error) 38%, transparent);
+  }
+
+  /* --- Resultado --------------------------------------------------------- */
+
+  .transacciones__resultado {
+    margin-block-start: 2rem;
+  }
+
+  .transacciones__resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1rem;
+    margin-block-end: 1.5rem;
+  }
+
+  .transacciones__dato {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .transacciones__dato-etiqueta {
+    margin: 0 0 0.35rem;
+    color: var(--color-text-subtle);
+    font-size: 0.85rem;
+  }
+
+  .transacciones__dato-valor {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* La tabla scrollea dentro de su caja: el body nunca se desborda de lado. */
+  .transacciones__tabla-scroll {
+    overflow-x: auto;
+    max-block-size: 70vh;
+    overflow-y: auto;
+    border: var(--border-subtle);
+    border-radius: var(--radius-panel);
+  }
+
+  .transacciones__tabla {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  .transacciones__tabla th,
+  .transacciones__tabla td {
+    padding: 0.7rem 1rem;
+    border-block-end: 1px solid var(--color-border);
+    text-align: start;
+    white-space: nowrap;
+  }
+
+  .transacciones__tabla th {
+    position: sticky;
+    inset-block-start: 0;
+    background: var(--color-background-deep);
+    color: var(--color-text-subtle);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .transacciones__tabla td--descripcion {
+    white-space: normal;
+    min-inline-size: 22rem;
+  }
+
+  .transacciones__tabla td--monto {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .transacciones__tipo {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.78rem;
+  }
+
+  .transacciones__tipo--cargo {
+    background: color-mix(in srgb, var(--color-error) 18%, transparent);
+    color: var(--color-error-text);
+  }
+
+  .transacciones__tipo--abono {
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
+    color: var(--color-success);
+  }
+
+  /* --- Detalles técnicos ------------------------------------------------- */
+
+  .transacciones__detalles {
+    margin-block-start: 2rem;
+  }
+
+  .transacciones__detalles-titulo {
+    cursor: pointer;
+    color: var(--color-text-subtle);
+    font-size: 0.9rem;
+  }
+
+  .transacciones__detalles-titulo:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .transacciones__log {
+    max-block-size: 24rem;
+    margin-block-start: 0.75rem;
+    padding: 1rem;
+    overflow: auto;
+    background: var(--color-background-deep);
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  @keyframes transacciones-loader-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  /* El original de gestionar-cursos.css no trae este bloque; se agrega acá
+     porque un loop infinito sin escape es justo lo que la preferencia pide
+     apagar, y el resto del sistema (auth.css, navbar.css, toast.css) ya la
+     respeta. */
+  @media (prefers-reduced-motion: reduce) {
+    .transacciones__startup-loader {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .transacciones__container {
+      padding-inline: 1.25rem;
+    }
+
+    .transacciones__header {
+      padding-block: 2rem 1.5rem;
+    }
+
+    .transacciones__tabla td--descripcion {
+      min-inline-size: 14rem;
+    }
+  }
+}
