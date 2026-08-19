@@ -138,6 +138,42 @@
     if (detalle) registrar(String(detalle));
   }
 
+  // El veredicto va a la consola del navegador, no a la pantalla: hoy sirve
+  // para diagnosticar, no para que decida quien sube el archivo. El servidor lo
+  // registra en paralelo en sus propios logs, sin importes.
+  function informarValidacion(validacion) {
+    if (!validacion) {
+      console.info("[transacciones] el servidor no envió veredicto de validación");
+      return;
+    }
+
+    // Tres desenlaces, no dos: `null` es "el PDF no traía totales de control",
+    // que no es lo mismo que fallar. Confundirlos haría que un documento sin
+    // totales pareciera un error de lectura.
+    if (validacion.cuadra === null) {
+      console.info("[transacciones] sin totales de control en el PDF: no hay contra qué cotejar");
+      return;
+    }
+
+    if (validacion.cuadra) {
+      console.info("[transacciones] los totales cuadran con el resumen del banco");
+      return;
+    }
+
+    console.warn(`[transacciones] ${validacion.mensaje}`);
+    (validacion.chequeos || [])
+      .filter((chequeo) => !chequeo.ok)
+      .forEach((chequeo) => {
+        console.warn(
+          `[transacciones]   ${chequeo.nombre}: esperado ${chequeo.esperado}, obtenido ${chequeo.obtenido}`
+        );
+      });
+
+    if (typeof mostrarToast === "function") {
+      mostrarToast("Los totales no cuadran con el resumen del banco.", "warning");
+    }
+  }
+
   function ocuparInput(ocupado) {
     $("archivo").disabled = ocupado;
     $("contenido").setAttribute("aria-busy", String(ocupado));
@@ -220,20 +256,13 @@
       pintarTabla(filas);
       $("resultado").hidden = false;
 
-      // El control del banco es el juez: si los totales impresos en el resumen
-      // cuadran con lo extraído, la lectura fue correcta.
-      if (datos.control) {
-        const esperado = datos.control;
-        const difCargos = Math.abs((esperado.suma_cargos ?? 0) - suma("cargo"));
-        const difAbonos = Math.abs((esperado.suma_abonos ?? 0) - suma("abono"));
-        const cuadra = difCargos < 0.01 && difAbonos < 0.01;
-        registrar(cuadra
-          ? "Los totales cuadran con el resumen del banco."
-          : `Diferencia con el resumen — cargos ${difCargos.toFixed(2)}, abonos ${difAbonos.toFixed(2)}`);
-        if (!cuadra && typeof mostrarToast === "function") {
-          mostrarToast("Los totales no cuadran con el resumen del banco.", "warning");
-        }
-      }
+      // El control del banco es el juez: si los totales que él mismo imprime
+      // cuadran con lo extraído, la lectura fue correcta. La comparación la
+      // hace el servidor y no acá, porque tiene reglas por banco que desde el
+      // navegador no se ven — en crédito, por ejemplo, el TOTAL CARGOS impreso
+      // excluye comisiones y anualidad, y compararlo de frente daría un
+      // descuadre falso en cada tarjeta.
+      informarValidacion(datos.validacion);
 
     } catch (error) {
       // Un fetch rechazado acá es red, CORS o servicio caído — nunca un PDF
