@@ -13,20 +13,38 @@
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="/assets/images/1.png">
   <title>Transacciones financieras | Taudux</title>
+
+  <!-- Cinco familias, un rol cada una (ver el bloque de tipografía del CSS):
+       Orbitron = marca · Inter = interfaz y cifras · Source Serif = documento
+       Space Grotesk = gráficas · Playfair = la voz editorial.
+       Las dos primeras ya las carga el resto del sitio; las otras tres llegan
+       con esta vista. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Playfair+Display:ital,wght@1,400;1,500&display=swap"
     rel="stylesheet">
+
+  <!-- Fondo de estrellas: mismo CDN y misma versión que el landing (src/index.html). -->
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
   <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
   <link rel="stylesheet" href="/app/shared/button/button.css">
   <link rel="stylesheet" href="/app/shared/panel/panel.css">
   <link rel="stylesheet" href="/app/shared/toast/toast.css">
-  <link rel="stylesheet" href="/app/features/transactions/transacciones.css">
+  <link rel="stylesheet" href="/app/features/transactions/extractor.css">
   <script defer src="/app/core/analytics/ga4.js"></script>
 </head>
 
 <body>
+  <!-- Estrellas de fondo, detrás de todo: el mismo efecto del landing. -->
+  <div id="particulas-fondo" aria-hidden="true"></div>
+
+  <!-- El navbar es el del sitio, no el que traía el extractor: acá la sesión
+       es real (auth.service.js contra Supabase), no un correo escrito a mano. -->
   <nav class="navbar navbar--scrolled" aria-label="Navegación principal">
     <a href="/" class="navbar__brand">
       <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
@@ -36,114 +54,541 @@
     </div>
   </nav>
 
-  <main class="transacciones">
-    <div class="transacciones__container u-contenedor u-contenedor--medio">
-      <header class="transacciones__header">
-        <h1 class="transacciones__title">Transacciones financieras</h1>
-        <p class="transacciones__intro">
-          Convertí tu estado de cuenta en una tabla de movimientos, lista para
-          revisar o exportar.
+
+  <main class="u-contenedor">
+    <header class="hero">
+      <!--
+        El isotipo se dibuja inline (dos corchetes y el rombo central) en vez
+        de cargarse como imagen: escala nítido a cualquier tamaño y no depende
+        de un archivo externo. Los dos azules son los del logo.
+      -->
+      <h1 class="hero__titulo hero__titulo--marca">
+        <svg class="hero__logo" viewBox="0 0 100 100" role="img"
+             aria-label="Logotipo de Taudux">
+          <polygon fill="#1249a4" points="46,6 2,50 46,94 46,80 16,50 46,20"/>
+          <polygon fill="#29c2e2" points="54,6 98,50 54,94 54,80 84,50 54,20"/>
+          <polygon fill="#1249a4" points="50,28 28,50 50,72"/>
+          <polygon fill="#29c2e2" points="50,28 72,50 50,72"/>
+        </svg>
+        <span class="hero__marca">TAUDUX <span class="hero__grad">FINANCIAL</span></span>
+      </h1>
+      <p class="hero__bajada">
+        Sube el PDF que te da tu banco y descárgalo en Excel o CSV. Verificamos cada
+        movimiento contra los totales que imprime tu propio banco: si no cuadra al
+        centavo, te lo decimos.
+      </p>
+      <div class="hero__bancos" aria-label="Bancos soportados">
+        <span class="chip">BBVA</span>
+        <span class="chip">Banorte</span>
+        <span class="chip">Santander</span>
+        <span class="chip">Banamex</span>
+        <span class="chip">HSBC</span>
+        <span class="chip">Banbajío</span>
+      </div>
+    </header>
+
+    <section class="carga panel" aria-labelledby="tituloCarga">
+      <h2 class="u-visually-hidden" id="tituloCarga">Subir estado de cuenta</h2>
+
+      <!--
+        Al terminar una extracción la sección entera se pliega a esta barra: el
+        resultado es lo importante y debe verse sin scroll. La zona de arrastre
+        vuelve sólo si se pide otra extracción con el botón.
+      -->
+      <div class="carga__plegada" id="cargaPlegada" hidden>
+        <span class="carga__plegada-texto" id="plegadaTexto"></span>
+        <button type="button" class="button--outline" id="btnOtraExtraccion">Extraer otros estados</button>
+      </div>
+
+      <div class="dropzone" id="dropzone" role="button" tabindex="0"
+           aria-label="Arrastra tu PDF o haz clic para elegirlo">
+        <span class="dropzone__icono" aria-hidden="true">📄</span>
+        <span class="dropzone__titulo" id="tituloDropzone">Arrastra tu estado de cuenta aquí</span>
+        <span class="dropzone__nota" id="notaDropzone">o haz clic para elegir el archivo · PDF · máximo 25 MB</span>
+        <span class="dropzone__archivo" id="nombreArchivo"></span>
+      </div>
+      <!--
+        `multiple` va siempre puesto: si se activara sólo para ciertos planes,
+        el selector dependería de que el JS ya hubiera recibido el plan del
+        servidor, y cualquier fallo previo dejaba al usuario sin poder elegir
+        varios archivos. Quién puede procesarlos en lote lo decide el plan, en
+        el JS (con aviso) y en el servidor (que rechaza el lote).
+      -->
+      <input type="file" id="inputArchivo" accept="application/pdf" multiple
+             class="u-visually-hidden">
+
+      <div class="carga__acciones">
+        <input type="password" id="inputPassword" class="field carga__password"
+               placeholder="Contraseña del PDF (si la tiene)" autocomplete="off">
+        <button type="button" class="button--glow" id="btnProcesar" disabled>Procesar</button>
+        <span class="cuota">
+          Te quedan <span class="cuota__valor" id="cuotaRestantes">—</span> extracciones
+          <span class="cuota__leyenda" id="leyendaCuota"></span>
+        </span>
+      </div>
+
+      <p class="privacidad">
+        <span aria-hidden="true">🔒</span>
+        <span>
+          <strong>Tu información no se guarda.</strong> La extracción ocurre en vivo con un
+          proceso algorítmico que traduce el PDF a tabla. Nunca almacenamos el contenido
+          financiero de tu estado de cuenta: al cerrar o recargar esta página, los datos
+          desaparecen. Solo registramos métricas operativas (qué banco se procesó y si la
+          extracción cuadró), nunca movimientos ni saldos.
+        </span>
+      </p>
+    </section>
+
+    <section class="estado panel" id="estadoCargando">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="estado__titulo">Leyendo tu estado de cuenta…</p>
+      <p class="estado__texto">Detectando el banco y verificando que todo cuadre.</p>
+    </section>
+
+    <section class="estado panel estado--error" id="estadoError" role="alert">
+      <p class="estado__titulo" id="errorTitulo">No pudimos procesarlo</p>
+      <p class="estado__texto" id="errorTexto"></p>
+
+      <!--
+        Donación voluntaria. El texto es deliberadamente explícito sobre qué
+        nos interesa (la ESTRUCTURA, no sus datos) y por cuánto tiempo, porque
+        es lo que hace que alguien confíe en compartir su estado de cuenta.
+      -->
+      <div class="donar" id="cajaDonar" hidden>
+        <h3 class="donar__titulo">¿Nos ayudas a que funcione con tu banco?</h3>
+        <p class="donar__texto">
+          Con tu permiso guardamos este archivo <strong>máximo 5 días</strong>, sólo
+          para que nuestro equipo construya el soporte de tu banco. Después se
+          elimina automáticamente.
         </p>
-      </header>
+        <p class="donar__texto donar__texto--enfasis">
+          No nos interesan tus datos, sino <strong>cómo vienen presentados</strong>:
+          dónde pone el banco cada columna, cómo escribe las fechas, dónde imprime
+          los totales. Nadie va a revisar en qué gastas.
+        </p>
+        <div class="donar__acciones">
+          <button type="button" class="button--glow" id="btnDonar">Sí, úsenlo para mejorar</button>
+          <button type="button" class="button--outline" id="btnNoDonar">No, gracias</button>
+        </div>
+        <p class="donar__gracias" id="graciasDonar" hidden></p>
+      </div>
+    </section>
 
-      <!-- Arranque. Mismo patrón que las pantallas de cursos: el loader es
-           decorativo (aria-hidden) y el anuncio para lectores de pantalla vive
-           en un nodo aparte, visualmente oculto. -->
-      <section class="transacciones__startup panel panel--spacious" id="startup" role="status" aria-live="polite"
-        aria-busy="true" tabindex="-1">
-        <div class="transacciones__startup-loader" id="startupLoader" aria-hidden="true"></div>
-        <p class="transacciones__startup-announcement" id="startupMensaje">Cargando…</p>
-        <p class="transacciones__startup-visible" id="startupVisible" aria-hidden="true">Cargando…</p>
+    <section class="resultado" id="resultado" aria-live="polite">
+      <div class="sello" id="sello"></div>
 
-        <div class="transacciones__startup-error" id="startupError" hidden>
-          <h2 class="transacciones__subtitle">No pudimos preparar el analizador</h2>
-          <p class="transacciones__startup-message" id="startupErrorMensaje"></p>
-          <div class="transacciones__startup-actions">
-            <button type="button" class="button button--glow" id="btnReintentar">Volver a intentar</button>
+      <!--
+        Alerta de contaminación: si se mezclan estados de personas distintas,
+        la tabla y los indicadores suman el dinero de dos personas como si
+        fuera de una. El archivo se genera igual, así que hay que decirlo de
+        forma que no se pueda pasar por alto.
+      -->
+      <div class="alerta-mezcla" id="alertaMezcla" role="alert" hidden>
+        <span class="alerta-mezcla__icono" aria-hidden="true">⚠</span>
+        <div>
+          <h3 class="alerta-mezcla__titulo" id="alertaTitulo"></h3>
+          <p class="alerta-mezcla__texto" id="alertaTexto"></p>
+          <ul class="alerta-mezcla__lista" id="alertaLista"></ul>
+        </div>
+      </div>
+
+      <div class="resumen-lote" id="resumenLote" hidden></div>
+      <ul class="lista-archivos" id="listaArchivos" hidden></ul>
+
+      <!--
+        ORDEN DE LA PÁGINA (decidido con el usuario):
+          filtros → tabla → estadísticas → gráficas → ¿falta un indicador?
+          → en qué se te va el dinero → feedback
+        La tabla va primero porque es el entregable: lo que la gente vino a
+        buscar. Todo lo demás interpreta esa tabla, así que viene después.
+      -->
+
+      <!--
+        Filtros en vivo, arriba de todo lo que afectan: recalculan la tabla,
+        las estadísticas y las gráficas. Van colapsados para no estorbar a
+        quien sólo quiere su tabla.
+      -->
+      <section class="filtros panel" aria-labelledby="tituloFiltros">
+        <div class="filtros__cabecera">
+          <button type="button" class="filtros__toggle" id="toggleFiltros"
+                  aria-expanded="false" aria-controls="cuerpoFiltros">
+            <span class="filtros__flecha" aria-hidden="true">▸</span>
+            <h2 class="detalle__titulo" style="margin:0" id="tituloFiltros">Explora tus movimientos</h2>
+            <span class="filtros__activos" id="contadorFiltros" hidden></span>
+          </button>
+          <button type="button" class="filtros__limpiar" id="btnLimpiar" hidden>Limpiar filtros</button>
+        </div>
+
+        <div class="filtros__cuerpo" id="cuerpoFiltros" hidden>
+        <div class="filtros__rapidos" id="filtrosRapidos">
+          <button type="button" class="chip chip--accion" data-rapido="todo">Todo</button>
+          <button type="button" class="chip chip--accion" data-rapido="gastos">Solo gastos</button>
+          <button type="button" class="chip chip--accion" data-rapido="ingresos">Solo ingresos</button>
+          <button type="button" class="chip chip--accion" data-rapido="grandes">Mayores a $1,000</button>
+          <button type="button" class="chip chip--accion" data-rapido="hormiga">Gasto hormiga (&lt;$200)</button>
+        </div>
+
+        <div class="filtros__grid">
+          <label class="filtro">
+            <span class="filtro__etiqueta">Buscar en la descripción</span>
+            <input type="search" class="field" id="filtroTexto" placeholder="OXXO, SPEI, nómina…">
+          </label>
+          <label class="filtro">
+            <span class="filtro__etiqueta">Desde</span>
+            <input type="date" class="field" id="filtroDesde">
+          </label>
+          <label class="filtro">
+            <span class="filtro__etiqueta">Hasta</span>
+            <input type="date" class="field" id="filtroHasta">
+          </label>
+          <label class="filtro">
+            <span class="filtro__etiqueta">Banco</span>
+            <select class="field" id="filtroBanco"><option value="">Todos</option></select>
+          </label>
+          <label class="filtro">
+            <span class="filtro__etiqueta">Tipo</span>
+            <select class="field" id="filtroTipo">
+              <option value="">Todos</option>
+              <option value="Cargo">Gastos</option>
+              <option value="Abono">Ingresos</option>
+            </select>
+          </label>
+          <label class="filtro">
+            <span class="filtro__etiqueta">Monto mínimo</span>
+            <input type="number" class="field" id="filtroMin" placeholder="0" min="0" step="100">
+          </label>
+          <label class="filtro">
+            <span class="filtro__etiqueta">Monto máximo</span>
+            <input type="number" class="field" id="filtroMax" placeholder="sin límite" min="0" step="100">
+          </label>
+          <label class="filtro">
+            <span class="filtro__etiqueta">Ordenar por</span>
+            <select class="field" id="filtroOrden">
+              <option value="fecha_operacion|asc">Fecha (más antigua primero)</option>
+              <option value="fecha_operacion|desc">Fecha (más reciente primero)</option>
+              <option value="monto|desc">Monto (mayor a menor)</option>
+              <option value="monto|asc">Monto (menor a mayor)</option>
+            </select>
+          </label>
+        </div>
+        </div><!-- /filtros__cuerpo -->
+
+        <p class="filtros__resultado" id="resultadoFiltro"></p>
+      </section>
+
+      <!-- Descargas: arriba de la tabla, que es lo que descargan. -->
+      <div class="acciones acciones--centradas">
+        <button type="button" class="button--glow" id="btnExcel">Descargar Excel</button>
+        <button type="button" class="button--outline" id="btnCsv">Descargar CSV</button>
+        <span class="cuota" id="infoFilas"></span>
+      </div>
+
+      <!--
+        La tabla se pagina de 10 en 10: nadie recorre cientos de movimientos con
+        scroll, y el que busca uno concreto usa los filtros de arriba.
+      -->
+      <div class="panel" style="padding:1rem" id="panelTabla">
+        <div class="tabla-envoltorio">
+          <table>
+            <thead id="cabeceraTabla"></thead>
+            <tbody id="cuerpoTabla"></tbody>
+          </table>
+        </div>
+        <nav class="paginacion" id="paginacion" aria-label="Páginas de movimientos" hidden>
+          <button type="button" class="paginacion__btn" id="pagPrimera"
+                  aria-label="Primera página">«</button>
+          <button type="button" class="paginacion__btn" id="pagAnterior">‹ Anterior</button>
+          <span class="paginacion__info" id="pagInfo" role="status" aria-live="polite"></span>
+          <button type="button" class="paginacion__btn" id="pagSiguiente">Siguiente ›</button>
+          <button type="button" class="paginacion__btn" id="pagUltima"
+                  aria-label="Última página">»</button>
+        </nav>
+      </div>
+
+      <!--
+        Los destacados van ANTES que las estadísticas: es la sección que todos
+        los planes ven completa, y ponerla primero deja el difuminado de los
+        planes limitados en un solo bloque continuo, no intercalado.
+      -->
+      <div class="detalle panel" id="detalleMovimientos">
+        <h2 class="detalle__titulo">Movimientos destacados del periodo</h2>
+        <div class="detalle__grid" id="detalleGrid"></div>
+        <div class="bloqueado__aviso" id="avisoBloqueado" hidden>
+          <span id="avisoBloqueadoTexto"></span>
+          <button type="button" class="button--access" id="btnCrearCuenta">Crear cuenta</button>
+        </div>
+      </div>
+
+      <h2 class="seccion__titulo">Estadísticas</h2>
+      <div class="resumen" id="resumen"></div>
+
+      <p class="aviso-credito" id="avisoCredito" hidden>
+        <span aria-hidden="true">💳</span>
+        <span>
+          <strong>El dinero de tu tarjeta no es tuyo.</strong> Lo que gastas con
+          crédito no baja de tu cuenta: sube tu deuda. Por eso lo mostramos
+          aparte y nunca lo sumamos a tu saldo — verlo junto haría parecer que
+          tienes más de lo que realmente tienes.
+        </span>
+      </p>
+
+      <h2 class="seccion__titulo">Gráficas</h2>
+
+      <!--
+        Dos gráficas, no una: el flujo diario (miles) y el saldo (cientos de
+        miles) viven en escalas distintas. Forzarlos a un mismo eje aplastaría
+        las líneas de ingresos y gastos contra el cero; dos paneles apilados que
+        comparten el eje de tiempo se comparan igual de bien y cada uno conserva
+        su escala.
+      -->
+      <div class="grafica panel" id="panelGraficas">
+        <div class="grafica__cabecera">
+          <h2 class="detalle__titulo" style="margin:0">Tu mes, día a día</h2>
+          <button type="button" class="grafica__expandir" id="btnExpandir"
+                  title="Ver en pantalla completa">⛶ Pantalla completa</button>
+          <div class="leyenda" id="leyenda">
+            <span class="leyenda__item"><span class="leyenda__marca leyenda__marca--ingreso"></span>Ingresos</span>
+            <span class="leyenda__item"><span class="leyenda__marca leyenda__marca--gasto"></span>Gastos</span>
+            <span class="leyenda__item"><span class="leyenda__marca leyenda__marca--saldo"></span>Saldo</span>
           </div>
         </div>
-      </section>
-
-      <noscript>
-        <p class="transacciones__noscript panel panel--spacious">
-          Esta herramienta analiza tu estado de cuenta dentro del navegador, así
-          que necesita JavaScript. Activalo y volvé a cargar la página.
-        </p>
-      </noscript>
-
-      <!-- Sin sesión no se muestra el formulario: la API rechaza igual, y
-           ofrecer un campo que va a fallar es peor que explicar por qué. -->
-      <section class="transacciones__login panel panel--spacious" id="necesitaSesion" hidden
-        tabindex="-1">
-        <h2 class="transacciones__subtitle">Iniciá sesión para usar la herramienta</h2>
-        <p class="transacciones__ayuda">
-          Analizar un estado de cuenta requiere una cuenta de Taudux. Es gratis.
-        </p>
-        <p class="transacciones__startup-actions">
-          <a class="button button--glow" id="enlaceLogin" href="/app/features/auth/login.html">
-            Iniciar sesión
-          </a>
-        </p>
-      </section>
-
-      <div id="contenido" hidden>
-        <section class="transacciones__carga panel panel--spacious">
-          <h2 class="transacciones__subtitle">Elegí tu estado de cuenta</h2>
-          <p class="transacciones__ayuda">
-            Formato PDF, hasta 25 MB. El archivo se procesa y se descarta: no se
-            almacena.
-          </p>
-          <input type="file" id="archivo" class="transacciones__archivo" accept="application/pdf,.pdf"
-            aria-describedby="archivoAyuda">
-          <p class="transacciones__ayuda" id="archivoAyuda">
-            Reconocemos BBVA, Banamex, Banorte, Santander, HSBC y Banbajío, en
-            cuenta de débito y tarjeta de crédito. No hace falta que elijas cuál
-            es: se identifica solo.
-          </p>
-        </section>
-
-        <!-- role="alert" no es decorativo: navbar.js escucha
-             taudux:operation-error y emite un toast genérico SALVO que haya un
-             [role="alert"] visible. Sin esto, un fallo mostraría dos mensajes. -->
-        <section class="transacciones__error panel panel--spacious" id="errorLectura" role="alert"
-          aria-live="assertive" tabindex="-1" hidden>
-          <h2 class="transacciones__subtitle">No pudimos leer ese archivo</h2>
-          <p class="transacciones__startup-message" id="errorLecturaMensaje"></p>
-        </section>
-
-        <section class="transacciones__resultado" id="resultado" hidden>
-          <div class="transacciones__resumen">
-            <div class="transacciones__dato panel">
-              <p class="transacciones__dato-etiqueta">Movimientos</p>
-              <p class="transacciones__dato-valor" id="datoFilas">—</p>
-            </div>
-            <div class="transacciones__dato panel">
-              <p class="transacciones__dato-etiqueta">Cargos</p>
-              <p class="transacciones__dato-valor" id="datoCargos">—</p>
-            </div>
-            <div class="transacciones__dato panel">
-              <p class="transacciones__dato-etiqueta">Abonos</p>
-              <p class="transacciones__dato-valor" id="datoAbonos">—</p>
-            </div>
-          </div>
-
-          <div class="transacciones__tabla-scroll" id="contenedorTabla"></div>
-        </section>
-
-        <details class="transacciones__detalles">
-          <summary class="transacciones__detalles-titulo">Detalles técnicos</summary>
-          <pre class="transacciones__log" id="log"></pre>
-        </details>
+        <figure class="grafica__figura">
+          <figcaption class="grafica__subtitulo">Entradas y salidas por día</figcaption>
+          <div class="grafica__lienzo" id="lienzoFlujos"></div>
+        </figure>
+        <figure class="grafica__figura">
+          <figcaption class="grafica__subtitulo">Saldo al cierre de cada día</figcaption>
+          <p class="grafica__alerta" id="alertaSaldoNegativo" hidden></p>
+          <div class="grafica__lienzo" id="lienzoSaldo"></div>
+        </figure>
+        <div class="grafica__tooltip" id="tooltip" role="status" aria-live="polite"></div>
       </div>
-    </div>
+
+      <!--
+        Compras a meses. Va en su propio panel y no entre los movimientos
+        porque NO es un movimiento: es deuda ya contraída que el estado de
+        cuenta sólo enseña en esta tabla. Es el dato que corrige la lectura de
+        "este mes pagué poco".
+      -->
+      <div class="msi panel" id="panelMsi" hidden>
+        <h2 class="detalle__titulo">Lo que sigues pagando a meses</h2>
+        <p class="msi__nota" id="msiNota"></p>
+
+        <!--
+          Calendario de lo comprometido: cada columna es un mes futuro y cada
+          segmento una compra. La lista de compras va a la IZQUIERDA del eje,
+          no debajo: así se lee "qué es cada color" sin apartar la vista de la
+          gráfica ni tener que recordar la correspondencia.
+        -->
+        <div class="msi-g" id="msiGrafica" hidden>
+          <div class="msi-g__cabecera">
+            <div>
+              <h3 class="msi-g__titulo">Lo que ya debes cada mes</h3>
+              <p class="msi-g__nota" id="msiGraficaNota"></p>
+            </div>
+            <label class="msi-g__switch">
+              <input type="checkbox" id="msiMontos">
+              <span>Ver monto por compra</span>
+            </label>
+          </div>
+          <div class="msi-g__cuerpo">
+            <div class="msi-g__leyenda" id="msiLeyenda"></div>
+            <div class="msi-g__svg"></div>
+          </div>
+          <div class="msi-g__tooltip" id="msiTooltip" role="status"
+               aria-live="polite" hidden></div>
+        </div>
+
+        <div class="msi__lista" id="msiLista"></div>
+      </div>
+
+      <!--
+        Investigación de producto justo después de que el usuario vio sus
+        números: es cuando sabe qué le faltó. Se ofrecen opciones para votar
+        porque mucha más gente marca que escribe; el campo libre recoge lo que
+        no se nos ocurrió.
+      -->
+      <div class="pedir panel">
+        <button type="button" class="pedir__abrir" id="abrirPedir" aria-expanded="false"
+                aria-controls="cajaPedir">
+          <span aria-hidden="true">💡</span> ¿Falta algún indicador? Dinos cuál te interesaría
+        </button>
+
+        <div class="pedir__caja" id="cajaPedir" hidden>
+          <p class="pedir__ayuda">
+            Marca lo que te gustaría ver aquí. Nos sirve para decidir qué construir
+            después — puedes elegir varios.
+          </p>
+          <div class="pedir__opciones" id="opcionesIndicadores"></div>
+          <label class="filtro" style="margin-top:1rem">
+            <span class="filtro__etiqueta">¿Se te ocurre otro?</span>
+            <textarea class="field field--textarea" id="ideaIndicador" rows="2"
+                      placeholder="Escríbelo con tus palabras, no hace falta que sea técnico…"></textarea>
+          </label>
+          <div class="pedir__acciones">
+            <button type="button" class="button--glow" id="btnEnviarPedido">Enviar</button>
+            <span class="pedir__gracias" id="graciasPedido">¡Gracias! Lo tomamos en cuenta.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dónde se concentra el gasto: responde "¿en qué se me va?" -->
+      <div class="detalle panel" id="panelConceptos" hidden>
+        <h2 class="detalle__titulo">En qué se te va el dinero</h2>
+        <ol class="conceptos" id="listaConceptos"></ol>
+      </div>
+
+    </section>
   </main>
 
+  <!--
+    Errores y comentarios acompañan al usuario en toda la página como botones
+    flotantes: reportar un problema no puede depender de encontrar una sección
+    al fondo. Discretos (una píldora en la esquina), pero siempre a un click.
+    Abrir uno cierra al otro; enviar agradece y se cierra solo.
+  -->
+  <div class="flotante flotante--error">
+    <button type="button" class="flotante__boton" id="btnFlotanteError"
+            aria-expanded="false" aria-controls="cajaFlotanteError">
+      <span aria-hidden="true">⚠</span> ¿Algo salió mal?
+    </button>
+    <div class="flotante__caja" id="cajaFlotanteError" role="dialog"
+         aria-label="Reportar un error" hidden>
+      <div class="flotante__cabecera">
+        <strong>Reportar un error</strong>
+        <button type="button" class="flotante__cerrar" data-cerrar aria-label="Cerrar">✕</button>
+      </div>
+      <textarea class="field" id="textoError" rows="3"
+                placeholder="Cuéntanos qué salió mal: un movimiento que falta, un monto distinto, una fecha equivocada…"></textarea>
+      <button type="button" class="button--glow" id="btnEnviarError">Enviar</button>
+      <p class="flotante__gracias" hidden>¡Gracias! Lo revisamos.</p>
+    </div>
+  </div>
+
+  <div class="flotante flotante--comentario">
+    <button type="button" class="flotante__boton" id="btnFlotanteComentario"
+            aria-expanded="false" aria-controls="cajaFlotanteComentario">
+      <span aria-hidden="true">💬</span> Comentarios
+    </button>
+    <div class="flotante__caja" id="cajaFlotanteComentario" role="dialog"
+         aria-label="Dejar un comentario" hidden>
+      <div class="flotante__cabecera">
+        <strong>¿Qué tal la herramienta?</strong>
+        <button type="button" class="flotante__cerrar" data-cerrar aria-label="Cerrar">✕</button>
+      </div>
+      <div class="flotante__estrellas" id="estrellas" role="group" aria-label="Calificación de 1 a 5">
+        <button type="button" class="estrella" data-valor="1" aria-label="1 de 5">★</button>
+        <button type="button" class="estrella" data-valor="2" aria-label="2 de 5">★</button>
+        <button type="button" class="estrella" data-valor="3" aria-label="3 de 5">★</button>
+        <button type="button" class="estrella" data-valor="4" aria-label="4 de 5">★</button>
+        <button type="button" class="estrella" data-valor="5" aria-label="5 de 5">★</button>
+      </div>
+      <textarea class="field" id="textoComentario" rows="3"
+                placeholder="Se vale todo: qué te gustó, qué cambiarías, qué te gustaría ver…"></textarea>
+      <button type="button" class="button--glow" id="btnEnviarComentario">Enviar</button>
+      <p class="flotante__gracias" hidden>¡Gracias! Tu comentario nos ayuda a mejorar.</p>
+    </div>
+  </div>
+
+  <!--
+    Vista ampliada. Aquí caben las etiquetas de valor en cada punto y el
+    control de rango: con más espacio, la gráfica puede mostrar los números
+    sin que se encimen, que es lo que no cabe en la vista compacta.
+  -->
+  <div class="visor" id="visor" hidden role="dialog" aria-modal="true"
+       aria-labelledby="visorTitulo">
+    <header class="visor__cabecera">
+      <h2 class="visor__titulo" id="visorTitulo">Tu dinero en el tiempo</h2>
+      <div class="leyenda">
+        <span class="leyenda__item"><span class="leyenda__marca leyenda__marca--ingreso"></span>Ingresos</span>
+        <span class="leyenda__item"><span class="leyenda__marca leyenda__marca--gasto"></span>Gastos</span>
+        <span class="leyenda__item"><span class="leyenda__marca leyenda__marca--saldo"></span>Saldo</span>
+      </div>
+      <button type="button" class="visor__cerrar" id="btnCerrarVisor" aria-label="Cerrar">✕</button>
+    </header>
+
+    <div class="visor__controles">
+      <label class="filtro">
+        <span class="filtro__etiqueta">Desde</span>
+        <input type="date" class="field" id="visorDesde">
+      </label>
+      <label class="filtro">
+        <span class="filtro__etiqueta">Hasta</span>
+        <input type="date" class="field" id="visorHasta">
+      </label>
+      <label class="filtro">
+        <span class="filtro__etiqueta">Ver</span>
+        <select class="field" id="visorAtajo">
+          <option value="todo">Todo el periodo</option>
+          <option value="1m">Último mes</option>
+          <option value="3m">Últimos 3 meses</option>
+          <option value="6m">Últimos 6 meses</option>
+        </select>
+      </label>
+      <!--
+        Escala horizontal: estira el eje del tiempo más allá del ancho de la
+        ventana (con scroll). Sirve cuando hay muchos puntos juntos: separarlos
+        deja ver cada dato y sus etiquetas sin tener que recortar el periodo.
+      -->
+      <label class="filtro filtro--rango">
+        <span class="filtro__etiqueta">Escala horizontal · <b id="escalaValor">100%</b></span>
+        <input type="range" id="visorEscala" min="100" max="500" step="25" value="100">
+      </label>
+      <!--
+        Escala vertical: baja el tope del eje Y. Un solo movimiento grande
+        aplasta contra el cero a todos los pequeños; al recortar el eje, esos
+        movimientos vuelven a tener altura y se puede ver su comportamiento.
+        Lo que queda fuera se avisa: recortar sin decirlo engañaría.
+      -->
+      <label class="filtro filtro--rango">
+        <span class="filtro__etiqueta">Escala vertical · <b id="escalaVerticalValor">100%</b></span>
+        <input type="range" id="visorEscalaY" min="5" max="100" step="5" value="100">
+      </label>
+      <label class="filtro filtro--check">
+        <input type="checkbox" id="visorEtiquetas" checked>
+        <span>Mostrar valores en la gráfica</span>
+      </label>
+      <span class="visor__rango" id="visorRangoTexto"></span>
+      <span class="visor__recorte" id="avisoRecorte" hidden></span>
+    </div>
+
+    <div class="visor__lienzos">
+      <figure class="grafica__figura">
+        <figcaption class="grafica__subtitulo">Entradas y salidas</figcaption>
+        <div class="grafica__lienzo" id="visorFlujos"></div>
+      </figure>
+      <figure class="grafica__figura" id="visorFiguraSaldo">
+        <figcaption class="grafica__subtitulo">Saldo al cierre</figcaption>
+        <div class="grafica__lienzo" id="visorSaldo"></div>
+      </figure>
+    </div>
+
+    <!--
+      Control de rango tipo Power BI: la miniatura muestra TODO el periodo y
+      las dos manijas acotan lo que se ve arriba. Arrastrar el centro desplaza
+      la ventana sin cambiar su tamaño.
+    -->
+    <div class="brush" id="brush">
+      <div class="brush__mini" id="brushMini"></div>
+      <div class="brush__seleccion" id="brushSeleccion">
+        <span class="brush__manija brush__manija--izq" data-manija="izq"></span>
+        <span class="brush__manija brush__manija--der" data-manija="der"></span>
+      </div>
+    </div>
+    <p class="visor__ayuda">Arrastra los extremos de la barra para acotar el periodo, o el centro para desplazarlo.</p>
+
+    <div class="grafica__tooltip" id="visorTooltip" role="status" aria-live="polite"></div>
+  </div>
+
+  <footer class="pie">
+    <p>© <strong>Taudux</strong> 2026 · Desarrollo &amp; Tecnología</p>
+  </footer>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app/core/supabase/supabase-client.js"></script>
   <script src="/app/core/auth/auth.service.js"></script>
   <script src="/app/shared/navbar/navbar.js"></script>
   <script src="/app/shared/toast/toast.js"></script>
-  <script src="/app/features/transactions/transacciones.js"></script>
+  <script src="/app/features/transactions/extractor.js"></script>
 </body>
 
 </html>
