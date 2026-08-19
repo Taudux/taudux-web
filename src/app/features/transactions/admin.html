@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Fuera de buscadores, como el resto de lo sensible: acá se reparten
+       accesos y se ve quién usó la herramienta. No basta con omitirla del
+       sitemap — no listar una página no le pide a nadie que la ignore. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Administración del extractor | Taudux</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/field/field.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/features/courses/courses.css">
+  <link rel="stylesheet" href="/app/features/transactions/admin.css">
+  <script defer src="/app/core/analytics/ga4.js"></script>
+</head>
+
+<body>
+  <nav class="navbar navbar--scrolled" id="adminNavbar" aria-label="Navegación principal" hidden>
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <a href="#" id="accessBtn" class="navbar__link button button--access">Salir</a>
+    </div>
+  </nav>
+
+  <main class="courses">
+    <div class="courses__container u-contenedor u-contenedor--medio">
+
+      <!-- Arranque compartido con las pantallas de cursos: exige sesión, exige
+           rol admin, y sólo entonces revela #adminContent. El gate real de
+           escritura es la RLS; esto es la puerta de UX. -->
+      <section class="courses__startup-status panel panel--spacious" id="adminStartup" role="status"
+        aria-live="polite" aria-busy="true" tabindex="-1">
+        <div class="courses__startup-loader" id="adminStartupLoader" aria-hidden="true"></div>
+        <p class="courses__startup-announcement" id="adminStartupLoadingMessage">
+          Cargando la administración del extractor.
+        </p>
+        <div class="courses__startup-error" id="adminStartupError" hidden>
+          <h2 class="courses__subtitle" id="adminStartupTitle">
+            No se pudo abrir la administración del extractor
+          </h2>
+          <p class="courses__startup-message" id="adminStartupMessage"></p>
+          <div class="courses__startup-actions">
+            <button class="button button--outline" type="button" id="adminStartupRetry" hidden>Reintentar</button>
+            <a class="button button--outline" href="/app/features/transactions/">Volver a la herramienta</a>
+          </div>
+        </div>
+      </section>
+
+      <noscript>
+        <p class="courses__noscript panel">
+          Necesitas habilitar JavaScript para administrar el extractor. Puedes
+          <a href="/app/features/transactions/">volver a la herramienta</a>.
+        </p>
+      </noscript>
+
+      <div class="courses__admin-content" id="adminContent" hidden>
+
+        <header class="courses__header">
+          <h1 class="courses__title">Administración del extractor</h1>
+          <p class="courses__intro">
+            Da acceso ilimitado a quien esté probando la herramienta. Los demás
+            conservan sus <strong>3 documentos al mes</strong>.
+          </p>
+        </header>
+
+        <!-- Lo que se otorga acá vive en la memoria del servicio, y Cloud Run
+             escala a cero: un acceso dura hasta que el contenedor se apague.
+             Decirlo en la pantalla evita que alguien lo dé por hecho y después
+             no entienda por qué desapareció. Es el hallazgo F25. -->
+        <p class="admin__aviso panel" role="note">
+          <strong>Los accesos que otorgues aquí son temporales.</strong> Se guardan
+          en la memoria del servicio y se pierden cuando se reinicia, algo que
+          ocurre tras unos minutos sin uso. Serán permanentes cuando el extractor
+          escriba en la base de datos.
+        </p>
+
+        <section class="panel panel--spacious">
+          <h2 class="courses__subtitle">Dar acceso ilimitado</h2>
+          <div class="admin__alta">
+            <label class="field__label" for="adminCorreo">Correo del usuario</label>
+            <input type="email" class="field" id="adminCorreo" placeholder="correo@ejemplo.com"
+              autocomplete="off">
+
+            <label class="field__label" for="adminMotivo">Motivo</label>
+            <input type="text" class="field" id="adminMotivo"
+              placeholder="beta tester, socio, prueba de carga…">
+
+            <button type="button" class="button button--glow" id="btnDarAcceso">Dar acceso</button>
+            <p class="admin__error" id="adminError" role="alert" hidden></p>
+          </div>
+        </section>
+
+        <section class="panel panel--spacious">
+          <h2 class="courses__subtitle">
+            Quién ha usado la herramienta
+            <span class="admin__mes" id="adminMes"></span>
+          </h2>
+          <div class="admin__lista" id="listaUsuarios" aria-live="polite">
+            <p class="admin__vacio">Cargando…</p>
+          </div>
+        </section>
+
+        <section class="panel panel--spacious">
+          <h2 class="courses__subtitle">Paneles internos</h2>
+          <div class="courses__startup-actions">
+            <button type="button" class="button button--outline" id="btnTelemetria">
+              Telemetría por banco
+            </button>
+            <button type="button" class="button button--outline" id="btnDonaciones">
+              Documentos donados
+            </button>
+          </div>
+          <p class="admin__vacio" id="panelInterno" hidden></p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/core/telemetry/operaciones.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="/app/features/courses/admin-startup.js"></script>
+  <script src="/app/features/transactions/api-cliente.js"></script>
+  <script src="/app/features/transactions/admin.js"></script>
+</body>
+
+</html>

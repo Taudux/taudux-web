@@ -1,0 +1,143 @@
+/* Panel de administración del extractor.
+ *
+ * Reusa el arranque y los contenedores de las pantallas de cursos
+ * (`courses.css`), así que acá sólo vive lo propio: el formulario de alta, la
+ * lista de usuarios y el visor de los paneles internos.
+ */
+@layer features {
+
+  /* El aviso de que los accesos son temporales. Naranja y no rojo: no es un
+     error, es una limitación que hay que leer antes de otorgar algo. */
+  .admin__aviso {
+    margin-block-end: 1.5rem;
+    border-color: color-mix(in srgb, var(--color-warning, #d98324) 38%, transparent);
+    color: var(--color-text-muted);
+  }
+
+  .admin__alta {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: start;
+  }
+
+  .admin__alta .field {
+    inline-size: 100%;
+    max-inline-size: 28rem;
+  }
+
+  .admin__alta .button {
+    margin-block-start: 0.5rem;
+  }
+
+  .admin__error {
+    color: var(--color-error);
+    margin-block-start: 0.5rem;
+  }
+
+  .admin__mes {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+  }
+
+  .admin__lista {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .admin__fila {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-field);
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+  }
+
+  /* Quien tiene acceso ilimitado se distingue por el borde y no sólo por el
+     texto del botón: la lista se lee de un vistazo y el color hace el trabajo
+     antes que la lectura. */
+  .admin__fila--ilimitado {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+
+  .admin__quien {
+    display: grid;
+    gap: 0.15rem;
+    min-inline-size: 0;
+  }
+
+  .admin__usuario {
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .admin__meta {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  .admin__insignia {
+    color: var(--color-accent);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .admin__switch {
+    padding: 0.4rem 0.9rem;
+    background: transparent;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .admin__switch:hover {
+    color: var(--color-text);
+    border-color: var(--color-accent);
+  }
+
+  .admin__switch:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .admin__switch--on {
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+
+  .admin__vacio {
+    color: var(--color-text-muted);
+  }
+
+  /* El visor de los paneles internos muestra JSON crudo: monoespaciado y con
+     scroll propio, para que una respuesta larga no estire la página entera. */
+  #panelInterno {
+    margin-block-start: 1rem;
+    padding: 1rem;
+    max-block-size: 24rem;
+    overflow: auto;
+    background: var(--color-field);
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 0.78rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 560px) {
+    .admin__fila {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+}

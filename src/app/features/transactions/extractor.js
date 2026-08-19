@@ -7,38 +7,10 @@
 */
 
 /*
-  La API vive en OTRO origen: la pantalla la sirve Vercel y el Python corre en
-  Cloud Run. En el simulador ambos eran el mismo servidor Flask, así que los
-  fetch iban a rutas relativas; acá una ruta relativa pegaría contra
-  taudux.com, donde no hay ninguna API.
-
-  Y hay algo más importante que la URL: el simulador se identificaba con una
-  cookie de sesión de Flask que el propio cliente escribía. En producción eso
-  no puede ser —cualquiera se declararía administrador—, así que cada llamada
-  lleva el token de Supabase y el servidor lo verifica contra el servidor de
-  Auth antes de creer nada.
+  La API y su cliente viven en `api-cliente.js`, compartido con el panel de
+  administración: las dos pantallas necesitan lo mismo —prefijar Cloud Run y
+  mandar el token de Supabase— y tener dos copias es tener dos verdades.
 */
-const API = "https://extractor-taudux-953578674176.northamerica-south1.run.app";
-
-// El token se relee en CADA llamada, no una vez al cargar: entre que se abre
-// la página y se sube un archivo pueden pasar minutos, y Supabase lo renueva.
-async function apiFetch(ruta, opciones = {}) {
-  const cabeceras = new Headers(opciones.headers || {});
-
-  try {
-    const sesion = typeof obtenerSesion === "function" ? await obtenerSesion() : null;
-    if (sesion && sesion.access_token) {
-      cabeceras.set("Authorization", `Bearer ${sesion.access_token}`);
-    }
-  } catch (error) {
-    // Sin sesión no se aborta: hay endpoints que responden igual sin ella, y
-    // los que no, contestan 401 con su propio mensaje. Fallar acá dejaría a la
-    // persona sin saber por qué no pasó nada.
-    console.warn("[extractor] no se pudo leer la sesión:", error);
-  }
-
-  return fetch(`${API}${ruta}`, { ...opciones, headers: cabeceras });
-}
 
 const pesos = new Intl.NumberFormat("es-MX", {
   style: "currency", currency: "MXN", minimumFractionDigits: 2,

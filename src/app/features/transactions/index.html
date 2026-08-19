@@ -588,6 +588,10 @@
   <script src="/app/core/auth/auth.service.js"></script>
   <script src="/app/shared/navbar/navbar.js"></script>
   <script src="/app/shared/toast/toast.js"></script>
+  <!-- Antes que extractor.js: define API y apiFetch, que aquél usa 11 veces.
+       El orden de los <script> es una dependencia real en este sitio — no hay
+       sistema de módulos, todo vive en globales. -->
+  <script src="/app/features/transactions/api-cliente.js"></script>
   <script src="/app/features/transactions/extractor.js"></script>
 </body>
 
