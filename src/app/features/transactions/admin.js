@@ -203,6 +203,13 @@
     const inicio = arranque.iniciarTiempo();
     if (!(await arranque.asegurarAdmin(inicio))) return;
 
+    // `asegurarAdmin` COMPRUEBA, `revelar` MUESTRA. Son dos pasos y hay que dar
+    // los dos: sin esta línea el rol se verifica correctamente, la consola no
+    // dice nada, y la pantalla se queda con el loader girando para siempre —
+    // porque nadie destapa el contenido. Las tres pantallas de cursos la
+    // llaman; yo la había omitido.
+    arranque.revelar();
+
     el("btnDarAcceso").addEventListener("click", async () => {
       const correo = el("adminCorreo").value.trim();
       if (!correo) { el("adminCorreo").focus(); return; }
@@ -224,5 +231,23 @@
     cargarUsuarios();
   }
 
-  document.addEventListener("DOMContentLoaded", iniciar);
+  /*
+    Se arranca YA, no en `DOMContentLoaded`.
+
+    Este script va al final del `<body>`: cuando corre, el DOM ya está parseado
+    y **ese evento probablemente ya disparó**. Registrar el listener entonces es
+    esperar algo que no va a volver a ocurrir — `iniciar()` no se ejecutaba
+    nunca, el gate no llegaba a correr, y el loader giraba para siempre sin un
+    solo error en consola. Eso pasó el 2026-08-19 y costó encontrarlo justamente
+    porque nada fallaba: simplemente no arrancaba.
+
+    Es lo que hace `administrar-cursos.js`, del que salió este markup. El guard
+    por `readyState` cubre además el caso de que alguien mueva el `<script>` al
+    `<head>`, donde el DOM todavía no existiría.
+  */
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", iniciar);
+  } else {
+    iniciar();
+  }
 })();

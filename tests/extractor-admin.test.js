@@ -95,6 +95,49 @@ test("it lists the site's real users, not only the in-memory ones", () => {
   );
 });
 
+test("it reveals the content after the gate approves", () => {
+  /*
+    `asegurarAdmin` COMPRUEBA; `revelar` MUESTRA. Llamar sólo al primero deja
+    la pantalla con el loader girando para siempre, con el rol verificado y sin
+    un solo error en consola — el modo de falla más caro de diagnosticar,
+    porque todo "funciona" salvo lo que se ve.
+
+    Las tres pantallas de administración de cursos llaman `revelar()`; ésta lo
+    había omitido (2026-08-19).
+  */
+  assert.match(
+    read(SCRIPT),
+    /arranque\.revelar\(\)/,
+    "debe destapar el contenido tras aprobar el gate"
+  );
+});
+
+test("it starts even if DOMContentLoaded already fired", () => {
+  /*
+    El script va al final del <body>: cuando corre, el DOM ya está parseado y
+    ese evento probablemente ya pasó. Esperarlo a secas significa no arrancar
+    nunca — y el modo de falla es cruel, porque **nada falla**: no hay error en
+    consola, la página carga entera, y el loader gira para siempre.
+
+    Pasó el 2026-08-19. Se pide el guard por `readyState`, que funciona tanto si
+    el DOM ya está listo como si el script se moviera al <head>.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /document\.readyState/,
+    "debe comprobar readyState en vez de confiar en DOMContentLoaded"
+  );
+
+  // Y que efectivamente llame a iniciar() por fuera del listener.
+  assert.match(
+    js,
+    /}\s*else\s*{\s*iniciar\(\);/,
+    "con el DOM ya listo debe arrancar de inmediato"
+  );
+});
+
 test("its API calls carry the session token", () => {
   const js = read(SCRIPT);
 
