@@ -1967,7 +1967,11 @@ function pintarMenuCuenta(cuota) {
   // naturaleza que los enlaces del sitio y conviene que se lea así.
   if (cuota.es_admin) {
     partes.push('<hr class="nav-menu__divider">');
-    partes.push(itemMenu({ texto: "⚙ Panel de administración", href: "/admin",
+    // `/admin` era la ruta del Flask del simulador, que servía la página con
+    // `render_template`. Acá el panel es una página del sitio, servida por
+    // Vercel junto al resto de `src/`, y el backend ya no tiene esa ruta.
+    partes.push(itemMenu({ texto: "⚙ Panel de administración",
+                           href: "/app/features/transactions/admin",
                            clase: "nav-menu__link--admin" }));
   }
 
