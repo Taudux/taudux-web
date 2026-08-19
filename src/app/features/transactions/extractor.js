@@ -1988,15 +1988,27 @@ function pintarMenuCuenta(cuota) {
   });
 }
 
+/*
+  El menú de cuenta era del navbar que traía esta herramienta. En taudux la
+  barra es la del sitio —con su propio `navbar.js` y la sesión real de
+  Supabase—, así que estos elementos no existen y todo lo que los toque tiene
+  que sobrevivir a su ausencia.
+
+  No es una precaución teórica: sin las guardas, `el("btnMenuCuenta")` devuelve
+  `null`, el `addEventListener` lanza, y **el script entero deja de ejecutarse
+  desde esa línea** — la página se ve entera pero nada responde. Pasó el
+  2026-08-19 y costó un rato entenderlo, porque el HTML se veía perfecto.
+*/
 function abrirMenuCuenta(abrir) {
-  el("menuCuenta").classList.toggle("nav-menu--open", abrir);
-  el("btnMenuCuenta").setAttribute("aria-expanded", String(abrir));
+  siExiste("menuCuenta", (menu) => menu.classList.toggle("nav-menu--open", abrir));
+  siExiste("btnMenuCuenta", (boton) => boton.setAttribute("aria-expanded", String(abrir)));
 }
 
-el("btnMenuCuenta").addEventListener("click", (e) => {
+siExiste("btnMenuCuenta", (boton) => boton.addEventListener("click", (e) => {
   e.stopPropagation();
-  abrirMenuCuenta(!el("menuCuenta").classList.contains("nav-menu--open"));
-});
+  const menu = el("menuCuenta");
+  abrirMenuCuenta(!(menu && menu.classList.contains("nav-menu--open")));
+}));
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#menuCuenta")) abrirMenuCuenta(false);
 });
@@ -2012,8 +2024,10 @@ siExiste("btnReiniciar", (boton) => boton.addEventListener("click", async () => 
   actualizarCuota((await r.json()).cuota);
 }));
 
-el("btnAcceder").addEventListener("click", () => cambiarPlan("free"));
-el("btnCrearCuenta").addEventListener("click", () => cambiarPlan("free"));
+// Los dos botones de "crear cuenta" venían del navbar propio de esta
+// herramienta; en taudux esa llamada a la acción vive en la barra del sitio.
+siExiste("btnAcceder", (b) => b.addEventListener("click", () => cambiarPlan("free")));
+siExiste("btnCrearCuenta", (b) => b.addEventListener("click", () => cambiarPlan("free")));
 
 /* ------------------------------------------- ¿falta algún indicador? --- */
 /*
@@ -2299,3 +2313,28 @@ if (window.tsParticles) {
 } else {
   window.addEventListener("load", cargarEstrellas);
 }
+
+/*
+  La cuota, al abrir la página.
+
+  En el proyecto original este valor llegaba renderizado por el servidor
+  (`{{ cuota.restantes }}` en la plantilla). Acá la página es estática y la sirve
+  Vercel, así que hay que pedirlo: sin esto el contador se queda en su marcador
+  de posición —"Te quedan — extracciones"— hasta que alguien procese algo, y los
+  paneles que dependen del plan tampoco se configuran.
+
+  Falla en silencio a propósito: no poder mostrar cuántas extracciones quedan no
+  debe impedir usar la herramienta, y el servidor rechaza igual si no hay cuota.
+*/
+async function cargarCuotaInicial() {
+  try {
+    const respuesta = await apiFetch("/api/cuota");
+    if (!respuesta.ok) return;
+    const json = await respuesta.json();
+    if (json.cuota) actualizarCuota(json.cuota);
+  } catch (error) {
+    console.warn("[extractor] no se pudo leer la cuota inicial:", error);
+  }
+}
+
+cargarCuotaInicial();
