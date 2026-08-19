@@ -72,6 +72,66 @@
         cambiarAcceso(boton.dataset.usuario, boton.dataset.estado !== "true", "")));
   }
 
+  // --- Usuarios del sitio --------------------------------------------------
+
+  /*
+    Los usuarios REALES, leídos de `perfiles`. Es una lista distinta de la de
+    abajo y conviene no confundirlas:
+
+      · Ésta sale de Supabase y es permanente. Están todos, hayan usado la
+        herramienta o no, con el rol que de verdad tienen.
+      · La de consumo sale de la memoria del servicio y se vacía cuando Cloud
+        Run apaga el contenedor.
+
+    Se lee con la clave `anon` y el token de quien abre el panel: la policy
+    `perfiles_select_admin` (migración 0031) decide si puede ver más que su
+    propia fila. Sin ser administrador esto devuelve una sola fila, y eso es
+    exactamente lo que tiene que pasar.
+
+    El correo NO viene, y no es un olvido: vive en `auth.users`, fuera del
+    alcance del cliente, y este sitio nunca lo ha entregado al navegador.
+  */
+  async function cargarUsuariosDelSitio() {
+    const lista = el("listaPerfiles");
+
+    const { data, error } = await supabaseClient
+      .from("perfiles")
+      .select("id, nombre, apellidos, rol, creado_en")
+      .order("rol", { ascending: true })
+      .order("creado_en", { ascending: false });
+
+    if (error) {
+      lista.innerHTML = '<p class="admin__vacio">No pudimos leer los perfiles.</p>';
+      console.warn("[admin] fallo al leer perfiles:", error);
+      return;
+    }
+
+    const perfiles = data || [];
+    el("totalPerfiles").textContent = `· ${perfiles.length}`;
+
+    if (!perfiles.length) {
+      lista.innerHTML = '<p class="admin__vacio">No hay perfiles que mostrar.</p>';
+      return;
+    }
+
+    // Administración primero: es lo que se busca al abrir esta lista.
+    const orden = [...perfiles].sort(
+      (a, b) => Number(b.rol === "admin") - Number(a.rol === "admin"));
+
+    lista.innerHTML = orden.map((p) => {
+      const nombre = [p.nombre, p.apellidos].filter(Boolean).join(" ").trim();
+      const esAdmin = p.rol === "admin";
+      return `
+        <div class="admin__fila${esAdmin ? " admin__fila--ilimitado" : ""}">
+          <div class="admin__quien">
+            <span class="admin__usuario">${escapar(nombre || "(sin nombre)")}</span>
+            <span class="admin__meta">${escapar(p.id)}</span>
+          </div>
+          <span class="admin__insignia">${escapar(p.rol)}</span>
+        </div>`;
+    }).join("");
+  }
+
   // --- Conceder y quitar ---------------------------------------------------
 
   async function cambiarAcceso(usuario, ilimitado, motivo) {
@@ -130,6 +190,11 @@
     const arranque = crearArranqueAdmin({
       pagina: "extractor_admin",
       tituloError: "No se pudo abrir la administración del extractor",
+      // Sin esto vuelve al catálogo de cursos, que es el destino heredado de
+      // las pantallas para las que se escribió este arranque. Quien intenta
+      // abrir la administración del extractor sin permiso tiene que aterrizar
+      // en el extractor, no en una lista de cursos que no pidió.
+      rutaRechazo: "/app/features/transactions/",
     });
 
     // Nada del panel se revela antes de esto: `asegurarAdmin` exige sesión Y
@@ -155,6 +220,7 @@
     el("btnDonaciones").addEventListener(
       "click", () => verPanelInterno("/api/donaciones", "las donaciones"));
 
+    cargarUsuariosDelSitio();
     cargarUsuarios();
   }
 

@@ -64,6 +64,37 @@ test("it asks the shared gate for admin, not just for a session", () => {
   assert.match(js, /asegurarAdmin\(/, "debe exigir rol admin, no sólo sesión");
 });
 
+test("it sends unauthorised visitors back to the extractor, not to courses", () => {
+  // `crearArranqueAdmin` manda al catálogo de cursos por defecto, que es de
+  // donde vinieron las tres pantallas para las que se escribió. Caer ahí desde
+  // la administración del extractor no le explica nada a nadie.
+  assert.match(
+    read(SCRIPT),
+    /rutaRechazo:\s*"\/app\/features\/transactions\//,
+    "debe devolver a la herramienta, no al catálogo de cursos"
+  );
+});
+
+test("it lists the site's real users, not only the in-memory ones", () => {
+  const js = read(SCRIPT);
+
+  // Sin esto el panel sólo muestra quién usó la herramienta desde el último
+  // reinicio del contenedor — que con escala a cero es casi nadie.
+  assert.match(js, /from\("perfiles"\)/, "debe leer los perfiles de Supabase");
+  assert.match(js, /"id, nombre, apellidos, rol/, "debe traer el rol real");
+
+  // El correo vive en auth.users y este sitio nunca lo entrega al navegador.
+  // Se mira la CONSULTA y no el archivo entero: la primera versión de este
+  // test buscaba "email" en todo el texto y saltaba con el comentario que
+  // explica, justamente, que los correos no se leen.
+  const consulta = js.match(/\.from\("perfiles"\)[\s\S]{0,200}/)?.[0] ?? "";
+  assert.doesNotMatch(
+    consulta,
+    /email|correo/i,
+    "la consulta no debe pedir correos: no se exponen al cliente"
+  );
+});
+
 test("its API calls carry the session token", () => {
   const js = read(SCRIPT);
 

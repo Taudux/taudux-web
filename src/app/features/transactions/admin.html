@@ -102,11 +102,33 @@
           </div>
         </section>
 
+        <!-- Dos listas, dos fuentes. Se dice cuál es cuál porque cuentan cosas
+             distintas y no coinciden: una es permanente y trae a todos, la otra
+             es lo que recuerda el servicio en este momento. -->
+        <section class="panel panel--spacious">
+          <h2 class="courses__subtitle">
+            Usuarios del sitio
+            <span class="admin__mes" id="totalPerfiles"></span>
+          </h2>
+          <p class="admin__ayuda">
+            Todas las cuentas registradas y su rol, leídas de la base de datos.
+            El correo no se muestra: vive en el sistema de autenticación y no se
+            entrega al navegador.
+          </p>
+          <div class="admin__lista" id="listaPerfiles" aria-live="polite">
+            <p class="admin__vacio">Cargando…</p>
+          </div>
+        </section>
+
         <section class="panel panel--spacious">
           <h2 class="courses__subtitle">
             Quién ha usado la herramienta
             <span class="admin__mes" id="adminMes"></span>
           </h2>
+          <p class="admin__ayuda">
+            Consumo que el servicio recuerda <strong>ahora mismo</strong>. Se
+            reinicia con el contenedor, así que no es un histórico.
+          </p>
           <div class="admin__lista" id="listaUsuarios" aria-live="polite">
             <p class="admin__vacio">Cargando…</p>
           </div>

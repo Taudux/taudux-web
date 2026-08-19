@@ -9,7 +9,12 @@
 
 const RUTA_CATALOGO_CURSOS = "/app/features/courses/cursos.html";
 
-function crearArranqueAdmin({ pagina, tituloError }) {
+// A dónde va quien tiene sesión pero no es administrador. El valor por defecto
+// es el catálogo de cursos porque de ahí vinieron las tres primeras pantallas
+// que usaron este arranque; el parámetro existe desde que lo reusó el panel del
+// extractor, donde mandar a alguien a una lista de cursos no explicaba nada.
+// Devolverlo a la sección de la que vino es lo único que no lo desorienta.
+function crearArranqueAdmin({ pagina, tituloError, rutaRechazo = RUTA_CATALOGO_CURSOS }) {
   const { iniciarTiempo, reportarFallo } = crearReporteroOperaciones(pagina);
   const startup = document.getElementById("adminStartup");
   const titulo = document.getElementById("adminStartupTitle");
@@ -52,7 +57,7 @@ function crearArranqueAdmin({ pagina, tituloError }) {
       const session = await requerirSesion();
       if (!session) return false;
       if (await esAdmin(session)) return true;
-      window.location.href = RUTA_CATALOGO_CURSOS;
+      window.location.href = rutaRechazo;
       return false;
     } catch (error) {
       reportarFallo("admin_startup", error, inicio, "startup_failed");
