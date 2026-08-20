@@ -59,7 +59,7 @@ const ENLACES_NAVEGACION_BASE = [
       aparecer o faltar en local sin que signifique nada sobre producción.
     */
     texto: "Panel de administración",
-    href: "/app/features/transactions/admin",
+    href: "/app/features/transactions/admin.html",
     habilitado: true,
     soloAdmin: true,
   },

@@ -425,7 +425,9 @@ test("the admin panel is reachable from every page, not just its own", () => {
     "estuvo dentro de features/transactions/, un admin parado en Cursos no " +
     "tenía cómo llegar a él desde el menú"
   );
-  assert.equal(panel.href, "/app/features/transactions/admin");
+  // Con la extensión, como cursos.html y detector.html. Sin ella la URL sólo la
+  // resuelve `cleanUrls` de Vercel: abría en el deploy y daba 404 en local.
+  assert.equal(panel.href, "/app/features/transactions/admin.html");
   assert.equal(panel.habilitado, true);
 
   // Es cosmética, no control de acceso: el candado son los endpoints

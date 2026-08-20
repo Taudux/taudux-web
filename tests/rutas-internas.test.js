@@ -21,13 +21,42 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RAIZ_WEB = path.join(ROOT, "src");
 
-/** Todas las páginas HTML bajo src/, recursivo. */
-function paginas(directorio = RAIZ_WEB) {
+/** Todos los archivos con una extensión dada bajo src/, recursivo. */
+function archivos(extension, directorio = RAIZ_WEB) {
   return fs.readdirSync(directorio, { withFileTypes: true }).flatMap((entrada) => {
     const completo = path.join(directorio, entrada.name);
-    if (entrada.isDirectory()) return paginas(completo);
-    return entrada.name.endsWith(".html") ? [completo] : [];
+    if (entrada.isDirectory()) return archivos(extension, completo);
+    return entrada.name.endsWith(extension) ? [completo] : [];
   });
+}
+
+/** Todas las páginas HTML bajo src/, recursivo. */
+const paginas = () => archivos(".html");
+
+/** Un directorio no es un recurso: lo sirve su index.html, o no lo sirve nadie. */
+const esArchivo = (p) => fs.existsSync(p) && fs.statSync(p).isFile();
+
+/*
+  ¿Hay un archivo servible detrás de esta ruta interna?
+
+  Dos exigencias, y las dos salieron de un 404 real:
+
+  1. **No se acepta `ruta + ".html"`.** Una URL sin extensión la resuelve
+     `cleanUrls` de `vercel.json`, y eso existe **sólo en Vercel**: el enlace
+     anda publicado y devuelve 404 en Live Server, que es como se prueba el
+     sitio en local. Ya pasó — el "Panel de administración" del navbar apuntaba
+     a "/app/features/transactions/admin" y por eso sólo abría en el deploy.
+
+  2. **La ruta literal tiene que ser un archivo, no una carpeta.** `existsSync`
+     dice `true` para un directorio, así que un enlace a una carpeta *sin*
+     `index.html` pasaba el test y daba 404 servido. Medido el 2026-08-20:
+     `taudux.com/app/features/courses` → **404**, y la carpeta existe.
+*/
+function resuelve(ruta) {
+  const literal = path.join(RAIZ_WEB, ruta);
+  return ruta.endsWith("/")
+    ? esArchivo(path.join(literal, "index.html"))
+    : esArchivo(literal) || esArchivo(path.join(literal, "index.html"));
 }
 
 /*
@@ -48,14 +77,8 @@ test("every internal href and src points to a file that exists", () => {
     const html = fs.readFileSync(pagina, "utf8");
     rutasInternas(html).forEach((ruta) => {
       // Las rutas de directorio ("/app/features/transactions/") las resuelve el
-      // servidor con su index.html; las páginas sin extensión, cleanUrls.
-      const candidatos = ruta.endsWith("/")
-        ? [path.join(RAIZ_WEB, ruta, "index.html")]
-        : [path.join(RAIZ_WEB, ruta),
-           path.join(RAIZ_WEB, `${ruta}.html`),
-           path.join(RAIZ_WEB, ruta, "index.html")];
-
-      if (!candidatos.some((c) => fs.existsSync(c))) {
+      // servidor con su index.html. Las páginas se enlazan con su extensión.
+      if (!resuelve(ruta)) {
         rotas.push(`${path.relative(ROOT, pagina)} → ${ruta}`);
       }
     });
@@ -69,30 +92,29 @@ test("every internal href and src points to a file that exists", () => {
 
 test("links built from JavaScript also point somewhere real", () => {
   /*
-    El HTML no es el único que enlaza. `extractor.js` arma su menú en
+    El HTML no es el único que enlaza. `extractor.js` armaba su menú en
     JavaScript, y ahí vivía el segundo error del 2026-08-19: `href: "/admin"`,
     la ruta del Flask del simulador, que en este sitio no existe.
+
+    El escaneo cubre **todo `src/`**, no una carpeta. Cuando miraba sólo
+    `app/features/transactions/`, el menú se mudó a `app/shared/navbar/` (F28) y
+    se llevó sus enlaces fuera del alcance del test: así fue como sobrevivió el
+    href sin extensión del panel de administración.
 
     Se buscan sólo los `href: "…"` —el patrón con el que se construyen enlaces—
     y no cualquier cadena que empiece con "/": las rutas de la API (`/api/…`)
     son de otro servicio y no tienen archivo que respalde.
   */
-  const scripts = fs.readdirSync(path.join(RAIZ_WEB, "app/features/transactions"))
-    .filter((n) => n.endsWith(".js"));
-
   const rotas = [];
-  scripts.forEach((nombre) => {
-    const relativo = path.join("app/features/transactions", nombre);
-    const js = fs.readFileSync(path.join(RAIZ_WEB, relativo), "utf8");
+  archivos(".js").forEach((absoluto) => {
+    const relativo = path.relative(RAIZ_WEB, absoluto);
+    const js = fs.readFileSync(absoluto, "utf8");
 
     [...js.matchAll(/href:\s*"(\/[^"#?]*)"/g)]
       .map((m) => m[1])
       .filter((ruta) => !ruta.startsWith("/api/"))
       .forEach((ruta) => {
-        const candidatos = [path.join(RAIZ_WEB, ruta),
-                            path.join(RAIZ_WEB, `${ruta}.html`),
-                            path.join(RAIZ_WEB, ruta, "index.html")];
-        if (!candidatos.some((c) => fs.existsSync(c))) {
+        if (!resuelve(ruta)) {
           rotas.push(`${relativo} → ${ruta}`);
         }
       });
