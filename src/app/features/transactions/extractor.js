@@ -275,7 +275,21 @@ function pintarResultado(datos) {
   const v = datos.validacion;
   const varios = (datos.archivos || []).length > 1;
   const alcance = varios ? `${v.cuadran} de ${v.total} estados` : datos.banco;
-  if (v.cuadra === true) {
+  /*
+    Esta rama va PRIMERO y no es un capricho de orden: el backend manda
+    `motivo` junto a `cuadra: false`, así que si la comprobación genérica de
+    `false` se evaluara antes, este mensaje no se vería nunca.
+
+    Y hace falta un mensaje propio porque los otros dos mentirían distinto:
+    "no cuadra con los totales" sugiere que se leyeron movimientos y no dieron,
+    y "sin totales de control" sugiere que el PDF no los traía. Acá lo que pasó
+    es otra cosa: el PDF se abrió, traía sus totales, y no reconocimos su
+    plantilla para sacar una sola fila.
+  */
+  if (v.motivo === "sin_movimientos") {
+    sello.className = "sello sello--alerta";
+    sello.innerHTML = `<span aria-hidden="true">⚠</span> ${alcance} · no pudimos leer los movimientos de este estado de cuenta · puede ser una plantilla que aún no soportamos`;
+  } else if (v.cuadra === true) {
     sello.className = "sello sello--ok";
     sello.innerHTML = `<span aria-hidden="true">✓</span> Verificado contra los totales de ${alcance} · cuadra al centavo`;
   } else if (v.cuadra === false) {
