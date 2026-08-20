@@ -332,3 +332,152 @@ test("an entry without hijos still renders a plain leaf via crearItemMenu, the o
   const nodoNoticias = crearItemMenu(noticias);
   assert.equal(nodoNoticias.tagName, "SPAN");
 });
+
+/*
+  El navbar tiene un solo dueño: `src/app/shared/navbar/`.
+
+  Estos tres tests no existían, y por eso el 2026-08-20 se descubrió que
+  `features/transactions/` llevaba meses montando su propio menú de cuenta
+  encima del compartido. Los dos usaban el mismo id —`#menuCuentaLista`—, así
+  que el del extractor lo reescribía con `innerHTML` y se llevaba puestos los
+  listeners del navbar. El síntoma se veía cosmético (el correo en vez del
+  nombre, sin las flechas de los acordeones); el daño real era que **el "Salir"
+  de esa página no cerraba la sesión**, porque el handler bueno moría con el
+  reemplazo.
+
+  Los tests de arriba no podían atraparlo: cargan `navbar.js` en un DOM de
+  juguete y verifican lo que ese archivo hace bien. El problema estaba en quién
+  le pasaba por encima después, en el navegador. Esto se comprueba leyendo los
+  fuentes, que es barato y suficiente.
+*/
+
+function archivosDeFeatures(extension) {
+  const raiz = path.join(ROOT, "src/app/features");
+  const encontrados = [];
+  const recorrer = (directorio) => {
+    fs.readdirSync(directorio, { withFileTypes: true }).forEach((entrada) => {
+      const completa = path.join(directorio, entrada.name);
+      if (entrada.isDirectory()) recorrer(completa);
+      else if (entrada.name.endsWith(extension)) encontrados.push(completa);
+    });
+  };
+  recorrer(raiz);
+  return encontrados;
+}
+
+test("no feature stylesheet redefines the shared navbar", () => {
+  const hojas = archivosDeFeatures(".css");
+  assert.ok(hojas.length > 0, "no se encontró ninguna hoja en features/");
+
+  hojas.forEach((ruta) => {
+    const contenido = fs.readFileSync(ruta, "utf8");
+    // Sólo selectores en posición de regla: una mención dentro de un comentario
+    // —como las notas que explican por qué esto ya no está— es legítima.
+    const selectores = contenido.match(/^\s*\.(navbar|nav-menu)[\w-]*[^\n]*\{/gm) || [];
+    assert.deepEqual(
+      selectores, [],
+      `${path.relative(ROOT, ruta)} redefine el navbar; esos selectores son de ` +
+      `shared/navbar/navbar.css. Vive en @layer features y le gana al compartido ` +
+      `(@layer components) sin importar la especificidad.`
+    );
+  });
+});
+
+test("no feature script writes over the navbar's own menu", () => {
+  const guiones = archivosDeFeatures(".js");
+  assert.ok(guiones.length > 0, "no se encontró ningún script en features/");
+
+  // El id lo crea navbar.js (crearDesplegable, idLista: "menuCuentaLista"). Que
+  // otro archivo lo NOMBRE en prosa es legítimo —explicar por qué algo ya no
+  // está tiene valor—; lo que no puede es USARLO.
+  //
+  // Se buscan comillas simples o dobles, no backticks: en este repositorio los
+  // comentarios usan backticks como marca de código al citar un identificador,
+  // así que incluirlos convertiría cada explicación en un falso positivo. Un
+  // template literal para un id fijo no es idiomático acá; si algún día lo
+  // fuera, este test hay que endurecerlo.
+  const citado = /['"]#?menuCuentaLista['"]/;
+  guiones.forEach((ruta) => {
+    const contenido = fs.readFileSync(ruta, "utf8");
+    assert.ok(
+      !citado.test(contenido),
+      `${path.relative(ROOT, ruta)} toca #menuCuentaLista, que es del navbar ` +
+      `compartido. Si hace falta cambiar el menú, se cambia en shared/navbar/.`
+    );
+  });
+});
+
+test("the admin panel is reachable from every page, not just its own", () => {
+  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesPorRol } = cargarNavbar();
+
+  // Aplanar y buscar son dos pasos: mezclarlos hace que la recursión devuelva
+  // el resultado de `find` —posiblemente undefined— donde `flatMap` espera un
+  // array.
+  const aplanar = (enlaces) =>
+    enlaces.flatMap((enlace) => (enlace.hijos ? aplanar(enlace.hijos) : [enlace]));
+  const buscar = (enlaces) =>
+    aplanar(enlaces).find((enlace) => /administraci/i.test(enlace.texto || ""));
+
+  const panel = buscar(ENLACES_NAVEGACION_BASE);
+  assert.ok(
+    panel,
+    "el panel de administración debe vivir en el navbar compartido: mientras " +
+    "estuvo dentro de features/transactions/, un admin parado en Cursos no " +
+    "tenía cómo llegar a él desde el menú"
+  );
+  assert.equal(panel.href, "/app/features/transactions/admin");
+  assert.equal(panel.habilitado, true);
+
+  // Es cosmética, no control de acceso: el candado son los endpoints
+  // /api/admin/*. Pero anunciarle el panel a quien no es admin sólo confunde.
+  assert.equal(panel.soloAdmin, true);
+  assert.ok(
+    !buscar(filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, false)),
+    "quien no es admin no debe ver la entrada"
+  );
+  assert.ok(
+    buscar(filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, true)),
+    "quien es admin sí debe verla"
+  );
+});
+
+test("every page that mounts the navbar loads the stylesheets it needs", () => {
+  /*
+    `navbar.js` marca la lista y sus enlaces con clases de dos hojas distintas:
+    `nav-menu__*` de navbar.css y `floating-menu*` de floating-menu.css (ver
+    crearDesplegable y crearEnlaceMenu). Cargar una sin la otra deja el menú a
+    medio vestir.
+
+    Y no es sólo estético: el `display: none` de partida lo pone `.floating-menu`,
+    así que sin esa hoja el panel **nace abierto**, tapando el contenido. Le pasó
+    a admin.html, la única de las once páginas a la que se le olvidó el link.
+  */
+  const paginas = [];
+  const recorrer = (directorio) => {
+    fs.readdirSync(directorio, { withFileTypes: true }).forEach((entrada) => {
+      const completa = path.join(directorio, entrada.name);
+      if (entrada.isDirectory()) recorrer(completa);
+      else if (entrada.name.endsWith(".html")) paginas.push(completa);
+    });
+  };
+  recorrer(path.join(ROOT, "src"));
+
+  const montanElNavbar = paginas.filter((ruta) =>
+    fs.readFileSync(ruta, "utf8").includes("shared/navbar/navbar.js")
+  );
+  assert.ok(montanElNavbar.length > 5, "se esperaban varias páginas con navbar");
+
+  montanElNavbar.forEach((ruta) => {
+    const contenido = fs.readFileSync(ruta, "utf8");
+    const relativa = path.relative(ROOT, ruta);
+    assert.ok(
+      contenido.includes("shared/navbar/navbar.css"),
+      `${relativa} monta el navbar pero no carga navbar.css`
+    );
+    assert.ok(
+      contenido.includes("shared/floating-menu/floating-menu.css"),
+      `${relativa} monta el navbar pero no carga floating-menu.css: el menú ` +
+      `nacería abierto y sin estilos, porque el display:none lo pone .floating-menu`
+    );
+  });
+});

@@ -1818,9 +1818,14 @@ function actualizarCuota(cuota) {
   });
   siExiste("permiteLote", (n) => { n.textContent = permiteLote ? "sí" : "no"; });
 
-  // El menú se rearma con cada cambio de sesión: ahí es donde aparece (o
-  // desaparece) la entrada al panel de administración.
-  pintarMenuCuenta(cuota);
+  // Acá se rearmaba el menú de cuenta. Ya no: lo monta `navbar.js`, que es el
+  // dueño de la barra en todo el sitio. Ver la nota al final de este archivo.
+  //
+  // Además de pisar el menú, esa llamada podía cortar esta función a la mitad:
+  // buscaba `#menuCuentaLista` sin guarda, y si /api/cuota respondía antes de
+  // que el navbar montara, lanzaba y se saltaba todo lo de abajo —incluido
+  // `aplicarBloqueo()`—. Los try/catch de arriba se lo tragaban en silencio.
+
   // "Te quedan N extracciones" no aplica a quien tiene acceso ilimitado.
   const leyenda = el("leyendaCuota");
   if (leyenda) {
@@ -1930,95 +1935,33 @@ if (EN_SIMULADOR) {
 
 /* ------------------------------------------------------- menú de cuenta --- */
 /*
-  Mismo patrón que el menú del sitio: el isotipo abre un desplegable con el
-  nombre arriba, los enlaces, y "Salir" tras un divisor. Se arma en JavaScript
-  porque su contenido depende de la sesión — y "Panel de administración" sólo
-  se añade a quien lo es.
+  ACÁ NO HAY MENÚ, Y ES A PROPÓSITO.
 
-  Que el botón aparezca o no es cosmética: /admin y sus endpoints comprueban
-  el permiso en el servidor. Quien fuerce la URL ve la página de "sin permiso".
+  Esta herramienta llegó de `aplicacion-financiera` con su propio menú de
+  cuenta. En taudux la barra la monta `app/shared/navbar/navbar.js`, que es su
+  único dueño en todo el sitio. El menú heredado sobrevivió a la portación y
+  estuvo hasta el 2026-08-20 pisándole el suyo, porque los dos usaban el mismo
+  id: `navbar.js` crea la lista como `#menuCuentaLista` y esto la reescribía
+  entera con `innerHTML`.
+
+  Se veía como una diferencia cosmética —el correo en vez del nombre, sin las
+  flechas de los acordeones, "Mi cuenta" y "Academy" en gris— pero se llevaba
+  puesto algo serio: **el "Salir" inyectado acá no cerraba la sesión**. Llamaba
+  a `entrarComo("")`, que es un POST al backend del extractor; el que cierra de
+  verdad es `salirYVolver()` de `navbar.js`, contra Supabase. Quien lo pulsaba
+  en esta página creía haber salido y seguía dentro.
+
+  Lo que este archivo aportaba y no se perdió:
+
+  - **El panel de administración** vive ahora en `ENLACES_NAVEGACION_BASE` de
+    `navbar.js` con `soloAdmin: true`, así que aparece en TODAS las páginas
+    para quien es admin. Antes sólo existía acá, y un admin parado en Cursos no
+    tenía cómo llegar.
+
+  Regla que deja el episodio: `features/` no monta ni estiliza el navbar. Si
+  hace falta algo del menú, se agrega en `shared/navbar/`. Lo blinda
+  `tests/navbar-jerarquia.test.js`.
 */
-const ENLACES_MENU = [
-  { texto: "Mi cuenta", href: "#", habilitado: false },
-  { texto: "Academy", href: "#", habilitado: false },
-  { texto: "Noticias", href: "#", habilitado: false },
-  { texto: "Tools", href: "/", habilitado: true },
-  { texto: "Proyectos", href: "#", habilitado: false },
-];
-
-function itemMenu({ texto, href, habilitado = true, clase = "" }) {
-  if (!habilitado) {
-    return `<span class="nav-menu__link nav-menu__link--disabled">${escapar(texto)}</span>`;
-  }
-  return `<a class="nav-menu__link ${clase}" href="${href}" role="menuitem">${escapar(texto)}</a>`;
-}
-
-function pintarMenuCuenta(cuota) {
-  const lista = el("menuCuentaLista");
-  const dentro = Boolean(cuota.correo);
-  const partes = [];
-
-  if (dentro) {
-    partes.push(`<div class="nav-menu__header">${escapar(cuota.correo)}</div>`);
-  }
-  partes.push(...ENLACES_MENU.map(itemMenu));
-
-  // La entrada de administración va con su propio divisor: es de otra
-  // naturaleza que los enlaces del sitio y conviene que se lea así.
-  if (cuota.es_admin) {
-    partes.push('<hr class="nav-menu__divider">');
-    // `/admin` era la ruta del Flask del simulador, que servía la página con
-    // `render_template`. Acá el panel es una página del sitio, servida por
-    // Vercel junto al resto de `src/`, y el backend ya no tiene esa ruta.
-    partes.push(itemMenu({ texto: "⚙ Panel de administración",
-                           href: "/app/features/transactions/admin",
-                           clase: "nav-menu__link--admin" }));
-  }
-
-  partes.push('<hr class="nav-menu__divider">');
-  partes.push(dentro
-    ? '<a class="nav-menu__link" href="#" role="menuitem" data-salir>Salir</a>'
-    : '<a class="nav-menu__link" href="#" role="menuitem" data-entrar>Entrar</a>');
-
-  lista.innerHTML = partes.join("");
-  lista.querySelector("[data-salir]")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    entrarComo("");
-  });
-  lista.querySelector("[data-entrar]")?.addEventListener("click", (e) => {
-    e.preventDefault();
-    abrirMenuCuenta(false);
-    el("correoSimulado")?.focus();
-  });
-}
-
-/*
-  El menú de cuenta era del navbar que traía esta herramienta. En taudux la
-  barra es la del sitio —con su propio `navbar.js` y la sesión real de
-  Supabase—, así que estos elementos no existen y todo lo que los toque tiene
-  que sobrevivir a su ausencia.
-
-  No es una precaución teórica: sin las guardas, `el("btnMenuCuenta")` devuelve
-  `null`, el `addEventListener` lanza, y **el script entero deja de ejecutarse
-  desde esa línea** — la página se ve entera pero nada responde. Pasó el
-  2026-08-19 y costó un rato entenderlo, porque el HTML se veía perfecto.
-*/
-function abrirMenuCuenta(abrir) {
-  siExiste("menuCuenta", (menu) => menu.classList.toggle("nav-menu--open", abrir));
-  siExiste("btnMenuCuenta", (boton) => boton.setAttribute("aria-expanded", String(abrir)));
-}
-
-siExiste("btnMenuCuenta", (boton) => boton.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const menu = el("menuCuenta");
-  abrirMenuCuenta(!(menu && menu.classList.contains("nav-menu--open")));
-}));
-document.addEventListener("click", (e) => {
-  if (!e.target.closest("#menuCuenta")) abrirMenuCuenta(false);
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") abrirMenuCuenta(false);
-});
 
 document.querySelectorAll("[data-plan]").forEach((boton) =>
   boton.addEventListener("click", () => cambiarPlan(boton.dataset.plan)));

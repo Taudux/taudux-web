@@ -39,6 +39,30 @@ const ENLACES_NAVEGACION_BASE = [
     ],
   },
   { texto: "Proyectos", habilitado: false },
+  {
+    /*
+      Va al final y en primer nivel a propósito: no es una herramienta más, y a
+      dos clics dentro de "Tools" un admin no lo encontraría.
+
+      Vivía dentro de `features/transactions/extractor.js`, así que sólo existía
+      en esa página: un admin parado en Cursos o en el Portal no tenía cómo
+      llegar al panel desde el menú. Al traerlo acá aparece en todas.
+
+      El criterio de rol NO cambió con la mudanza, aunque lo parezca: el
+      `es_admin` que devolvía el backend del extractor sale de consultar
+      `public.perfiles.rol` (ver `_es_admin()` en extractor/app.py), que es la
+      misma fila que lee esto. Cambia quién pregunta, no la fuente.
+
+      Con una excepción que sólo existe en local: si el extractor corre en modo
+      simulador, `_es_admin()` se resuelve contra un `set` de correos del código
+      en vez de la base. Ahí sí pueden discrepar, y por eso el panel podría
+      aparecer o faltar en local sin que signifique nada sobre producción.
+    */
+    texto: "Panel de administración",
+    href: "/app/features/transactions/admin",
+    habilitado: true,
+    soloAdmin: true,
+  },
 ];
 
 /*

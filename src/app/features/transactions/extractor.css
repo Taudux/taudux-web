@@ -97,30 +97,12 @@
     box-shadow: var(--shadow-panel);
   }
 
-  /* Navbar igual al del sitio: fija, oscura, logo a la izquierda. */
-  .navbar {
-    position: sticky; top: 0; z-index: 1000;
-    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-    min-height: var(--navbar-height);
-    padding: 0 2rem;
-    background: rgba(11, 13, 15, 0.92);
-    border-bottom: var(--border-subtle);
-    backdrop-filter: blur(8px);
-  }
-  .navbar__brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit; }
-  .navbar__isotipo {
-    display: grid; place-items: center;
-    width: 34px; height: 34px;
-    border: 2px solid var(--color-accent);
-    transform: rotate(45deg);
-    border-radius: 4px;
-  }
-  /* El logotipo real, no una letra dibujada con CSS. La altura manda y el
-     ancho sigue: la proporción del archivo no se toca. */
-  .navbar__logo { height: 34px; width: auto; display: block; }
-  .navbar__links { display: flex; align-items: center; gap: 1.5rem; }
-  .navbar__link { color: var(--color-text-muted); text-decoration: none; font-size: 0.9rem; transition: color var(--transition-base); }
-  .navbar__link:hover { color: var(--color-accent); }
+  /* La barra la viste `app/shared/navbar/navbar.css`, que es su dueño en todo
+     el sitio. Acá había una copia entera —`.navbar`, `__brand`, `__logo`,
+     `__links`, `__link`— heredada de `aplicacion-financiera`. Como este archivo
+     vive en `@layer features` y el compartido en `@layer components`, la copia
+     le ganaba propiedad por propiedad sin importar la especificidad: por eso el
+     menú se veía distinto acá que en el resto del sitio. */
 
   .button--access {
     padding: 8px 20px; border: 0; border-radius: var(--radius-pill);
@@ -812,56 +794,17 @@
   #particulas-fondo { position: fixed; inset: 0; z-index: -1; }
   #particulas-fondo canvas { display: block; }
 
-  /* Menú de cuenta: mismo lenguaje visual que el desplegable del sitio.
-     El isotipo abre, el nombre encabeza, y "Salir" va tras un divisor. */
-  .nav-menu { position: relative; }
-  .nav-menu__toggle {
-    display: grid; place-items: center; padding: 0; border: 0;
-    background: none; cursor: pointer; line-height: 0;
-  }
-  .nav-menu__isotipo {
-    width: 40px; height: 40px; display: block;
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--color-accent) 45%, transparent));
-    transition: transform .2s ease, filter .2s ease;
-  }
-  .nav-menu__toggle:hover .nav-menu__isotipo,
-  .nav-menu--open .nav-menu__isotipo {
-    transform: scale(1.06);
-    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--color-accent) 70%, transparent));
-  }
-  .nav-menu__list {
-    position: absolute; top: calc(100% + 0.75rem); right: 0; z-index: 1400;
-    display: none; flex-direction: column; gap: 0.15rem;
-    min-width: 240px; padding: 1rem 0.9rem;
-    border: 1px solid var(--color-border); border-radius: 18px;
-    background: #16181b; box-shadow: 0 18px 45px rgba(0,0,0,.6);
-    text-align: center;
-  }
-  .nav-menu--open .nav-menu__list { display: flex; }
-  .nav-menu__header {
-    padding: 0.35rem 0.5rem 0.9rem; color: var(--color-accent);
-    font-family: var(--font-marca); font-size: 0.85rem; font-weight: 700;
-    overflow-wrap: anywhere;
-  }
-  .nav-menu__link {
-    display: block; padding: 0.55rem 0.75rem; border-radius: var(--radius-field);
-    color: var(--color-text); text-decoration: none;
-    font-family: var(--font-marca); font-size: 0.95rem; letter-spacing: .5px;
-    transition: background .16s ease, color .16s ease;
-  }
-  .nav-menu__link:hover { background: rgba(255,255,255,.05); color: var(--color-accent); }
-  .nav-menu__link--disabled { color: #5b5f66; cursor: default; }
-  .nav-menu__link--disabled:hover { background: none; color: #5b5f66; }
-  .nav-menu__link--admin { color: var(--color-accent); font-size: 0.86rem; }
-  .nav-menu__divider {
-    border: 0; border-top: 1px solid var(--color-border); margin: 0.6rem 0.5rem;
-  }
+  /* El menú de cuenta también lo monta y lo viste `shared/navbar/`. Lo que
+     había acá era el desplegable propio de la herramienta: entre otras cosas
+     fijaba `min-width: 240px` contra los 160px que el compartido tiene medidos
+     a mano —"el ítem más ancho mide 79px de texto y las flechas de los
+     acordeones entran cómodas"— y ponía Orbitron en el encabezado, que con un
+     correo largo lo partía en dos renglones.
 
-  /* Panel de administración (página /admin) */
-  .navbar__correo {
-    font-size: 0.74rem; color: var(--color-text-subtle);
-    max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
+     Se fueron con él dos reglas que ya no viste nada: `.nav-menu__isotipo`, sin
+     elemento en ningún HTML, y `.nav-menu__link--admin`, del panel de
+     administración que ahora emite `navbar.js`. */
+
   .admin__mes {
     font-family: var(--font-ui); font-size: 0.75rem; font-weight: 400;
     color: var(--color-text-subtle); text-transform: none; letter-spacing: 0;
@@ -1158,9 +1101,6 @@
   .simulador-barra button:hover { background: color-mix(in srgb, var(--color-warning) 12%, transparent); }
 
   @media (max-width: 640px) {
-    .navbar { padding: 0 1rem; }
-    .navbar__links { gap: 0.75rem; }
-    .navbar__link:not(.button--access) { display: none; }
     .carga { padding: 1.5rem; }
   }
 }
