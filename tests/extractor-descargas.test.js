@@ -32,6 +32,7 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "u
 const SCRIPT = "src/app/features/transactions/extractor.js";
 const CLIENTE = "src/app/features/transactions/api-cliente.js";
 const PAGINA = "src/app/features/transactions/index.html";
+const ESTILOS = "src/app/features/transactions/extractor.css";
 
 // Los comentarios de bloque y de línea se sacan antes de mirar el código. Sin
 // esto, explicar bien la eliminación de `location.href` la resucitaría a ojos
@@ -181,4 +182,61 @@ test("the download buttons obey the server's flag and nothing else", () => {
   // Arranca cerrado a propósito: si la consulta de cuota falla, se ve de menos.
   assert.match(js, /let permisos = \{ paneles: \[\], descargas: false \}/,
                "sin respuesta del servidor, las descargas empiezan cerradas");
+});
+
+/* --------------------------------------------------------------------------
+ * Sin cuenta no hay descarga (2026-08-21).
+ *
+ * El servidor pasó `anonimo.descargas` a `False` y `anonimo.limite` a `None`:
+ * la cuota de 2 se midió en producción y no se hacía cumplir —cada petición
+ * del navegador nacía con identidad nueva porque este archivo nunca llegó a
+ * mandar `X-Sesion-Anon`— así que la frontera se movió a la descarga, que sí
+ * es exigible desde el servidor.
+ *
+ * Lo que le toca al front son dos consecuencias, y NINGUNA es apagar los
+ * botones: eso ya lo hace `aplicarBloqueo()` obedeciendo a `puede.descargas`,
+ * y duplicarlo acá reintroduciría la segunda fuente de verdad que el test de
+ * arriba existe para impedir.
+ * ------------------------------------------------------------------------ */
+
+test("the quota counter hides for whoever has no account", () => {
+  const js = codigo();
+  const inicio = js.indexOf("function actualizarCuota(");
+  assert.notEqual(inicio, -1, "debe existir actualizarCuota()");
+  const cuerpo = js.slice(inicio, js.indexOf("\n}", inicio));
+
+  // "Te quedan N extracciones" no aplica a un plan sin techo: el servidor
+  // manda `limite: null` y el marcador quedaría en "—" para siempre.
+  assert.match(cuerpo, /cajaCuota/,
+               "el contador tiene que poder ocultarse, no sólo cambiar de valor");
+  assert.match(cuerpo, /hidden\s*=\s*cuota\.plan === "anonimo"/,
+               "se oculta para quien no tiene cuenta");
+});
+
+test("the page gives the quota counter a handle to hide it by", () => {
+  const pagina = read(PAGINA);
+  // Arranca oculto y lo revela el servidor: si `/api/cuota` falla o tarda, un
+  // anónimo vería el parpadeo de "Te quedan — extracciones". Mismo criterio
+  // que `let permisos = { descargas: false }`: de menos, nunca de más.
+  assert.match(pagina, /<span class="cuota" id="cajaCuota" hidden>/,
+               "sin id no se puede ocultar, y sin `hidden` se ve antes de saber");
+  // `.cuota` declara `display: flex`, que le gana al `[hidden]` del navegador
+  // por ser una regla de autor: sin la regla explícita, `hidden` no oculta.
+  assert.match(read(ESTILOS), /\.cuota\[hidden\]/,
+               "el atributo `hidden` necesita su regla o no hace nada");
+});
+
+test("the disabled download button tells whoever has no account what to do", () => {
+  const js = codigo();
+  const inicio = js.indexOf("function aplicarBloqueo(");
+  const cuerpo = js.slice(inicio, js.indexOf("\n}", inicio));
+
+  // "Tu plan no incluye descargas" no le dice nada a quien no eligió ningún
+  // plan. El texto útil es el camino de salida, y es el ÚNICO lugar donde el
+  // front mira el nombre del plan para las descargas: el permiso sigue
+  // saliendo de `permisos.descargas` (test de arriba). Acá sólo se redacta.
+  assert.match(cuerpo, /planActual === "anonimo"/,
+               "el motivo del botón apagado depende de si hay cuenta o no");
+  assert.match(cuerpo, /[Cc]rea una cuenta/,
+               "al anónimo se le ofrece la salida, no un diagnóstico");
 });

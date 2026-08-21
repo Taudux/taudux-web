@@ -258,6 +258,11 @@
 
   /* Cuota */
   .cuota { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--color-text-subtle); }
+  /* El `display: flex` de arriba le gana al `[hidden] { display: none }` del
+     navegador: misma especificidad, pero una regla de autor va antes que la
+     hoja de usuario-agente. Sin esta línea, poner `hidden` desde el JS no
+     ocultaría nada. Mismo motivo que en curso-detalle.css. */
+  .cuota[hidden] { display: none; }
   .cuota__valor { color: var(--color-accent); font-weight: 700; }
 
   /* Estados */

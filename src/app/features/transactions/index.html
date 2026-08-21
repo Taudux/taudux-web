@@ -123,7 +123,18 @@
         <input type="password" id="inputPassword" class="field carga__password"
                placeholder="Contraseña del PDF (si la tiene)" autocomplete="off">
         <button type="button" class="button--glow" id="btnProcesar" disabled>Procesar</button>
-        <span class="cuota">
+        <!--
+          El contador entero lleva id porque hay planes SIN techo que mostrar:
+          desde el 2026-08-21 `anonimo` viene con `limite: null` y este texto
+          se quedaría en "Te quedan — extracciones" para siempre.
+
+          Arranca OCULTO y lo revela `actualizarCuota()` (extractor.js) cuando
+          el servidor dice que hay un número. Es el mismo criterio que
+          `let permisos = { descargas: false }` en ese archivo: si la consulta
+          de cuota falla o tarda, se ve de menos y nunca de más — mostrarlo
+          primero le daría a todo anónimo un parpadeo de "Te quedan —".
+        -->
+        <span class="cuota" id="cajaCuota" hidden>
           Te quedan <span class="cuota__valor" id="cuotaRestantes">—</span> extracciones
           <span class="cuota__leyenda" id="leyendaCuota"></span>
         </span>

@@ -1920,6 +1920,14 @@ function actualizarCuota(cuota) {
   avisoPlan = cuota.aviso || "";
   permiteLote = !!permisos.lote;
   el("cuotaRestantes").textContent = cuota.restantes === null ? "∞" : cuota.restantes;
+  // "Te quedan N extracciones" sólo tiene sentido si hay una N. Desde el
+  // 2026-08-21 `anonimo` viene sin techo (`limite: null` en el servidor): la
+  // cuota de 2 se midió en producción y no se hacía cumplir —cada petición
+  // nacía con identidad nueva porque este archivo nunca llegó a mandar
+  // `X-Sesion-Anon`— así que se dejó de prometer un número que no se cobraba.
+  // Lo que ahora limita a quien no tiene cuenta es la DESCARGA, y de eso
+  // avisan los botones y `avisoBloqueado`, no este contador.
+  siExiste("cajaCuota", (n) => { n.hidden = cuota.plan === "anonimo"; });
 
   // Sólo del simulador: en producción estos tres no existen.
   siExiste("planActual", (n) => { n.textContent = cuota.plan; });
@@ -1984,9 +1992,17 @@ function aplicarBloqueo() {
     if (panel) panel.classList.toggle("velado", !visibles.has(id));
   });
   const puedeDescargar = permisos.descargas !== false;
+  // El PERMISO sale de `permisos.descargas` y de nada más (arriba). Lo que
+  // sigue es sólo la REDACCIÓN del motivo: "Tu plan no incluye descargas" no
+  // le dice nada a quien no eligió ningún plan, y desde el 2026-08-21 el
+  // anónimo es justo quien más ve este texto. Para él la frase útil no es un
+  // diagnóstico, es la salida.
+  const motivoSinDescarga = planActual === "anonimo"
+    ? "Crea una cuenta gratis para descargar tu Excel o CSV"
+    : "Tu plan no incluye descargas";
   ["btnExcel", "btnCsv"].forEach((id) => {
     el(id).disabled = !puedeDescargar;
-    el(id).title = puedeDescargar ? "" : "Tu plan no incluye descargas";
+    el(id).title = puedeDescargar ? "" : motivoSinDescarga;
   });
   // El visor de pantalla completa mostraría las gráficas SIN velo: se apaga
   // también (el blur ya bloquea el mouse, esto cierra la vía del teclado).
