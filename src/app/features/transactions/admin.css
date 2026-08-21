@@ -9,6 +9,11 @@
  * temporales (`.admin__aviso`) y el visor de JSON de los paneles internos
  * (`#panelInterno`). Se fueron el 2026-08-20 con el markup al que vestían:
  * ninguna de esas secciones mostraba datos ciertos (hallazgos F30 y F25).
+ *
+ * El 2026-08-21 la tabla dejó de ser sólo lectura: la columna Plan —que
+ * repetía "free" en todas las filas— dio lugar a los dos números editables y a
+ * su botón (`.admin__numero`, `.admin__toggle`, `.admin__guardar`), y
+ * `.admin__plan` se fue con ella.
  */
 @layer features {
 
@@ -54,29 +59,107 @@
     font-weight: 400;
   }
 
+  /* Contenedor de scroll: una tabla de seis columnas no debe apretar sus
+     celdas en mobile ni ocultar ninguna. Con overflow-x acá alcanza, sin
+     envoltura HTML aparte — la tabla fija su propio min-width. */
   .admin__lista {
-    display: grid;
-    gap: 0.5rem;
+    overflow-x: auto;
   }
 
-  .admin__fila {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
+  /* El mínimo es el umbral donde empieza el scroll horizontal: por debajo, las
+     celdas se apretarían y el botón "Guardar" partiría su texto en dos líneas.
+     Subió de 40rem a 64rem con las columnas editables, y volvió a 52rem el
+     mismo día al apilar nombre y correo en una sola celda — una columna menos
+     de texto ancho es exactamente lo que sobraba. */
+  .admin__tabla {
+    width: 100%;
+    min-inline-size: 52rem;
+    border-collapse: collapse;
     background: var(--color-field);
     border: var(--border-subtle);
     border-radius: var(--radius-field);
+    overflow: hidden;
   }
 
-  /* La administración se distingue por el borde y no sólo por la insignia: la
-     lista se lee de un vistazo y el color hace el trabajo antes que la lectura.
-     El nombre viene de cuando marcaba el acceso ilimitado; hoy marca el rol. */
-  .admin__fila--ilimitado {
-    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  /* `vertical-align: top` y no el `middle` por defecto.
+   *
+   * Las celdas de esta tabla NO tienen el mismo contenido: bajo "PDF al mes"
+   * va el input MÁS el consumo del mes, así que su bloque es más alto.
+   * Centrando cada celda por separado, cada control quedaba a una altura
+   * distinta —medido: 388, 398, 402 y 398 px en la misma fila— y la fila se
+   * leía torcida sin que se pudiera señalar qué estaba mal.
+   *
+   * Alineando arriba, todos los controles arrancan del mismo borde y el texto
+   * del consumo cuelga por debajo sin arrastrar a nadie. */
+  .admin__tabla th,
+  .admin__tabla td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: top;
   }
 
+  /* El checkbox mide 18px contra los 33px de un campo numérico: alineado
+     arriba quedaría flotando sobre la línea de los inputs. El margen lo baja
+     hasta que su centro coincide con el de ellos (medido: 403 contra 404).
+     El BOTÓN no lo lleva —mide 32px, casi lo mismo que un input—, y ponérselo
+     lo dejaba 6px por debajo de todo lo demás. */
+  .admin__toggle {
+    margin-block-start: 0.4rem;
+  }
+
+  .admin__tabla thead th {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    border-bottom: var(--border-subtle);
+  }
+
+  .admin__tabla tbody tr:not(:last-child) td {
+    border-bottom: var(--border-subtle);
+  }
+
+  /* La administración se distingue por el acento y no sólo por la insignia:
+     la tabla se lee de un vistazo y el color hace el trabajo antes que la
+     lectura. El nombre viene de cuando marcaba el acceso ilimitado; hoy
+     marca el rol. Una fila no tiene borde propio que teñir, así que el
+     criterio pasa a un tinte de fondo más una franja a la izquierda. */
+  .admin__fila--ilimitado td {
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+
+  /* La franja NO puede ser un `border`.
+   *
+   * Un borde ocupa espacio: empujaba el contenido 3px a la derecha, así que
+   * las filas de administración arrancaban en X=489 y el resto en X=486. A
+   * simple vista se lee como filas desalineadas, y el ojo lo nota antes de
+   * poder nombrarlo — medido el 2026-08-21.
+   *
+   * `inset-inline-start: 0` sobre un pseudo-elemento absoluto pinta la franja
+   * SIN participar del layout: todas las celdas conservan el mismo padding y
+   * el texto de todas las filas arranca en la misma columna. La celda necesita
+   * `position: relative` para ser el ancla. */
+  .admin__fila--ilimitado td:first-child {
+    position: relative;
+  }
+
+  .admin__fila--ilimitado td:first-child::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 3px;
+    background: var(--color-accent);
+  }
+
+  /* Nombre y correo apilados en UNA celda (2026-08-21).
+   *
+   * Existió como wrapper `<div>` cuando la lista era de tarjetas, se fue al
+   * pasar a tabla —cada dato tomó su columna— y vuelve porque separarlos los
+   * presentaba como dos datos independientes cuando identifican a la misma
+   * persona. Y le cobraban a la tabla un ancho que necesitan las columnas
+   * editables: con una columna menos, el scroll horizontal aparece más tarde. */
   .admin__quien {
     display: grid;
     gap: 0.15rem;
@@ -84,31 +167,88 @@
   }
 
   .admin__usuario {
+    display: block;
     color: var(--color-text);
     overflow-wrap: anywhere;
   }
 
   .admin__meta {
+    display: block;
     color: var(--color-text-muted);
     font-size: 0.8rem;
+    overflow-wrap: anywhere;
   }
 
-  .admin__insignia {
-    color: var(--color-accent);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+  /* Los dos campos numéricos.
+   *
+   * Llevan también `.field`, que vive en la capa `components`: esta capa
+   * (`features`) va después en el orden declarado en `styles.css`, así que lo
+   * de acá gana sin necesidad de `!important`. El padding compartido es de
+   * 1rem, pensado para un formulario a lo ancho; dentro de una celda de tabla
+   * dejaría filas altísimas. */
+  .admin__numero {
+    inline-size: 5rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  /* La cuenta con acceso ilimitado no lleva campo: no hay número que fijar, y
+     un input deshabilitado con un "∞" adentro sería un control mintiendo sobre
+     lo que se puede escribir. El texto ocupa el mismo ancho para que la columna
+     no baile entre filas. */
+  .admin__numero--infinito {
+    display: inline-block;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  /* Debajo del límite mensual, en gris y más chico: el consumo acompaña al
+     número que se está editando, no compite con él. */
+  .admin__consumo {
+    display: block;
+    margin-block-start: 0.35rem;
+    color: var(--color-text-subtle);
+    font-size: 0.7rem;
+  }
+
+  /* El nombre NO es `.admin__switch`: aquel era el interruptor del alta de
+     accesos que se borró por no otorgar nada (hallazgo F30), y un test afirma
+     su ausencia. Reusar el nombre mezclaría dos historias que terminaron
+     distinto. */
+  .admin__toggle {
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  /* Un botón por fila, no uno por pantalla: el `.button--outline` compartido
+     está dimensionado para acciones de página y en una celda se ve enorme. */
+  .admin__guardar {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.8rem;
     white-space: nowrap;
+  }
+
+  /* Deshabilitado ES el indicador de "sin cambios" de esta tabla, así que
+     tiene que leerse como apagado y no como disponible. */
+  .admin__guardar:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .admin__guardar:disabled:hover {
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+  }
+
+  /* La fila que está viajando. El botón ya dice "Guardando…"; esto le da el
+     mismo estado al resto de la fila, que sigue editable pero desactualizada. */
+  .admin__fila[aria-busy="true"] td {
+    opacity: 0.6;
   }
 
   .admin__vacio {
     color: var(--color-text-muted);
-  }
-
-  @media (max-width: 560px) {
-    .admin__fila {
-      flex-direction: column;
-      align-items: flex-start;
-    }
   }
 }

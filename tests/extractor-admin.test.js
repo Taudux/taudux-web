@@ -107,6 +107,197 @@ test("it lists the site's real users, not only the in-memory ones", () => {
   );
 });
 
+test("each row shows the email from /api/admin/perfiles, not the raw uuid", () => {
+  const js = read(SCRIPT);
+
+  /*
+    Ninguna CELDA debe pintar el uuid: el correo viene de /api/admin/perfiles,
+    no de `p.id`.
+
+    El aserto miraba el archivo entero (`${escapar(p.id)}` en cualquier lado) y
+    eso dejó de servir cuando la tabla se volvió editable: los listeners van por
+    delegación y necesitan el uuid en el markup para saber a quién guardar. Lo
+    que se prohíbe es mostrarlo; llevarlo en `data-uid` es justamente lo que
+    permite no mostrarlo, así que se pide.
+  */
+  assert.doesNotMatch(
+    js,
+    /<td[^>]*>\s*\$\{escapar\(p\.id\)\}/,
+    "ninguna celda debe pintar el uuid crudo"
+  );
+  assert.match(
+    js,
+    /data-uid="\$\{escapar\(p\.id\)\}"/,
+    "la fila debe llevar el uid para que la delegación sepa a quién guarda"
+  );
+
+  // La celda de correo sigue existiendo, ahora como <td>.
+  assert.match(js, /admin__meta/, "la celda de correo debe seguir en el markup");
+});
+
+test("name and email share one 'Usuario' cell instead of two columns", () => {
+  /*
+    Nombre y correo identifican a la MISMA persona: separarlos en dos columnas
+    los presentaba como dos datos independientes y le cobraba a la tabla un
+    ancho que necesitan las columnas editables. Apilados en una celda se leen
+    como lo que son —quién es esta fila—, y el `min-inline-size` de la tabla
+    baja, así que el scroll horizontal aparece más tarde en pantallas chicas.
+
+    Es el apilado que la lista tenía ANTES de volverse tabla (`.admin__quien`
+    con el nombre arriba y el meta abajo); lo que cambia es que ahora convive
+    con columnas de formulario.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /<th[^>]*>\s*Usuario/,
+    "el encabezado de la primera columna debe ser Usuario"
+  );
+
+  ["Nombre", "Correo"].forEach((viejo) => {
+    assert.doesNotMatch(
+      js,
+      new RegExp(`<th[^>]*>\\s*${viejo}\\s*<`),
+      `"${viejo}" dejó de ser una columna propia`
+    );
+  });
+
+  // Y el nombre y el correo quedan dentro de la MISMA celda, apilados.
+  assert.match(
+    js,
+    /<td[^>]*admin__quien[\s\S]{0,300}admin__usuario[\s\S]{0,300}admin__meta/,
+    "nombre y correo van en una sola celda, uno debajo del otro"
+  );
+});
+
+test("the plan column gives way to the two limits that can actually be edited", () => {
+  /*
+    Con un solo plan asignable —los de pago siguen apagados en el catálogo— la
+    columna Plan repetía "free" en todas las filas: un dato cierto que no
+    informa de nada y ocupa el lugar del que sí se puede cambiar. Los dos
+    números que el administrador gobierna son cuántos PDF al mes y cuántos por
+    envío, y hasta ahora no se veían.
+  */
+  const js = read(SCRIPT);
+
+  ["PDF al mes", "PDF por envío", "Personalizado"].forEach((titulo) => {
+    assert.match(
+      js,
+      new RegExp(`<th[^>]*>\\s*${titulo}`),
+      `falta el encabezado "${titulo}"`
+    );
+  });
+
+  assert.doesNotMatch(
+    js,
+    /<th[^>]*>\s*Plan/,
+    "la columna Plan repetía el mismo valor en todas las filas"
+  );
+
+  // Su formateador se va con ella: código muerto que aún nombra el plan como
+  // si la tabla lo mostrara.
+  assert.doesNotMatch(js, /formatearPlan/, "sobra formatearPlan()");
+});
+
+test("saving a row writes it through PUT /api/admin/acceso/<uid>", () => {
+  /*
+    La tabla dejó de ser sólo lectura. El alta que se borró el 2026-08-20
+    escribía contra una identidad rota (`user:<correo>` cuando en producción es
+    `user:<uuid>`, hallazgo F30); ésta escribe contra el uuid y por el endpoint
+    que lo espera, que además resuelve la herencia del plan en el servidor.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /apiFetch\(\s*`\/api\/admin\/acceso\//,
+    "debe guardar contra /api/admin/acceso/<uid>"
+  );
+  assert.match(js, /method:\s*"PUT"/, "el endpoint escribe con PUT");
+  assert.match(
+    js,
+    /"Content-Type":\s*"application\/json"/,
+    "el cuerpo va en JSON: sin la cabecera Flask no lo parsea"
+  );
+
+  // El endpoint no acepta `plan` y no hay que inventárselo: encender un nivel
+  // de pago es otra decisión, tomada en otro lado.
+  const cuerpo = js.match(/JSON\.stringify\([\s\S]{0,200}/)?.[0] ?? "";
+  assert.doesNotMatch(cuerpo, /\bplan\b/, "el payload no lleva plan");
+});
+
+test("the numeric inputs are born disabled while the row inherits its plan", () => {
+  /*
+    Con la bandera apagada el servidor ignora los dos números y aplica los del
+    plan. Dejarlos escribibles invita a tipear un límite que no va a regir —
+    exactamente la clase de pantalla que se cree y miente que costó cuatro
+    secciones acá.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /personalizado\s*\?\s*""\s*:\s*"disabled"/,
+    "los numéricos deben nacer disabled mientras la fila hereda del plan"
+  );
+
+  // Y que la decisión alcance a los DOS campos, no sólo al primero.
+  assert.equal(
+    (js.match(/\$\{bloqueo\}/g) || []).length,
+    2,
+    "los dos numéricos comparten el mismo bloqueo"
+  );
+});
+
+test("it announces the result of every save with a toast", () => {
+  /*
+    Sin aviso, un guardado fallido se ve igual que uno exitoso: la fila queda
+    como estaba. El toast es el único lugar donde se lee el `mensaje` que manda
+    el endpoint —en español y explicando el rechazo—, así que se reusa en vez
+    de escribir una segunda copia de esos textos acá.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(js, /mostrarToast\([^)]*"error"\)/, "el fallo debe avisar");
+  assert.match(js, /mostrarToast\([^)]*"success"\)/, "el éxito debe avisar");
+});
+
+test("the page loads the shared field styles now that it has inputs again", () => {
+  /*
+    `field.css` se había quitado cuando el único formulario de la página era el
+    alta de accesos borrada. La tabla editable trae inputs de vuelta, y sin esa
+    hoja quedan con el estilo por defecto del navegador: fondo blanco sobre un
+    panel oscuro.
+  */
+  assert.match(
+    sinComentariosHtml(read(PAGINA)),
+    /shared\/field\/field\.css/,
+    "los campos de la tabla necesitan la hoja compartida"
+  );
+});
+
+test("the copy stops promising a role column that no longer exists", () => {
+  /*
+    La columna Rol se quitó el 2026-08-21, y dos frases se quedaron hablando de
+    ella: la bajada de la cabecera ("…y el rol de cada una") y `.admin__ayuda`
+    ("…su rol, correo y consumo"). El rol ya no se puede LEER en la tabla: sólo
+    se insinúa con la franja de acento de las filas de administración.
+
+    Esta pantalla perdió cuatro secciones por mostrar datos que no eran ciertos;
+    prometer una columna que no está es la misma clase de defecto, más barata
+    de cometer. Se mira el markup sin comentarios: el de arriba explica el
+    cambio y nombra justo lo que ya no está.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.doesNotMatch(
+    html,
+    /\brol\b/i,
+    "el copy visible no debe prometer un rol que la tabla ya no muestra"
+  );
+});
+
 test("it reveals the content after the gate approves", () => {
   /*
     `asegurarAdmin` COMPRUEBA; `revelar` MUESTRA. Llamar sólo al primero deja
@@ -150,26 +341,26 @@ test("it starts even if DOMContentLoaded already fired", () => {
   );
 });
 
-test("the panel no longer talks to the extractor API", () => {
+test("the panel reads what Supabase cannot give it from /api/admin/perfiles", () => {
   /*
-    Mientras repartía accesos y listaba el consumo del mes, el panel hablaba con
-    Cloud Run a través de `apiFetch`. Al quedarse sólo con los perfiles —que
-    salen de Supabase con la clave anon y el token de quien abre la página— esa
-    dependencia desapareció entera.
+    El correo y el consumo del mes no viven en `perfiles` (RLS + Supabase
+    anon): el correo está en `auth.users`, fuera del alcance del cliente, y el
+    consumo es estado en memoria de Cloud Run. `GET /api/admin/perfiles` es la
+    única puerta admin-only que entrega ambos, así que el panel vuelve a
+    llamar a `apiFetch`.
 
-    Se comprueban las dos puntas: que el script no llame, y que la página no
-    cargue el cliente. Un `<script>` que ya no hace falta no rompe nada, pero
-    miente sobre de dónde salen los datos de esta pantalla.
+    Este test cubre la lectura; la escritura —`PUT /api/admin/acceso/<uid>`,
+    la otra ruta que este panel usa— la cubre el suyo, más arriba.
   */
-  assert.doesNotMatch(
+  assert.match(
     read(SCRIPT),
-    /apiFetch\(/,
-    "el panel ya no llama a la API del extractor"
+    /apiFetch\(\s*["']\/api\/admin\/perfiles["']/,
+    "debe pedir el correo y el consumo a /api/admin/perfiles"
   );
-  assert.doesNotMatch(
+  assert.match(
     sinComentariosHtml(read(PAGINA)),
     /api-cliente\.js/,
-    "sin apiFetch, la página no debe cargar el cliente de la API"
+    "con apiFetch de vuelta, la página debe cargar su cliente"
   );
 });
 
@@ -283,16 +474,24 @@ test("its stylesheet keeps only the rules the profile list still uses", () => {
 
   // Y las que sí: con éstas se dibuja cada fila de la lista de perfiles, así
   // que borrarlas de paso dejaría la única sección viva sin estilos.
+  // `.admin__plan` se fue con su columna (2026-08-21); los cuatro últimos son
+  // los controles que la reemplazaron. Ojo con `.admin__switch`: aquel nombre
+  // era del alta de accesos borrada y sigue prohibido arriba — reusarlo para el
+  // interruptor nuevo mezclaría dos historias que terminaron distinto.
   [
     ".admin__lista",
     ".admin__fila",
+    ".admin__tabla",
     ".admin__quien",
     ".admin__usuario",
     ".admin__meta",
-    ".admin__insignia",
     ".admin__vacio",
     ".admin__mes",
     ".admin__ayuda",
+    ".admin__numero",
+    ".admin__toggle",
+    ".admin__guardar",
+    ".admin__consumo",
   ].forEach((selector) => {
     assert.ok(css.includes(selector), `${selector} sigue en uso: no se borra`);
   });

@@ -22,9 +22,13 @@
   <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
   <link rel="stylesheet" href="/app/shared/button/button.css">
   <link rel="stylesheet" href="/app/shared/panel/panel.css">
-  <!-- Sin `field.css`: el único formulario de la página era el alta de accesos.
-       `toast.css` sí se queda — `navbar.js` avisa por toast si falla el
-       cierre de sesión, y ese camino sigue vivo. -->
+  <!-- `field.css` vuelve el 2026-08-21: se había quitado cuando el único
+       formulario de la página era el alta de accesos borrada, y la tabla
+       editable trae inputs de vuelta. Sin ella quedan con el estilo por
+       defecto del navegador — fondo blanco sobre un panel oscuro. -->
+  <link rel="stylesheet" href="/app/shared/field/field.css">
+  <!-- `toast.css`: `navbar.js` avisa por toast si falla el cierre de sesión, y
+       ahora también cada guardado de la tabla. -->
   <link rel="stylesheet" href="/app/shared/toast/toast.css">
   <!-- El arranque de administración reusa el markup de las pantallas de cursos
        (#adminStartup, #adminContent, .courses__subtitle), y sus estilos viven
@@ -79,9 +83,14 @@
 
         <header class="courses__header">
           <h1 class="courses__title">Administración del extractor</h1>
+          <!-- Decía "y el rol de cada una" hasta el 2026-08-21, cuando se quitó
+               esa columna. El rol ya no se puede LEER en la tabla: sólo se
+               insinúa con la franja de acento de las filas de administración.
+               Prometer que se muestra es el tipo exacto de texto que le costó
+               cuatro secciones a esta pantalla. -->
           <p class="courses__intro">
-            Las cuentas registradas en el sitio y el rol de cada una, leídas de
-            la base de datos.
+            Las cuentas registradas en el sitio y sus límites de uso, que se
+            ajustan desde esta misma tabla.
           </p>
         </header>
 
@@ -104,10 +113,16 @@
             Usuarios del sitio
             <span class="admin__mes" id="totalPerfiles"></span>
           </h2>
+          <!-- Los dos datos de esta tabla no duran lo mismo, y confundirlos es
+               lo que costó las secciones borradas: los límites se escriben en
+               Postgres y sobreviven a todo; el consumo es una variable en
+               memoria del contenedor. Decirlo acá evita que alguien lea el
+               consumo como un historial. -->
           <p class="admin__ayuda">
-            Todas las cuentas registradas y su rol, leídas de la base de datos.
-            El correo no se muestra: vive en el sistema de autenticación y no se
-            entrega al navegador.
+            Todas las cuentas registradas, su correo y sus límites de uso. Los
+            límites se guardan en la base de datos; el consumo del mes no: vive
+            en la memoria del servicio y vuelve a cero cuando el contenedor se
+            reinicia.
           </p>
           <div class="admin__lista" id="listaPerfiles" aria-live="polite">
             <p class="admin__vacio">Cargando…</p>
@@ -124,9 +139,12 @@
   <script src="/app/shared/navbar/navbar.js"></script>
   <script src="/app/shared/toast/toast.js"></script>
   <script src="/app/features/courses/admin-startup.js"></script>
-  <!-- Sin `api-cliente.js`: lo cargaba por las secciones que hablaban con Cloud
-       Run, y los perfiles salen de Supabase. Un cliente de API que nadie llama
-       miente sobre de dónde vienen los datos de esta pantalla. -->
+  <!-- Vuelve el 2026-08-20 para leer (`GET /api/admin/perfiles`: correo,
+       consumo y límites, admin-only en Cloud Run) y el 2026-08-21 para
+       escribir (`PUT /api/admin/acceso/<uid>`). Los perfiles (nombre, rol)
+       siguen saliendo de Supabase — esto sólo suma lo que esa tabla nunca
+       tuvo. -->
+  <script src="/app/features/transactions/api-cliente.js"></script>
   <script src="/app/features/transactions/admin.js"></script>
 </body>
 
