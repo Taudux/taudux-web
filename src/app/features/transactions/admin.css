@@ -1,46 +1,41 @@
 /* Panel de administración del extractor.
  *
  * Reusa el arranque y los contenedores de las pantallas de cursos
- * (`courses.css`), así que acá sólo vive lo propio: el formulario de alta, la
- * lista de usuarios y el visor de los paneles internos.
+ * (`courses.css`), así que acá sólo vive lo propio: la lista de cuentas del
+ * sitio.
+ *
+ * Tenía además el formulario de alta de accesos (`.admin__alta`, su
+ * `.admin__error` y el interruptor `.admin__switch`), el aviso de accesos
+ * temporales (`.admin__aviso`) y el visor de JSON de los paneles internos
+ * (`#panelInterno`). Se fueron el 2026-08-20 con el markup al que vestían:
+ * ninguna de esas secciones mostraba datos ciertos (hallazgos F30 y F25).
  */
 @layer features {
 
-  /* El aviso de que los accesos son temporales. Naranja y no rojo: no es un
-     error, es una limitación que hay que leer antes de otorgar algo. */
-  .admin__aviso {
-    margin-block-end: 1.5rem;
-    border-color: color-mix(in srgb, var(--color-warning, #d98324) 38%, transparent);
-    color: var(--color-text-muted);
+  /* El offset que despega el contenido del navbar fijo.
+   *
+   * Vive acá y no en la hoja de cursos porque `admin.html` reusa el markup y
+   * las clases de aquellas pantallas pero NO su hoja: el `padding: 8rem 2rem
+   * 4rem` está en `.courses__main` de `cursos.css`, que esta página no carga —
+   * y su `<main>` lleva `.courses`, no `.courses__main`, así que tampoco
+   * casaría si la cargara.
+   *
+   * El contenido siempre arrancó debajo de la barra. No se notaba porque lo
+   * primero era el aviso de accesos temporales, que a nadie le dolía tapado; al
+   * borrar las cuatro secciones de arriba (2026-08-20) quedó primero "Usuarios
+   * del sitio" y el título apareció cortado. El defecto es viejo: el borrado
+   * sólo lo destapó. */
+  .courses {
+    padding-block-start: 8rem;
   }
 
-  /* Va debajo de cada título de lista y dice de dónde salen esos datos. No es
-     decoración: las dos listas de esta pantalla cuentan cosas distintas y no
-     coinciden, así que sin esta línea parecen contradecirse. */
+  /* Va debajo del título de la lista y dice de dónde salen esos datos. No es
+     decoración: sin ella nadie sabe si el padrón sale de la base o de lo que
+     el servicio recuerde — la confusión que costó las secciones borradas. */
   .admin__ayuda {
     color: var(--color-text-muted);
     font-size: 0.85rem;
     margin-block-end: 1rem;
-  }
-
-  .admin__alta {
-    display: grid;
-    gap: 0.5rem;
-    justify-items: start;
-  }
-
-  .admin__alta .field {
-    inline-size: 100%;
-    max-inline-size: 28rem;
-  }
-
-  .admin__alta .button {
-    margin-block-start: 0.5rem;
-  }
-
-  .admin__error {
-    color: var(--color-error);
-    margin-block-start: 0.5rem;
   }
 
   .admin__mes {
@@ -65,9 +60,9 @@
     border-radius: var(--radius-field);
   }
 
-  /* Quien tiene acceso ilimitado se distingue por el borde y no sólo por el
-     texto del botón: la lista se lee de un vistazo y el color hace el trabajo
-     antes que la lectura. */
+  /* La administración se distingue por el borde y no sólo por la insignia: la
+     lista se lee de un vistazo y el color hace el trabajo antes que la lectura.
+     El nombre viene de cuando marcaba el acceso ilimitado; hoy marca el rol. */
   .admin__fila--ilimitado {
     border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
   }
@@ -96,51 +91,8 @@
     white-space: nowrap;
   }
 
-  .admin__switch {
-    padding: 0.4rem 0.9rem;
-    background: transparent;
-    border: var(--border-subtle);
-    border-radius: var(--radius-field);
-    color: var(--color-text-muted);
-    font-family: var(--font-body);
-    font-size: 0.8rem;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .admin__switch:hover {
-    color: var(--color-text);
-    border-color: var(--color-accent);
-  }
-
-  .admin__switch:focus-visible {
-    outline: var(--focus-ring);
-    outline-offset: var(--focus-ring-offset);
-  }
-
-  .admin__switch--on {
-    color: var(--color-accent);
-    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
-  }
-
   .admin__vacio {
     color: var(--color-text-muted);
-  }
-
-  /* El visor de los paneles internos muestra JSON crudo: monoespaciado y con
-     scroll propio, para que una respuesta larga no estire la página entera. */
-  #panelInterno {
-    margin-block-start: 1rem;
-    padding: 1rem;
-    max-block-size: 24rem;
-    overflow: auto;
-    background: var(--color-field);
-    border: var(--border-subtle);
-    border-radius: var(--radius-field);
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-    font-size: 0.78rem;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
   }
 
   @media (max-width: 560px) {

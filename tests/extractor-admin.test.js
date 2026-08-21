@@ -20,6 +20,18 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "u
 
 const PAGINA = "src/app/features/transactions/admin.html";
 const SCRIPT = "src/app/features/transactions/admin.js";
+const HOJA = "src/app/features/transactions/admin.css";
+
+/*
+  Los asertos de ausencia miran el markup y las reglas, no la prosa.
+
+  Este repo documenta POR QUÉ algo se fue, y ese comentario tiene que nombrar
+  justamente lo que ya no está: `#panelInterno`, `api-cliente.js`, "dar acceso
+  ilimitado". Leyendo el archivo entero, explicar bien una eliminación la haría
+  fallar — el incentivo exacto que no queremos crear.
+*/
+const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
+const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 test("the extractor admin page stays out of search engines", () => {
   // Mismo criterio que las dos páginas de Tools y las de auth: no listarla no
@@ -138,16 +150,149 @@ test("it starts even if DOMContentLoaded already fired", () => {
   );
 });
 
-test("its API calls carry the session token", () => {
+test("the panel no longer talks to the extractor API", () => {
+  /*
+    Mientras repartía accesos y listaba el consumo del mes, el panel hablaba con
+    Cloud Run a través de `apiFetch`. Al quedarse sólo con los perfiles —que
+    salen de Supabase con la clave anon y el token de quien abre la página— esa
+    dependencia desapareció entera.
+
+    Se comprueban las dos puntas: que el script no llame, y que la página no
+    cargue el cliente. Un `<script>` que ya no hace falta no rompe nada, pero
+    miente sobre de dónde salen los datos de esta pantalla.
+  */
+  assert.doesNotMatch(
+    read(SCRIPT),
+    /apiFetch\(/,
+    "el panel ya no llama a la API del extractor"
+  );
+  assert.doesNotMatch(
+    sinComentariosHtml(read(PAGINA)),
+    /api-cliente\.js/,
+    "sin apiFetch, la página no debe cargar el cliente de la API"
+  );
+});
+
+test("it keeps the profile list and nothing else", () => {
+  const html = sinComentariosHtml(read(PAGINA));
+
+  // Lo que se conserva: la única lista que dice la verdad, porque la lee de la
+  // base de datos y no de la memoria de un contenedor.
+  ["totalPerfiles", "listaPerfiles"].forEach((id) => {
+    assert.match(html, new RegExp(`id="${id}"`), `falta #${id}`);
+  });
+
+  /*
+    Lo que se fue, y por qué se fue (2026-08-20):
+
+      · "Dar acceso ilimitado" no otorgaba nada: indexaba por `user:<correo>`
+        cuando la identidad en producción es `user:<uuid>` (hallazgo F30).
+      · El consumo del mes leía el estado en memoria de UNA instancia de Cloud
+        Run: con `--max-instances 3` cada administrador veía otra cosa, y un
+        reinicio lo borraba (hallazgo F25).
+      · Los paneles internos volcaban el JSON crudo de esas mismas fuentes.
+
+    Dos pantallas que mostraban datos falsos son peores que dos pantallas que
+    no están.
+  */
+  [
+    "adminCorreo",
+    "adminMotivo",
+    "btnDarAcceso",
+    "adminError",
+    "adminMes",
+    "listaUsuarios",
+    "btnTelemetria",
+    "btnDonaciones",
+    "panelInterno",
+  ].forEach((id) => {
+    assert.doesNotMatch(html, new RegExp(`id="${id}"`), `#${id} debía irse`);
+  });
+
+  assert.doesNotMatch(
+    html,
+    /admin__aviso/,
+    "el aviso de accesos temporales no tiene accesos que advertir"
+  );
+
+  // Incluye la bajada de la cabecera: la página no puede seguir prometiendo
+  // algo que ya no reparte.
+  assert.doesNotMatch(
+    html,
+    /acceso ilimitado/i,
+    "el copy visible no debe ofrecer el alta que se eliminó"
+  );
+});
+
+test("its script drops the code that only fed the removed sections", () => {
   const js = read(SCRIPT);
 
-  // El original llamaba a rutas relativas y sin token: servía porque Flask
-  // servía la página y la API juntas. Acá la API vive en otro origen y sólo
-  // reconoce el Bearer de Supabase.
-  assert.doesNotMatch(
-    js,
-    /fetch\("\/api\//,
-    "no debe llamar a rutas relativas: la API está en otro origen"
+  // `\b` corta antes de `cargarUsuariosDelSitio`: la D es carácter de palabra,
+  // así que el nombre largo no matchea el corto.
+  ["cargarUsuarios", "cambiarAcceso", "verPanelInterno"].forEach((nombre) => {
+    assert.doesNotMatch(js, new RegExp(`\\b${nombre}\\b`), `sobra ${nombre}()`);
+  });
+
+  assert.match(js, /cargarUsuariosDelSitio\(/, "debe seguir listando los perfiles");
+});
+
+test("its stylesheet pays for the top offset that cursos.css never delivered", () => {
+  /*
+    `admin.html` reusa el markup y las clases de las pantallas de cursos pero no
+    su hoja. El padding que despega el contenido del navbar fijo está en
+    `.courses__main` de `cursos.css`, y acá no llega por partida doble: la
+    página no carga esa hoja, y su `<main>` lleva `.courses`, no
+    `.courses__main`.
+
+    El contenido SIEMPRE arrancó debajo de la barra. No se notaba porque lo
+    primero era el aviso de accesos temporales, que nadie extrañaba tapado; al
+    quedar "Usuarios del sitio" en cabeza (2026-08-20) el título apareció
+    cortado. El defecto es viejo, el borrado sólo lo destapó.
+
+    Lo que se fija acá es de QUIÉN es el offset, no cuánto mide: esta hoja
+    tiene que declararlo porque ninguna otra lo hace en esta página. El
+    CUÁNTO —8rem, escrito literal acá y todavía no atado a
+    `--espacio-bajo-navbar`— lo protege por separado `ui-consolidation.test.js`
+    cuando el token llega a esta hoja.
+  */
+  assert.match(
+    sinComentariosCss(read(HOJA)),
+    /\.courses\s*\{[^}]*padding-block-start:\s*8rem/,
+    "admin.css debe dar el offset superior: nadie más lo hace en esta página"
   );
-  assert.match(js, /apiFetch\(/, "las llamadas deben pasar por apiFetch");
+
+  // Y no se arregla trayendo `cursos.css` entero: son las reglas del catálogo,
+  // que esta pantalla no usa, por una sola declaración que le falta.
+  assert.doesNotMatch(
+    sinComentariosHtml(read(PAGINA)),
+    /courses\/cursos\.css/,
+    "no debe cargar la hoja del catálogo para conseguir un padding"
+  );
+});
+
+test("its stylesheet keeps only the rules the profile list still uses", () => {
+  const css = sinComentariosCss(read(HOJA));
+
+  // Sin markup que las invoque: el formulario de alta, su error, el interruptor
+  // de acceso, el aviso y el visor de JSON.
+  [".admin__aviso", ".admin__alta", ".admin__error", ".admin__switch", "#panelInterno"]
+    .forEach((selector) => {
+      assert.ok(!css.includes(selector), `${selector} ya no tiene markup que lo use`);
+    });
+
+  // Y las que sí: con éstas se dibuja cada fila de la lista de perfiles, así
+  // que borrarlas de paso dejaría la única sección viva sin estilos.
+  [
+    ".admin__lista",
+    ".admin__fila",
+    ".admin__quien",
+    ".admin__usuario",
+    ".admin__meta",
+    ".admin__insignia",
+    ".admin__vacio",
+    ".admin__mes",
+    ".admin__ayuda",
+  ].forEach((selector) => {
+    assert.ok(css.includes(selector), `${selector} sigue en uso: no se borra`);
+  });
 });
