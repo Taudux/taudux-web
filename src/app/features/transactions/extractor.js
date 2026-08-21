@@ -1797,7 +1797,7 @@ el("pagUltima").addEventListener("click", () => irAPagina(totalPaginas()));
 
 /* La descarga lleva los filtros al servidor: el archivo trae TODAS las filas
    que cumplen, no sólo las que se alcanzan a ver en pantalla. */
-function urlDescarga(formato) {
+function rutaDescarga(formato) {
   const f = leerFiltros();
   const parametros = new URLSearchParams();
   if (f.texto) parametros.set("texto", f.texto);
@@ -1812,8 +1812,104 @@ function urlDescarga(formato) {
   return `/api/descargar/${formato}?${parametros}`;
 }
 
-el("btnExcel").addEventListener("click", () => { location.href = urlDescarga("xlsx"); });
-el("btnCsv").addEventListener("click", () => { location.href = urlDescarga("csv"); });
+/*
+  Por qué la descarga no es una navegación (hallazgo F29).
+
+  Era `location.href = urlDescarga(...)`, la ÚNICA llamada de este archivo que
+  no pasaba por `apiFetch`. Eso rompía dos cosas al mismo tiempo, y ninguna se
+  notaba en el simulador —donde un mismo Flask sirve la página y la API—:
+
+    1. La ruta relativa apuntaba a taudux.com, y `vercel.json` no proxea
+       `/api`. Medido: 404.
+    2. Una navegación no puede llevar cabeceras, así que aunque el host fuera
+       el correcto no habría `Authorization: Bearer` y el servidor no sabría
+       quién pide el archivo.
+
+  De ahí la forma actual: `fetch` con token -> Blob -> `<a download>` sintético.
+  Es la única manera de mandar el token, y trae de la mano el requisito del
+  nombre del archivo, que con Blob ya no lo pone el navegador.
+*/
+
+const NOMBRE_UTF8 = /filename\*=UTF-8''([^;]+)/i;   // RFC 5987
+const NOMBRE_SIMPLE = /filename="?([^";]+)"?/i;
+
+function nombreDelServidor(respuesta, formato) {
+  // El nombre bueno lo arma el servidor con el banco y el PDF de origen
+  // (`_nombre_archivo()`), y viaja en `Content-Disposition`. Sólo se puede leer
+  // porque la API la expone con `Access-Control-Expose-Headers`; si eso se
+  // cayera, esta función no lanza: entrega un nombre de reserva con su
+  // extensión, que es peor que el bueno pero muchísimo mejor que "descarga".
+  const cabecera = respuesta.headers.get("Content-Disposition") || "";
+
+  // `filename*` primero, y no por gusto: Flask manda LOS DOS, con el simple
+  // antes en la cadena, pero ése es la variante degradada a ASCII — un estado
+  // de cuenta de "ñandú" llega ahí como "nandu". El codificado es el fiel.
+  const utf8 = cabecera.match(NOMBRE_UTF8);
+  const simple = cabecera.match(NOMBRE_SIMPLE);
+  const crudo = (utf8 && utf8[1]) || (simple && simple[1]);
+  if (!crudo) return `transacciones.${formato}`;
+  try {
+    return decodeURIComponent(crudo.trim());
+  } catch (error) {
+    // Un `%` suelto en el nombre revienta el decodificador. Vale más el nombre
+    // crudo que ninguno.
+    return crudo.trim();
+  }
+}
+
+function guardarArchivo(blob, nombre) {
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // Liberar en el mismo turno cancela la descarga en varios navegadores: el
+  // click acaba de encolarse y todavía no leyó el blob.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+// Lo que el servidor puede negar, con el texto que se muestra si no manda uno
+// propio. Antes los tres fallos se veían igual: no pasaba nada.
+const AVISOS_DESCARGA = {
+  sin_descargas: "Tu plan no incluye descargas.",
+  sin_datos: "Ya no tenemos esa extracción. Vuelve a subir tu estado de cuenta.",
+};
+
+async function descargar(formato) {
+  const boton = el(formato === "csv" ? "btnCsv" : "btnExcel");
+  boton.disabled = true;
+  try {
+    const respuesta = await apiFetch(rutaDescarga(formato));
+
+    if (!respuesta.ok) {
+      const json = await respuesta.json().catch(() => ({}));
+      // Un 402 trae la cuota al día: si el plan cambió, la pantalla se entera
+      // por esta vía y no se queda ofreciendo algo que ya no puede dar.
+      if (json.cuota) actualizarCuota(json.cuota);
+      mostrarToast(json.mensaje || AVISOS_DESCARGA[json.error]
+                   || "No pudimos generar el archivo.", "error");
+      return;
+    }
+
+    guardarArchivo(await respuesta.blob(), nombreDelServidor(respuesta, formato));
+  } catch (error) {
+    // El aviso va por toast y NO por `mostrarError`: esa función llama a
+    // `ocultarTodo()`, que esconde la tabla recién extraída. Perder el
+    // resultado por no haber podido bajarlo sería un castigo desproporcionado.
+    console.error("[extractor] no se pudo descargar:", error);
+    mostrarToast("No pudimos descargar el archivo. Revisa tu conexión e "
+                 + "inténtalo de nuevo.", "error");
+  } finally {
+    // Se restaura desde el permiso vigente, no a `false`: si el servidor acaba
+    // de decir que este plan no descarga, el botón tiene que quedar apagado.
+    aplicarBloqueo();
+  }
+}
+
+el("btnExcel").addEventListener("click", () => descargar("xlsx"));
+el("btnCsv").addEventListener("click", () => descargar("csv"));
 
 /* --------------------------------------------------------------- cuota --- */
 
