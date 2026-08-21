@@ -83,7 +83,7 @@
 
   /* `vertical-align: top` y no el `middle` por defecto.
    *
-   * Las celdas de esta tabla NO tienen el mismo contenido: bajo "PDF al mes"
+   * Las celdas de esta tabla NO tienen el mismo contenido: bajo "Cupo mensual"
    * va el input MÁS el consumo del mes, así que su bloque es más alto.
    * Centrando cada celda por separado, cada control quedaba a una altura
    * distinta —medido: 388, 398, 402 y 398 px en la misma fila— y la fila se

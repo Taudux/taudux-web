@@ -1914,19 +1914,43 @@ el("btnCsv").addEventListener("click", () => descargar("csv"));
 /* --------------------------------------------------------------- cuota --- */
 
 function actualizarCuota(cuota) {
+  /*
+    El id con el que el servidor va a reconocer a quien no tiene cuenta, y lo
+    PRIMERO que se hace acá.
+
+    Va antes que nada porque de él depende que la tabla que se acaba de
+    extraer se pueda descargar después: `_guardar_para_descarga()` la indexa
+    por `_identidad()`, y sin este id esa identidad es un uuid distinto en
+    cada petición. Si esta línea quedara más abajo, cualquier excepción del
+    medio dejaría el botón de descarga encendido sobre una tabla que el
+    servidor ya no sabe encontrar — 404 `sin_datos`, que es la firma de F29.
+
+    Este es el único punto por el que pasa toda respuesta con `cuota`
+    (`/api/extraer` y `/api/cuota`), así que guardar acá alcanza y guardar en
+    cada llamador sobraría — y el primero que se olvidara rompería la descarga
+    en silencio. Con cuenta llega `null` y `recordarSesionAnon()` no hace nada.
+  */
+  recordarSesionAnon(cuota.sesion_anon);
+
   planActual = cuota.plan;
   // Las capacidades vienen resueltas del servidor; el front no las deduce.
   permisos = cuota.puede || { paneles: [], descargas: false };
   avisoPlan = cuota.aviso || "";
   permiteLote = !!permisos.lote;
   el("cuotaRestantes").textContent = cuota.restantes === null ? "∞" : cuota.restantes;
-  // "Te quedan N extracciones" sólo tiene sentido si hay una N. Desde el
-  // 2026-08-21 `anonimo` viene sin techo (`limite: null` en el servidor): la
-  // cuota de 2 se midió en producción y no se hacía cumplir —cada petición
-  // nacía con identidad nueva porque este archivo nunca llegó a mandar
-  // `X-Sesion-Anon`— así que se dejó de prometer un número que no se cobraba.
-  // Lo que ahora limita a quien no tiene cuenta es la DESCARGA, y de eso
-  // avisan los botones y `avisoBloqueado`, no este contador.
+  // "Te quedan N extracciones" sólo tiene sentido si hay una N, y hoy no la
+  // hay para nadie: `anonimo` viene sin techo desde el 2026-08-21 y el de las
+  // cuentas pasó a ser opt-in, así que `limite` es `null` salvo que un
+  // administrador se lo fije a alguien desde el panel.
+  //
+  // El origen fue una medición: la cuota anónima de 2 no se cobraba porque
+  // cada petición nacía con identidad nueva —`X-Sesion-Anon` no se mandaba—.
+  // Ese agujero YA ESTÁ TAPADO (ver `recordarSesionAnon()` arriba y
+  // `api-cliente.js`), pero el techo no volvió: la decisión de no prometer un
+  // número se mantuvo por producto, no por no poder cobrarlo.
+  //
+  // Lo que separa tener cuenta de no tenerla es hoy sólo el VELO, y de eso
+  // avisan los paneles y `avisoBloqueado`, no este contador.
   siExiste("cajaCuota", (n) => { n.hidden = cuota.plan === "anonimo"; });
 
   // Sólo del simulador: en producción estos tres no existen.
@@ -1994,9 +2018,18 @@ function aplicarBloqueo() {
   const puedeDescargar = permisos.descargas !== false;
   // El PERMISO sale de `permisos.descargas` y de nada más (arriba). Lo que
   // sigue es sólo la REDACCIÓN del motivo: "Tu plan no incluye descargas" no
-  // le dice nada a quien no eligió ningún plan, y desde el 2026-08-21 el
-  // anónimo es justo quien más ve este texto. Para él la frase útil no es un
-  // diagnóstico, es la salida.
+  // le dice nada a quien no eligió ningún plan, así que para el anónimo la
+  // frase útil no es un diagnóstico sino la salida.
+  //
+  // HOY NINGUNA DE LAS DOS SE VE. El 2026-08-21 el anónimo pasó a
+  // `descargas=False` y era quien más leía este texto; al día siguiente
+  // volvió a `True` y ningún plan activo cobra la descarga, así que
+  // `puedeDescargar` es cierto para todos y el `title` queda vacío.
+  //
+  // Se conserva igual, y no por inercia: el permiso vive en el catálogo del
+  // servidor y puede volver a apagarse con un booleano. Borrar la redacción
+  // dejaría ese día un botón apagado sin explicación, que es el modo más
+  // barato de reabrir F29.
   const motivoSinDescarga = planActual === "anonimo"
     ? "Crea una cuenta gratis para descargar tu Excel o CSV"
     : "Tu plan no incluye descargas";

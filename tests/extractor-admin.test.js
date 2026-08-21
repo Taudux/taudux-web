@@ -176,12 +176,12 @@ test("the plan column gives way to the two limits that can actually be edited", 
     Con un solo plan asignable —los de pago siguen apagados en el catálogo— la
     columna Plan repetía "free" en todas las filas: un dato cierto que no
     informa de nada y ocupa el lugar del que sí se puede cambiar. Los dos
-    números que el administrador gobierna son cuántos PDF al mes y cuántos por
-    envío, y hasta ahora no se veían.
+    números que el administrador gobierna son el cupo mensual y cuántos PDF
+    por envío, y hasta ahora no se veían.
   */
   const js = read(SCRIPT);
 
-  ["PDF al mes", "PDF por envío", "Personalizado"].forEach((titulo) => {
+  ["Cupo mensual", "PDF por envío", "Con límite"].forEach((titulo) => {
     assert.match(
       js,
       new RegExp(`<th[^>]*>\\s*${titulo}`),
@@ -227,26 +227,86 @@ test("saving a row writes it through PUT /api/admin/acceso/<uid>", () => {
   assert.doesNotMatch(cuerpo, /\bplan\b/, "el payload no lleva plan");
 });
 
-test("the numeric inputs are born disabled while the row inherits its plan", () => {
+test("a row without its own limits shows no ceiling, not the plan's number", () => {
   /*
-    Con la bandera apagada el servidor ignora los dos números y aplica los del
-    plan. Dejarlos escribibles invita a tipear un límite que no va a regir —
-    exactamente la clase de pantalla que se cree y miente que costó cuatro
-    secciones acá.
+    El techo mensual es OPT-IN desde el 2026-08-21: con la bandera apagada el
+    servidor devuelve `limite: null` —sin techo—, no el número del plan.
+
+    Antes esta celda pintaba un input vacío con el 3 heredado asomando en el
+    `placeholder`. Eso hoy sería una pantalla que miente en la dirección más
+    cara: haría creer que hay un tope de 3 al mes donde no hay ninguno. El ∞
+    ya existía para `ilimitado`; lo que cambia es que ahora también lo gana la
+    fila sin personalizar.
+  */
+  const js = read(SCRIPT);
+
+  // Lo que se fija es el TÉRMINO que manda: sin la bandera, la celda es un ∞,
+  // sin importar qué más se le sume a esa condición. La primera versión de
+  // este test copiaba la expresión entera (`datos.ilimitado || !personalizado`)
+  // y se puso roja al sumarle el `lote` — sin que lo que probaba cambiara.
+  assert.match(
+    js,
+    /\|\|\s*!personalizado/,
+    "sin la bandera encendida la celda tiene que ser un ∞, no un input"
+  );
+
+  // Y que el ∞ del acceso ilimitado siga existiendo como caso propio: son dos
+  // estados distintos —"nadie le puso techo" y "tiene un permiso especial"— y
+  // sólo el primero se arregla marcando la casilla de al lado.
+  assert.match(
+    js,
+    /datos\.ilimitado/,
+    "el acceso ilimitado sigue siendo un camino aparte al ∞"
+  );
+});
+
+test("neither limit shows a number while the row has none of its own", () => {
+  /*
+    Los DOS son opt-in, no sólo el mensual. Una fila sin la bandera no tiene
+    tope por envío tampoco, así que su celda es el mismo "∞" de texto plano y
+    no un input deshabilitado con un número heredado asomando.
+
+    Que las dos celdas salgan de la MISMA función es lo que este test cuida:
+    si cada columna armara su markup, la próxima vez que una de las dos cambie
+    de estado la otra se queda atrás — que es exactamente cómo el `lote` llegó
+    tarde a este cambio.
   */
   const js = read(SCRIPT);
 
   assert.match(
     js,
-    /personalizado\s*\?\s*""\s*:\s*"disabled"/,
-    "los numéricos deben nacer disabled mientras la fila hereda del plan"
+    /function\s+controlSinTope|controlLimite\s*\(/,
+    "las dos celdas comparten el constructor del control"
   );
-
-  // Y que la decisión alcance a los DOS campos, no sólo al primero.
+  // Ningún `${bloqueo}`: ya no queda un numérico que nazca deshabilitado,
+  // porque sin bandera no hay input que deshabilitar en ninguna de las dos.
   assert.equal(
     (js.match(/\$\{bloqueo\}/g) || []).length,
-    2,
-    "los dos numéricos comparten el mismo bloqueo"
+    0,
+    "sin la bandera no queda ningún input que bloquear: los dos son ∞"
+  );
+});
+
+test("turning the flag on seeds the row from the plan, not from what applies", () => {
+  /*
+    Al encender la bandera hay que ofrecer un punto de partida, y ya no puede
+    ser "lo que rige hoy": lo que rige es SIN TECHO, y `null` no se puede
+    tipear en un `<input type="number">`.
+
+    La semilla sale de `defecto`, que `/api/admin/perfiles` manda con los dos
+    números del plan (3 y 2). Es el único lugar donde siguen escritos.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /defecto/,
+    "el panel tiene que leer la semilla que manda /api/admin/perfiles"
+  );
+  assert.doesNotMatch(
+    js,
+    /\[\["limite",\s*efectivo\.limite\]/,
+    "prellenar con lo efectivo dejaría el campo vacío: hoy lo efectivo es null"
   );
 });
 

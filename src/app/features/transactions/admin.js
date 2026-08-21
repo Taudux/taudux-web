@@ -82,24 +82,75 @@
   // --- Una fila ------------------------------------------------------------
 
   /*
+    El control del techo mensual, que NO es siempre el mismo control.
+
+    Sin techo que fijar es un "∞" de texto plano; con techo, un input. Son dos
+    caminos distintos los que llegan al "∞":
+
+      · `ilimitado` — la columna de `extractor_acceso`: administración o alta
+        de pruebas. Gana sobre todo lo demás, incluida la bandera.
+      · `!personalizado` — desde el 2026-08-21 el techo mensual es OPT-IN. Sin
+        la bandera encendida el servidor devuelve `limite: null`, o sea sin
+        tope, y el número del plan sobrevive sólo como semilla (`defecto`).
+
+    Antes este segundo caso pintaba un input vacío con el 3 heredado en el
+    `placeholder`. Hoy eso mentiría en la dirección más cara: haría creer que
+    hay un tope donde no hay ninguno. Un input deshabilitado con un "∞" adentro
+    tampoco sirve —es un control mintiendo sobre lo que se puede escribir—; el
+    texto plano dice lo mismo sin prometer nada.
+
+    Vive suelta y no dentro de `celdasFila` porque la usan DOS: el pintado
+    inicial y `alternarPersonalizado()`, que al mover la bandera tiene que
+    reemplazar el nodo entero. Si cada uno armara su markup, marcar y desmarcar
+    la casilla terminaría dando una celda distinta de la que pintó el servidor.
+
+    Los dos `title` no son uno solo con distinta redacción: "nadie le puso
+    techo" y "tiene un permiso especial" son estados distintos, y sólo el
+    primero se arregla marcando la casilla de al lado.
+  */
+  const CAMPOS = {
+    limite: { etiqueta: "Cupo mensual", min: 0, max: 10000,
+              queEs: "cupo mensual" },
+    lote: { etiqueta: "PDF por envío", min: 1, max: 20,
+            queEs: "tope por envío" },
+  };
+
+  function controlLimite(campo, datos, personalizado, valor) {
+    const def = CAMPOS[campo];
+
+    // `ilimitado` sólo habla del CUPO MENSUAL: es el override de
+    // administración, y contesta "¿tiene cupo?" y no "¿cuántos por envío?".
+    // Por eso no alcanza a `lote`.
+    const sinTope = (datos.ilimitado && campo === "limite") || !personalizado;
+
+    if (sinTope) {
+      const motivo = datos.ilimitado && campo === "limite"
+        ? "Esta cuenta tiene acceso ilimitado: el cupo mensual no se le aplica."
+        : `Sin ${def.queEs}. Marca «Con límite» para ponerle uno.`;
+      return `<span class="admin__numero admin__numero--infinito"
+                    data-control="${campo}"
+                    title="${escapar(motivo)}">∞</span>`;
+    }
+    return `<input class="field admin__numero" type="number" min="${def.min}"
+                   max="${def.max}" step="1" inputmode="numeric"
+                   data-control="${campo}" data-campo="${campo}"
+                   aria-label="${escapar(def.etiqueta)}"
+                   value="${escapar(valor)}"
+                   placeholder="${escapar(numero(datos.defecto?.[campo], "∞"))}">`;
+  }
+
+  /*
     Las celdas de una fila, a partir de lo que dijo el servidor.
 
-    `guardado` es lo que hay literalmente en `extractor_acceso`; `efectivo` es
-    lo que APLICA hoy, ya resuelta la herencia del plan. Los dos hacen falta:
-    con la bandera encendida el campo muestra lo guardado, y con la bandera
-    apagada el campo va vacío y lo efectivo baja a `placeholder` — así se lee
-    de un vistazo que ese número lo pone el plan y no esta fila.
+    `guardado` es lo que hay literalmente en `extractor_acceso`; `defecto` son
+    los números del plan, que ya no rigen y sólo sirven de semilla. Con la
+    bandera encendida los campos muestran lo guardado; con la bandera apagada
+    no hay campos: hay dos "∞", porque no hay ningún número que mostrar.
   */
   function celdasFila(datos) {
     const personalizado = Boolean(datos.personalizado);
-    const efectivo = datos.efectivo || {};
     const guardado = datos.guardado || {};
 
-    // Con la bandera apagada el servidor ignora los dos números. Dejarlos
-    // escribibles invitaría a tipear un límite que no va a regir: la misma
-    // clase de pantalla que se cree y miente que costó las cuatro secciones
-    // borradas.
-    const bloqueo = personalizado ? "" : "disabled";
     const limite = personalizado ? numero(guardado.limite) : "";
     const lote = personalizado ? numero(guardado.lote) : "";
 
@@ -119,35 +170,17 @@
       ? "consumo sin datos"
       : `${datos.usadas} usado${datos.usadas === 1 ? "" : "s"} este mes`;
 
-    /*
-      Acceso ilimitado (administración o alta de pruebas): el techo mensual no
-      se le aplica, así que no hay número que fijar. Un input deshabilitado con
-      un "∞" adentro sería un control mintiendo sobre lo que se puede escribir;
-      el texto plano dice lo mismo sin prometer nada. El `title` explica quién
-      gana, porque si no el administrador tipearía un número inocuo.
-    */
-    const celdaLimite = datos.ilimitado
-      ? `<span class="admin__numero admin__numero--infinito"
-               title="Esta cuenta tiene acceso ilimitado: el techo mensual no se le aplica.">∞</span>`
-      : `<input class="field admin__numero" type="number" min="0" max="10000" step="1"
-                inputmode="numeric" data-campo="limite" aria-label="PDF al mes"
-                value="${escapar(limite)}"
-                placeholder="${escapar(numero(efectivo.limite, "∞"))}" ${bloqueo}>`;
-
     return `
       <td class="admin__quien">
         <span class="admin__usuario">${escapar(datos.nombre)}</span>
         <span class="admin__meta">${escapar(datos.correo || "—")}</span>
       </td>
       <td>
-        ${celdaLimite}
+        ${controlLimite("limite", datos, personalizado, limite)}
         <span class="admin__consumo">${escapar(consumo)}</span>
       </td>
       <td>
-        <input class="field admin__numero" type="number" min="1" max="20" step="1"
-               inputmode="numeric" data-campo="lote" aria-label="PDF por envío"
-               value="${escapar(lote)}"
-               placeholder="${escapar(numero(efectivo.lote, "—"))}" ${bloqueo}>
+        ${controlLimite("lote", datos, personalizado, lote)}
       </td>
       <td>
         <input class="admin__toggle" type="checkbox" data-campo="personalizado"
@@ -195,25 +228,57 @@
 
   /*
     La bandera no guarda sola: sólo abre o cierra los dos campos, acá y sin
-    red. Encenderla precarga lo que HOY aplica —no deja los campos vacíos— por
-    dos razones: es lo que la persona espera ver al empezar a editar, y una
-    personalización sin `lote` la rechaza el servidor con 400 (`lote_requerido`).
+    red. Encenderla los precarga —no los deja vacíos— por dos razones: es lo
+    que la persona espera ver al empezar a editar, y una personalización sin
+    `lote` la rechaza el servidor con 400 (`lote_requerido`).
+
+    Lo que precarga cambió el 2026-08-21. Antes era "lo que HOY aplica"; hoy lo
+    que aplica es SIN TOPE en los dos, y `null` no se tipea en un
+    `<input type="number">`. Ver `semilla()` abajo.
   */
   function alternarPersonalizado(fila) {
     const datos = perfilesPorUid.get(fila.dataset.uid) || {};
-    const efectivo = datos.efectivo || {};
+    const guardado = datos.guardado || {};
+    const defecto = datos.defecto || {};
     const encendido = Boolean(
       fila.querySelector('[data-campo="personalizado"]')?.checked);
 
-    [["limite", efectivo.limite], ["lote", efectivo.lote]].forEach(
-      ([campo, valorEfectivo]) => {
-        // La fila con acceso ilimitado no tiene campo mensual que abrir.
-        const entrada = fila.querySelector(`[data-campo="${campo}"]`);
-        if (!entrada) return;
-        entrada.disabled = !encendido;
-        // Apagada: vacío, con el efectivo asomando en el `placeholder`.
-        entrada.value = encendido ? numero(valorEfectivo) : "";
-      });
+    /*
+      La SEMILLA ya no puede ser "lo que aplica hoy": lo que aplica es sin
+      techo, y `null` no se tipea en un `<input type="number">`. Sale de lo
+      guardado si esta fila ya tuvo un número propio —volver a marcar la
+      casilla devuelve lo que había, no un default sorpresa— y del plan si
+      nunca lo tuvo.
+
+      Que el `lote` tenga semilla no es cosmético: el servidor rechaza con 400
+      `lote_requerido` una personalización sin él.
+    */
+    const semilla = (propio, base) =>
+      typeof propio === "number" ? propio : base;
+
+    /*
+      Los dos límites cambian de CONTROL, no de estado: apagados son un
+      `<span>` con "∞" y encendidos un `<input>`. Por eso acá se reemplaza el
+      nodo entero, que es lo que antes alcanzaba resolver moviendo un
+      `disabled`.
+
+      `data-control` existe justamente para esto: es el ancla que sobrevive al
+      cambio de etiqueta. `data-campo` no serviría —sólo lo lleva el input,
+      porque `firma()` y `guardarAcceso()` leen `.value` por ahí y un `<span>`
+      no tiene—, y localizar la celda por su posición ataría este código al
+      orden de las columnas.
+
+      La fila con `ilimitado` conserva su "∞" en el techo mensual: ese permiso
+      gana sobre la bandera, así que abrirle un campo ofrecería un número que
+      no va a regir. `controlLimite()` ya lo contempla.
+    */
+    ["limite", "lote"].forEach((campo) => {
+      const actual = fila.querySelector(`[data-control="${campo}"]`);
+      if (!actual) return;
+      actual.outerHTML = controlLimite(
+        campo, datos, encendido,
+        numero(semilla(guardado[campo], defecto[campo])));
+    });
   }
 
   // --- Guardar -------------------------------------------------------------
@@ -248,13 +313,30 @@
     const personalizado = Boolean(
       fila.querySelector('[data-campo="personalizado"]')?.checked);
 
-    // La fila con acceso ilimitado no tiene campo mensual: se reenvía el número
-    // que ya tenía guardado para que cambiarle el lote no le borre el techo de
-    // paso — este endpoint escribe la fila entera, no un update parcial.
-    const limite = entradaLimite
-      ? aEntero(entradaLimite.value)
-      : ((datos.guardado || {}).limite ?? null);
-    const lote = aEntero(entradaLote ? entradaLote.value : "");
+    /*
+      Sin la bandera encendida NINGUNO de los dos campos existe: son "∞" de
+      texto, no inputs. Y con `ilimitado` tampoco existe el mensual. En todos
+      esos casos se reenvía el número que ya estaba guardado en vez de un
+      `null`, por dos razones:
+
+        · Este endpoint escribe la fila ENTERA, no un update parcial: mandar
+          `null` BORRA lo que hubiera, así que apagar la bandera perdería los
+          números que alguien fijó a mano.
+        · Es lo que hace cierto que desmarcar y volver a marcar la casilla
+          devuelva lo que había, en vez de la semilla del plan — ver
+          `alternarPersonalizado()`.
+
+      El `lote` se sumó a este trato el 2026-08-21, cuando también se volvió
+      opt-in. Hasta entonces su input existía siempre (deshabilitado), así que
+      leerlo vacío daba `null` y nadie lo notaba: era el mismo borrado, sólo
+      que sin consecuencia visible.
+    */
+    const guardado = datos.guardado || {};
+    const conservar = (entrada, previo) =>
+      entrada ? aEntero(entrada.value) : (previo ?? null);
+
+    const limite = conservar(entradaLimite, guardado.limite);
+    const lote = conservar(entradaLote, guardado.lote);
 
     if (Number.isNaN(limite) || Number.isNaN(lote)) {
       mostrarToast("Los límites tienen que ser números enteros.", "error");
@@ -403,9 +485,9 @@
         <thead>
           <tr>
             <th scope="col">Usuario</th>
-            <th scope="col">PDF al mes</th>
+            <th scope="col">Cupo mensual</th>
             <th scope="col">PDF por envío</th>
-            <th scope="col">Personalizado</th>
+            <th scope="col">Con límite</th>
             <!-- Sin rótulo visible: la columna es un botón y su texto ya lo
                  dice. El nombre queda para quien navega por lectura de
                  pantalla, que sin él escucharía una columna anónima. -->

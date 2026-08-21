@@ -240,3 +240,72 @@ test("the disabled download button tells whoever has no account what to do", () 
   assert.match(cuerpo, /[Cc]rea una cuenta/,
                "al anónimo se le ofrece la salida, no un diagnóstico");
 });
+
+/* ---------------------------------------------------------------------------
+ * La identidad de quien no tiene cuenta.
+ *
+ * Desde hoy el anónimo puede descargar. Eso reabre, para él, la cadena exacta
+ * que F29 rompía para todos: la tabla se guarda bajo `_identidad()` al
+ * extraer y se busca bajo `_identidad()` al descargar. Con cuenta esa
+ * identidad sale del token y no se pierde; sin cuenta sale del header
+ * `X-Sesion-Anon`, y si el navegador no lo manda el servidor genera un uuid
+ * NUEVO en cada petición.
+ *
+ * El efecto de que falte no es "la cuota no se cuenta" —eso ya se sabía y por
+ * eso `anonimo` no promete techo— sino algo peor ahora: **subir el PDF y
+ * pulsar Descargar devuelve 404 `sin_datos`, con el botón encendido**. Un
+ * botón que no hace nada es justo lo que costó F29.
+ *
+ * El servidor ya estaba entero (`_id_anonimo()` lee el header, `/api/extraer`
+ * y `/api/cuota` devuelven `cuota.sesion_anon`); lo que faltaba era esta
+ * mitad.
+ * ------------------------------------------------------------------------ */
+
+test("the anonymous id the server hands back gets stored", () => {
+  /*
+    `actualizarCuota()` es el único punto por el que pasa toda respuesta con
+    `cuota`, así que es donde el id tiene que quedar guardado. Si se guardara
+    en cada llamador, el primero que se olvidara rompería la descarga sin que
+    nada fallara.
+  */
+  const js = codigo();
+
+  assert.match(
+    js,
+    /sesion_anon/,
+    "el front tiene que leer el id que le devuelve el servidor"
+  );
+});
+
+test("every request carries the anonymous id, not just the one that got it", () => {
+  /*
+    Va en `apiFetch` y no en cada llamada por la misma razón que el token: es
+    el embudo por el que pasan todas. Ponerlo en `descargar()` solamente
+    dejaría a `/api/extraer` guardando bajo otra identidad, que es el mismo
+    404 por el otro extremo.
+  */
+  const cliente = sinComentariosJs(read(CLIENTE));
+
+  assert.match(
+    cliente,
+    /X-Sesion-Anon/,
+    "el cliente compartido debe mandar el header en cada petición"
+  );
+});
+
+test("reading the stored id never breaks the page", () => {
+  /*
+    `localStorage` LANZA —no devuelve null— cuando el navegador tiene las
+    cookies de terceros bloqueadas o la pestaña es de incógnito con acceso a
+    sitios restringido. Sin guarda, quien esté en ese modo no vería la página
+    romperse a medias: `actualizarCuota()` corta antes de `aplicarBloqueo()`,
+    y los paneles quedan velados para siempre.
+  */
+  const cliente = sinComentariosJs(read(CLIENTE));
+
+  assert.match(
+    cliente,
+    /try\s*\{[\s\S]*localStorage[\s\S]*?\}\s*catch/,
+    "todo acceso a localStorage va envuelto en try/catch"
+  );
+});

@@ -113,16 +113,24 @@
             Usuarios del sitio
             <span class="admin__mes" id="totalPerfiles"></span>
           </h2>
-          <!-- Los dos datos de esta tabla no duran lo mismo, y confundirlos es
-               lo que costó las secciones borradas: los límites se escriben en
-               Postgres y sobreviven a todo; el consumo es una variable en
-               memoria del contenedor. Decirlo acá evita que alguien lea el
-               consumo como un historial. -->
+          <!-- Este párrafo decía que el consumo "vive en la memoria del
+               servicio y vuelve a cero cuando el contenedor se reinicia".
+               Fue cierto hasta el 2026-08-21, cuando F9 y F25 movieron las
+               tres fuentes de esta tabla a Postgres: el correo sale de
+               `auth.users`, los límites de `extractor_acceso` y el consumo de
+               `extractor_uso`. Ninguna vive ya en el proceso, así que la
+               advertencia se había vuelto exactamente el tipo de pantalla que
+               miente contra la que estaba escrita.
+
+               Lo que sí hay que decir ahora es OTRA cosa, y no es un detalle
+               de implementación sino una regla de negocio: los DOS límites
+               son opt-in. Sin la casilla marcada no hay ninguno de los dos, y
+               ahí es donde un administrador puede leer de menos. -->
           <p class="admin__ayuda">
-            Todas las cuentas registradas, su correo y sus límites de uso. Los
-            límites se guardan en la base de datos; el consumo del mes no: vive
-            en la memoria del servicio y vuelve a cero cuando el contenedor se
-            reinicia.
+            Todas las cuentas registradas, su correo y sus límites de uso, que
+            se guardan en la base de datos junto con el consumo del mes. Nadie
+            tiene límites salvo que se los pongas: marca
+            <strong>Con límite</strong> para fijárselos a una cuenta.
           </p>
           <div class="admin__lista" id="listaPerfiles" aria-live="polite">
             <p class="admin__vacio">Cargando…</p>
