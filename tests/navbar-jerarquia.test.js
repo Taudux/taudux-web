@@ -443,6 +443,38 @@ test("the admin panel is reachable from every page, not just its own", () => {
   );
 });
 
+test("the admin panel leads the site links, above 'Mi cuenta'", () => {
+  /*
+    Antes iba al último. El argumento de entonces —"no es una herramienta más,
+    y a dos clics dentro de Tools un admin no lo encontraría"— defendía que
+    estuviera en **primer nivel**, no que estuviera al final; y quien lo usa lo
+    usa seguido, así que recorrer el menú entero cada vez no se justifica.
+
+    Se fija el orden porque nada más lo sujeta: `ENLACES_NAVEGACION_BASE` es un
+    array literal y mover una entrada no rompe nada por sí solo.
+
+    Ojo con el alcance: esto fija el orden del **array**, que no es el orden de
+    lo que se ve. El array se renderiza en dos puntos y los dos le anteponen
+    algo —las anclas de la página en la hamburguesa, el nombre del usuario en
+    el desplegable de cuenta—. Ese orden visual vive en el DOM y lo verifica el
+    navegador, no esta suite.
+  */
+  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesPorRol } = cargarNavbar();
+
+  assert.match(
+    ENLACES_NAVEGACION_BASE[0].texto || "", /administraci/i,
+    "el panel de administración encabeza los enlaces del sitio"
+  );
+
+  // Y para quien no es admin la entrada desaparece, así que el primer enlace
+  // del grupo vuelve a ser "Mi cuenta": no queda un hueco donde estaba.
+  assert.equal(
+    filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, false)[0].texto,
+    "Mi cuenta",
+    "sin el panel, los enlaces arrancan en 'Mi cuenta'"
+  );
+});
+
 test("every page that mounts the navbar loads the stylesheets it needs", () => {
   /*
     `navbar.js` marca la lista y sus enlaces con clases de dos hojas distintas:
