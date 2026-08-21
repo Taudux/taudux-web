@@ -250,14 +250,15 @@ test("its stylesheet pays for the top offset that cursos.css never delivered", (
     cortado. El defecto es viejo, el borrado sólo lo destapó.
 
     Lo que se fija acá es de QUIÉN es el offset, no cuánto mide: esta hoja
-    tiene que declararlo porque ninguna otra lo hace en esta página. El
-    CUÁNTO —8rem, escrito literal acá y todavía no atado a
-    `--espacio-bajo-navbar`— lo protege por separado `ui-consolidation.test.js`
-    cuando el token llega a esta hoja.
+    tiene que declararlo porque ninguna otra lo hace en esta página. El valor
+    lo fija `--espacio-bajo-navbar` en `styles.css`, y su derivación la
+    protege `ui-consolidation.test.js`. Este test decía `8rem` literal, que
+    era el mismo número escrito dos veces: al mudarlo al token compartido el
+    literal quedó viejo y contradecía al otro test.
   */
   assert.match(
     sinComentariosCss(read(HOJA)),
-    /\.courses\s*\{[^}]*padding-block-start:\s*8rem/,
+    /\.courses\s*\{[^}]*padding-block-start:\s*var\(--espacio-bajo-navbar\)/,
     "admin.css debe dar el offset superior: nadie más lo hace en esta página"
   );
 

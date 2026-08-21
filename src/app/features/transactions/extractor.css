@@ -67,7 +67,20 @@
     --shadow-panel: 0 0 20px rgba(255, 255, 255, 0.05);
     --focus-ring: 3px solid var(--color-accent);
 
-    --navbar-height: 5rem;
+    /*
+      Acá vivía `--navbar-height: 5rem`. Se borró el 2026-08-20.
+
+      Esta hoja se carga después de `styles.css` y en la misma capa, así que
+      esa línea pisaba la perilla del sitio SOLO en esta página. El síntoma
+      visible no era el navbar —que se viste con su propia hoja— sino el
+      `scroll-padding-top: var(--navbar-height)` de `styles.css`: el salto a
+      un ancla del extractor reservaba 5rem mientras el resto del sitio
+      reservaba 6.5rem, y el título de la sección quedaba mordido por la
+      barra. Una perilla que se puede pisar en silencio no es una perilla.
+
+      Al borrarla ese salto pasa a 6.5rem. Es un cambio de comportamiento
+      real, y es el correcto: ahora coincide con el del resto del sitio.
+    */
     --ancho-sitio: 1200px;
     --transition-base: 0.3s ease;
   }
@@ -147,6 +160,16 @@
 }
 
 @layer features {
+  /* El `<main>` de esta página no despejaba el navbar fijo: no tenía ningún
+     padding superior y el título del hero nacía debajo de la barra. El
+     despeje cuelga del token compartido en vez de un número suelto — un 8rem
+     escrito a mano ya trae sumada la altura de la barra y no se puede
+     auditar: no se sabe cuánto es barra y cuánto es aire. Acá el aire es lo
+     único que se elige, y se elige una sola vez, en `styles.css`. */
+  .extractor {
+    padding-block-start: var(--espacio-bajo-navbar);
+  }
+
   .hero { padding: 2.5rem 0 1.75rem; text-align: center; }
   .hero__titulo { font-size: clamp(1.9rem, 4vw, 2.8rem); line-height: 1.15; }
   /* Marca: isotipo + nombre en Orbitron. Peso ligero (400) y tracking amplio:

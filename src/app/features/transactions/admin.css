@@ -24,9 +24,19 @@
    * primero era el aviso de accesos temporales, que a nadie le dolía tapado; al
    * borrar las cuatro secciones de arriba (2026-08-20) quedó primero "Usuarios
    * del sitio" y el título apareció cortado. El defecto es viejo: el borrado
-   * sólo lo destapó. */
+   * sólo lo destapó.
+   *
+   * Se replica la declaración, no la hoja: traer `cursos.css` entera metería
+   * las reglas del catálogo, que esta pantalla no usa.
+   *
+   * El valor sale del token compartido y no de un 8rem escrito a mano. Ese
+   * número ya traía sumada la altura de la barra, así que no se podía
+   * auditar: mirándolo no se sabía cuánto era barra y cuánto aire, ni cuáles
+   * hojas había que tocar si la barra cambiaba de alto. Con el token el aire
+   * es lo único que se elige, y se elige en un solo lugar. Rinde el mismo
+   * 8rem, así que no se mueve nada en pantalla. */
   .courses {
-    padding-block-start: 8rem;
+    padding-block-start: var(--espacio-bajo-navbar);
   }
 
   /* Va debajo del título de la lista y dice de dónde salen esos datos. No es
