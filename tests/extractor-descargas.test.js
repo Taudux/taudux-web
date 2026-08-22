@@ -199,18 +199,29 @@ test("the download buttons obey the server's flag and nothing else", () => {
  * arriba existe para impedir.
  * ------------------------------------------------------------------------ */
 
-test("the quota counter hides for whoever has no account", () => {
+test("the quota counter shows exactly when a ceiling exists", () => {
+  /*
+    La regla dejó de ser "ocultar al anónimo" el 2026-08-21: el anónimo AHORA
+    tiene techo (1 al mes) y quien más necesita ver "te quedan N" es él. Y una
+    cuenta sin límites propios no tiene techo (opt-in), así que a ella no hay
+    N que mostrarle.
+
+    Por eso el test fija la RELACIÓN y no un plan: el contador se oculta si y
+    sólo si el servidor manda `limite: null`. Atarlo a "anonimo" volvería a
+    romperse con el próximo vaivén del catálogo — como este mismo test, que
+    fijaba lo contrario y quedó rojo por un cambio legítimo.
+  */
   const js = codigo();
   const inicio = js.indexOf("function actualizarCuota(");
   assert.notEqual(inicio, -1, "debe existir actualizarCuota()");
   const cuerpo = js.slice(inicio, js.indexOf("\n}", inicio));
 
-  // "Te quedan N extracciones" no aplica a un plan sin techo: el servidor
-  // manda `limite: null` y el marcador quedaría en "—" para siempre.
   assert.match(cuerpo, /cajaCuota/,
                "el contador tiene que poder ocultarse, no sólo cambiar de valor");
-  assert.match(cuerpo, /hidden\s*=\s*cuota\.plan === "anonimo"/,
-               "se oculta para quien no tiene cuenta");
+  assert.match(cuerpo, /hidden\s*=\s*cuota\.limite === null/,
+               "sin techo no hay N; con techo, se muestra — sea de quien sea");
+  assert.doesNotMatch(cuerpo, /hidden\s*=\s*cuota\.plan/,
+                      "la visibilidad depende del techo, no del plan");
 });
 
 test("the page gives the quota counter a handle to hide it by", () => {

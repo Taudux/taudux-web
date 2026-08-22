@@ -1960,20 +1960,15 @@ function actualizarCuota(cuota) {
   avisoPlan = cuota.aviso || "";
   permiteLote = !!permisos.lote;
   el("cuotaRestantes").textContent = cuota.restantes === null ? "∞" : cuota.restantes;
-  // "Te quedan N extracciones" sólo tiene sentido si hay una N, y hoy no la
-  // hay para nadie: `anonimo` viene sin techo desde el 2026-08-21 y el de las
-  // cuentas pasó a ser opt-in, así que `limite` es `null` salvo que un
-  // administrador se lo fije a alguien desde el panel.
+  // "Te quedan N extracciones" sólo tiene sentido si hay una N, y quién la
+  // tiene se invirtió el 2026-08-21: el ANÓNIMO sí (1 al mes, cobrable desde
+  // que `X-Sesion-Anon` viaja — ver `recordarSesionAnon()` arriba), y una
+  // cuenta sin límites propios NO (el techo es opt-in del panel).
   //
-  // El origen fue una medición: la cuota anónima de 2 no se cobraba porque
-  // cada petición nacía con identidad nueva —`X-Sesion-Anon` no se mandaba—.
-  // Ese agujero YA ESTÁ TAPADO (ver `recordarSesionAnon()` arriba y
-  // `api-cliente.js`), pero el techo no volvió: la decisión de no prometer un
-  // número se mantuvo por producto, no por no poder cobrarlo.
-  //
-  // Lo que separa tener cuenta de no tenerla es hoy sólo el VELO, y de eso
-  // avisan los paneles y `avisoBloqueado`, no este contador.
-  siExiste("cajaCuota", (n) => { n.hidden = cuota.plan === "anonimo"; });
+  // Por eso la visibilidad se ata al TECHO y no al plan: se oculta exactamente
+  // cuando el servidor manda `limite: null`. Atarla a "anonimo" ya se rompió
+  // una vez con un vaivén legítimo del catálogo.
+  siExiste("cajaCuota", (n) => { n.hidden = cuota.limite === null; });
 
   // Sólo del simulador: en producción estos tres no existen.
   siExiste("planActual", (n) => { n.textContent = cuota.plan; });
