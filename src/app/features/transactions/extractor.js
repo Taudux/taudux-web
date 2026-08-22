@@ -158,6 +158,28 @@ el("btnNoDonar").addEventListener("click", () => {
 
 btnProcesar.addEventListener("click", async () => {
   if (!archivos.length) return;
+
+  /*
+    Funnel: cuántos llegan a la página y cuántos procesan de verdad — lo único
+    que el servidor no puede ver (el resultado ya lo registra él en
+    `extractor_uso` y `extractor_metrica_banco`, sin Google de por medio).
+
+    LA LISTA DE PARÁMETROS ES CERRADA, y la blinda
+    `tests/extractor-analitica.test.js`: al evento sólo viajan el plan como
+    categoría y cuántos archivos. El nombre del archivo, el contenido del PDF
+    o cualquier identidad son datos personales (LFPDPPP) y violan los términos
+    de GA4 — agregar una clave nueva exige pasar por ese test y justificarla.
+
+    El guard: los bloqueadores cortan gtag.js a diario, y la medición es
+    cortesía — sin GA4, Procesar funciona igual.
+  */
+  if (typeof gtag === "function") {
+    gtag("event", "procesar_pdf", {
+      plan: planActual,
+      archivos: archivos.length,
+    });
+  }
+
   ocultarTodo();
   el("estadoCargando").classList.add("estado--visible");
   btnProcesar.disabled = true;
