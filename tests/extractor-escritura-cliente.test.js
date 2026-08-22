@@ -136,26 +136,52 @@ test("green stays switched off: assigning paid tiers is another change", () => {
   );
 });
 
-test("connecting the usage counter needed no migration at all", () => {
+/*
+  Migraciones sobre `extractor_uso` POSTERIORES a la 0030 que ya se
+  justificaron. La lista no es una excepción al guard: es el guard.
+
+  El test de abajo falla ante cualquier archivo que no esté acá, y ese fallo
+  es una PREGUNTA, no una acusación: *"¿de verdad hace falta tocar esta tabla,
+  o es la policy de escritura que este archivo prohíbe?"*. Responderla es
+  agregar el nombre con su motivo en una línea. Si el motivo no se puede
+  escribir en una línea, probablemente la migración no debería existir.
+
+  (La prohibición dura —ninguna policy de insert/update/delete— NO vive acá:
+  la fija el test de `TABLAS_SOLO_LECTURA`, que recorre TODAS las migraciones
+  y no tiene lista de permitidas.)
+*/
+const MIGRACIONES_JUSTIFICADAS = {
+  "0033_extractor_uso_ubicacion.sql":
+    "agrega ciudad/region/pais para el mapa del panel. Sólo columnas: " +
+    "ninguna policy, y a propósito NO agrega una columna para la IP",
+};
+
+test("every migration touching the usage table has a written reason", () => {
   /*
-    F9 se cerró el 2026-08-21 SIN migración nueva, y conviene que quede fijado
-    por qué: la tabla, su RLS y sus índices ya existían desde la 0030 —
-    `extractor_uso_user_fecha` es exactamente `(user_id, creado_en)`, que es el
+    F9 se cerró el 2026-08-21 SIN migración nueva, y eso sigue siendo cierto:
+    la tabla, su RLS y sus índices ya existían desde la 0030 —
+    `extractor_uso_user_fecha` es exactamente `(user_id, creado_en)`, el
     índice del `count(*)` del periodo—. Lo único que faltaba era código que
     escribiera.
 
-    Este test falla si alguien agrega una migración `extractor_uso` posterior a
-    la 0030, que es el momento de preguntarse si de verdad hace falta o si es
-    la policy de insert que este archivo prohíbe unas líneas más arriba.
+    Este test se llamaba "connecting the usage counter needed no migration at
+    all" y exigía CERO archivos posteriores. Se puso rojo el 2026-08-22 con la
+    `0033`, que agrega la ubicación aproximada — una necesidad real y ajena a
+    F9. El cable trampa funcionó: hizo la pregunta que tenía que hacer. Lo que
+    cambió es la forma de contestarla, de "no puede haber ninguna" a "cada una
+    con su motivo escrito".
   */
   const posteriores = archivos().filter(
     (nombre) => /extractor_uso/i.test(nombre) && !nombre.startsWith("0030_"));
 
+  const sinJustificar = posteriores.filter(
+    (nombre) => !MIGRACIONES_JUSTIFICADAS[nombre]);
+
   assert.deepEqual(
-    posteriores,
+    sinJustificar,
     [],
-    "el contador se conectó con la 0030 tal como estaba: tabla, RLS e índice " +
-    "(user_id, creado_en) ya existían y sólo faltaba escribirla"
+    "toca `extractor_uso` sin motivo escrito: agregalo a " +
+    "MIGRACIONES_JUSTIFICADAS, o revisá si en realidad no hace falta"
   );
 
   // Y la 0030 sigue trayendo lo que el conteo necesita.
@@ -174,5 +200,38 @@ test("connecting the usage counter needed no migration at all", () => {
     sql,
     /create policy\s+extractor_uso_select_admin/i,
     "y el panel las lee todas con el token del admin, no con service_role"
+  );
+});
+
+test("no migration ever adds an IP column to the usage table", () => {
+  /*
+    La ubicación aproximada (migración `0033`) se deriva de la dirección IP EN
+    MEMORIA y la descarta en la misma petición. Que no exista columna donde
+    guardarla no es un olvido: es la decisión que hace que ese dato sea un
+    agregado y no un rastro por persona, y está escrita en la propia 0033.
+
+    `app.py` ya tiene su mitad del candado —`tests/test_ubicacion.py` recorre
+    la fila a escribir y falla si aparece la IP—, pero el código se puede
+    cambiar sin tocar el esquema y al revés. Éste cierra el otro extremo: el
+    día que alguien agregue `ip inet` "para depurar", la columna existe y
+    entonces guardarla es un `insert` de distancia.
+
+    Se mira TODO el directorio y no sólo la 0033, por el mismo motivo que el
+    guard de las policies: el modo de falla realista es una migración futura
+    escrita con prisa, no la de hoy.
+  */
+  const columnaIp =
+    /add\s+column\s+(if\s+not\s+exists\s+)?[\w"]*\b(ip|direccion_ip|ip_address|remote_addr)\b/i;
+
+  const culpables = archivos().filter((nombre) => {
+    const sql = leer(nombre);
+    return /extractor_uso/i.test(sql) && columnaIp.test(sql);
+  });
+
+  assert.deepEqual(
+    culpables,
+    [],
+    "la IP se usa para derivar la ciudad y se descarta: no hay columna donde " +
+    "guardarla, y no puede haberla"
   );
 });
