@@ -556,3 +556,126 @@ test("its stylesheet keeps only the rules the profile list still uses", () => {
     assert.ok(css.includes(selector), `${selector} sigue en uso: no se borra`);
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * "Desde dónde se usa" — las barras por estado.
+ *
+ * El dato que manda sobre este diseño: medido contra la base GeoIP real, cerca
+ * de la mitad de las IPs no baja de país. "Sin ubicación" no es un caso borde
+ * que se pueda esconder — es una porción grande del total, y un panel que
+ * mostrara sólo los estados conocidos afirmaría menos uso del que hubo.
+ * ------------------------------------------------------------------------ */
+
+test("the panel has a section for where the tool is used from", () => {
+  const pagina = read(PAGINA);
+
+  assert.match(
+    pagina,
+    /id="listaRegiones"/,
+    "falta el contenedor donde se pintan las barras"
+  );
+  assert.match(
+    pagina,
+    /<div[^>]*id="listaRegiones"[^>]*aria-live="polite"/,
+    "se llena por red después de cargar: sin aria-live, quien usa lector de " +
+      "pantalla no se entera de que aparecieron datos"
+  );
+});
+
+test("the bars are proportional, not a fixed width", () => {
+  /*
+    Una barra que no sale de un porcentaje sobre el máximo no es un gráfico:
+    es una decoración que miente sobre la proporción. Y el porcentaje se
+    calcula en JS porque el máximo depende de los datos del mes.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /width:\s*\$\{[^}]*\}%/,
+    "el ancho de la barra tiene que venir de un porcentaje calculado"
+  );
+});
+
+test("rows with no known state are shown apart, never hidden", () => {
+  /*
+    Los dos errores posibles son opuestos y los dos mienten: descartar esas
+    filas hace ver menos uso del real, y mezclarlas con los estados inventa
+    uno que no existe. Van visibles y separadas.
+
+    El nombre de la clave lo pone el SERVIDOR (`SIN_UBICACION` en app.py) para
+    que los dos lados cuenten lo mismo; acá se verifica que el front la
+    reconozca y le dé su propio tratamiento.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /sin_ubicacion/,
+    "el front tiene que reconocer la clave que manda el servidor"
+  );
+  assert.match(
+    js,
+    /admin__barra--sin-ubicar/,
+    "y distinguirla visualmente de los estados reales"
+  );
+  assert.match(
+    js,
+    /Sin ubicación/,
+    "con una etiqueta legible, no la clave cruda"
+  );
+});
+
+test("each state shows its municipalities grouped underneath", () => {
+  /*
+    Estado y municipio resuelven SIEMPRE juntos (medido: 6 de 10 con las dos,
+    4 sin ninguna, nunca una sin la otra), así que todo estado a la vista
+    tiene detalle debajo. Se pintan agrupados y siempre visibles — sin clic:
+    lo que interesa es leer de un vistazo cuánto pesa el estado Y cómo se
+    reparte adentro.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /admin__municipio/,
+    "el nivel municipio necesita su propia clase para poder distinguirse"
+  );
+  assert.match(
+    js,
+    /admin__barra--municipio/,
+    "y su propia barra: la jerarquía se lee por el estilo, no por un rótulo"
+  );
+});
+
+test("a state's total is summed from its municipalities, never sent apart", () => {
+  /*
+    Dos números para lo mismo pueden discrepar, y ésa es la clase de bug que
+    no falla: sólo miente. El servidor manda `{estado: {municipio: n}}` y el
+    total sale de sumar ese dict.
+
+    Si mañana alguien agrega un campo `total` al agregado para "ahorrarse la
+    suma", este test lo obliga a justificarlo acá.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /Object\.values\([^)]*\)\s*\.reduce/,
+    "el total del estado se calcula sumando sus municipios"
+  );
+});
+
+test("the unlocated row stays apart and has no breakdown", () => {
+  /*
+    No tiene municipios que mostrar: es justamente el grupo de las filas cuya
+    IP no bajó de país. Un bloque de detalle vacío debajo sería peor que nada,
+    y con el color de acento se leería como el estado que más usa la
+    herramienta — cerca de la mitad de las IPs cae ahí.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(js, /sin_ubicacion/, "reconoce la clave que manda el servidor");
+  assert.match(js, /admin__barra--sin-ubicar/, "y la distingue visualmente");
+  assert.match(js, /Sin ubicación/, "con etiqueta legible, no la clave cruda");
+});

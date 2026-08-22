@@ -136,6 +136,32 @@
             <p class="admin__vacio">Cargando…</p>
           </div>
         </section>
+
+        <!-- Sale del MISMO viaje que la tabla de arriba: `/api/admin/perfiles`
+             devuelve los dos agregados, así que esta sección no cuesta una
+             consulta más (ver `_uso_todos_remoto()` en app.py).
+
+             El párrafo nombra las dos limitaciones de frente en vez de
+             dejarlas para que alguien las descubra mirando números que no
+             cuadran: que la ubicación es aproximada, y que de muchas visitas
+             sólo se sabe el país. Medido: cerca de la mitad de las IPs no
+             baja de país, casi siempre datos móviles. -->
+        <section class="panel panel--spacious">
+          <h2 class="courses__subtitle">
+            Desde dónde se usa
+            <span class="admin__mes" id="mesRegiones"></span>
+          </h2>
+          <p class="admin__ayuda">
+            Estados desde los que se extrajo este mes, contando también a quien
+            no tiene cuenta. La ubicación es <strong>aproximada</strong>: se
+            deduce de la conexión y nunca guardamos la dirección IP. De buena
+            parte de las visitas sólo se sabe el país, y ésas aparecen abajo
+            como <strong>Sin ubicación</strong>.
+          </p>
+          <div class="admin__regiones" id="listaRegiones" aria-live="polite">
+            <p class="admin__vacio">Cargando…</p>
+          </div>
+        </section>
       </div>
     </div>
   </main>

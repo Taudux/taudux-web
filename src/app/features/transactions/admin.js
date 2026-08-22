@@ -409,6 +409,145 @@
     }
   }
 
+  // --- Desde dónde se usa --------------------------------------------------
+
+  /*
+    La clave con la que el SERVIDOR agrupa las extracciones cuya IP no bajó de
+    país (`SIN_UBICACION` en app.py). Se repite acá porque atraviesa JSON, pero
+    el nombre lo pone el servidor: si cambia allá y no acá, la fila deja de
+    reconocerse y aparecería con su nombre crudo — feo, pero no silencioso.
+  */
+  const SIN_UBICACION = "sin_ubicacion";
+
+  /*
+    Barras horizontales por estado, ordenadas por volumen.
+
+    POR QUÉ NO HAY LIBRERÍA DE GRÁFICOS. Son rectángulos con un ancho en
+    porcentaje: traer una dependencia para dibujarlos sería sumar peso, un
+    tercero y una superficie de actualización a cambio de nada. El día que
+    haga falta un eje de tiempo o interacción, se reconsidera.
+
+    POR QUÉ "SIN UBICACIÓN" VA APARTE Y NO SE ESCONDE. Medido contra la base
+    GeoIP real, cerca de la mitad de las IPs no baja de país. Los dos errores
+    posibles son opuestos y los dos mienten: descartar esas filas hace ver
+    menos uso del que hubo, y mezclarlas con los estados inventa uno que no
+    existe. Van visibles, al final, y en gris apagado para que no compitan con
+    los estados reales.
+
+    Y la proporción se calcula sobre el MÁXIMO, no sobre el total: con muchos
+    estados, los porcentajes sobre el total dan barras de dos píxeles que no
+    se comparan entre sí. Sobre el máximo, el mayor llena la fila y el resto
+    se lee contra él.
+  */
+  function pintarRegiones(porRegion, periodo) {
+    const caja = el("listaRegiones");
+    if (!caja) return;
+
+    siExisteMes(periodo);
+
+    if (porRegion === null) {
+      // El endpoint falló. La tabla de arriba ya avisa por su lado; acá se
+      // dice que no se sabe, en vez de pintar un cero que se leería como
+      // "nadie usó la herramienta".
+      caja.innerHTML =
+        '<p class="admin__vacio">No se pudo leer desde dónde se usa.</p>';
+      return;
+    }
+
+    const entradas = Object.entries(porRegion);
+    if (!entradas.length) {
+      caja.innerHTML =
+        '<p class="admin__vacio">Todavía no hay extracciones este mes.</p>';
+      return;
+    }
+
+    /*
+      El total de un estado SE SUMA de sus municipios; el servidor no manda un
+      total aparte. Dos números para lo mismo pueden discrepar, y ésa es la
+      clase de bug que no falla: sólo miente. Ver `_uso_todos_remoto()`.
+    */
+    const sumar = (municipios) =>
+      Object.values(municipios).reduce((suma, n) => suma + n, 0);
+
+    const totalDe = new Map(entradas.map(([estado, m]) => [estado, sumar(m)]));
+
+    const total = [...totalDe.values()].reduce((suma, n) => suma + n, 0);
+    const sinUbicar = totalDe.get(SIN_UBICACION) || 0;
+
+    // Los estados reales, de mayor a menor; "sin ubicación" sale de la lista y
+    // se agrega al final, para que no compita por el primer puesto.
+    const estados = entradas
+      .filter(([clave]) => clave !== SIN_UBICACION)
+      .sort((a, b) => totalDe.get(b[0]) - totalDe.get(a[0]));
+
+    // El máximo sale de los TOTALES de estado, no de los municipios sueltos:
+    // así la barra del estado y la de su municipio más grande se leen en la
+    // misma escala, que es lo que permite compararlas de un vistazo.
+    const maximo = Math.max(1, ...totalDe.values());
+
+    const barra = (etiqueta, cantidad, clases = "", nivel = "region") => `
+      <li class="admin__${nivel}">
+        <span class="admin__region-nombre">${escapar(etiqueta)}</span>
+        <span class="admin__barra-pista">
+          <span class="admin__barra ${clases}"
+                style="width: ${Math.round((cantidad / maximo) * 100)}%"></span>
+        </span>
+        <span class="admin__region-conteo">${cantidad}</span>
+      </li>`;
+
+    /*
+      Cada estado con sus municipios debajo, siempre visibles — sin clic.
+      Estado y municipio resuelven SIEMPRE juntos (medido), así que ningún
+      estado queda sin detalle.
+
+      Un municipio bajo la clave `SIN_UBICACION` sólo aparece si el estado se
+      supo y el municipio no: hoy no pasa, pero podría llegar de una base
+      GeoIP vieja. Se muestra como "Sin municipio" para no repetir la etiqueta
+      de la fila de abajo, que significa otra cosa.
+    */
+    const filas = estados.map(([estado, municipios]) => {
+      const detalle = Object.entries(municipios)
+        .sort((a, b) => b[1] - a[1])
+        .map(([municipio, n]) => barra(
+          municipio === SIN_UBICACION ? "Sin municipio" : municipio,
+          n, "admin__barra--municipio", "municipio"))
+        .join("");
+      return barra(estado, totalDe.get(estado)) + detalle;
+    }).join("");
+
+    const cola = sinUbicar
+      ? `<ul class="admin__regiones-lista admin__regiones-lista--cola">
+           ${barra("Sin ubicación", sinUbicar, "admin__barra--sin-ubicar")}
+         </ul>`
+      : "";
+
+    const porcentaje = total ? Math.round((sinUbicar / total) * 100) : 0;
+
+    caja.innerHTML = `
+      <ul class="admin__regiones-lista">${filas}</ul>
+      ${cola}
+      <p class="admin__consumo">
+        ${total} ${total === 1 ? "extracción" : "extracciones"}${sinUbicar
+          ? ` · ${sinUbicar} sin ubicar (${porcentaje}%)`
+          : ""}
+      </p>`;
+
+    // Los DOS niveles: quien usa lector de pantalla no puede "ver" el ancho de
+    // ninguna barra. Sin esto la sección entera es decorativa para esa persona.
+    caja.querySelectorAll(".admin__region, .admin__municipio").forEach((fila) => {
+      const nombre = fila.querySelector(".admin__region-nombre").textContent;
+      const conteo = fila.querySelector(".admin__region-conteo").textContent;
+      const pista = fila.querySelector(".admin__barra-pista");
+      pista.setAttribute("role", "img");
+      pista.setAttribute("aria-label", `${nombre}: ${conteo}`);
+    });
+  }
+
+  function siExisteMes(periodo) {
+    const nodo = el("mesRegiones");
+    if (nodo) nodo.textContent = periodo ? `· ${periodo}` : "";
+  }
+
   // --- Usuarios del sitio --------------------------------------------------
 
   /*
@@ -458,10 +597,20 @@
     let extra = {};
     try {
       const r = await apiFetch("/api/admin/perfiles");
-      if (r.ok) extra = (await r.json()).perfiles || {};
-      else console.warn("[admin] /api/admin/perfiles respondió", r.status);
+      if (r.ok) {
+        const cuerpo = await r.json();
+        extra = cuerpo.perfiles || {};
+        // Del MISMO viaje: el endpoint devuelve los dos agregados, así que
+        // "Desde dónde se usa" no cuesta una consulta más. Se pinta acá y no
+        // en su propia carga por eso.
+        pintarRegiones(cuerpo.por_region || {}, cuerpo.periodo);
+      } else {
+        console.warn("[admin] /api/admin/perfiles respondió", r.status);
+        pintarRegiones(null);
+      }
     } catch (error) {
       console.warn("[admin] no se pudo leer correo/consumo:", error);
+      pintarRegiones(null);
     }
 
     // Administración primero: es lo que se busca al abrir esta lista.

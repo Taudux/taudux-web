@@ -251,4 +251,92 @@
   .admin__vacio {
     color: var(--color-text-muted);
   }
+
+  /* --- Desde dónde se usa ------------------------------------------------ */
+
+  /* Grilla de tres columnas y no una tabla: el nombre a su ancho natural, la
+     barra ocupando todo lo que sobre, y el número alineado a la derecha. Con
+     `1fr` en el medio, las barras de todas las filas arrancan y terminan en la
+     misma vertical — que es lo único que hace comparables dos barras. */
+  .admin__regiones-lista {
+    display: grid;
+    gap: 0.5rem 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Los dos niveles comparten la grilla: si el municipio tuviera columnas
+     propias, sus barras arrancarían en otra vertical que las del estado y
+     dejarían de ser comparables — que es lo único que hace útil una barra. */
+  .admin__region,
+  .admin__municipio {
+    display: grid;
+    grid-template-columns: minmax(6rem, max-content) 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .admin__region-nombre {
+    font-size: 0.85rem;
+  }
+
+  /* El municipio se distingue por TRES cosas a la vez —sangría, tamaño y
+     color— y no por una sola. Con un único indicio, la jerarquía se pierde en
+     cuanto alguien lee rápido o la pantalla es chica; el estilo tiene que
+     decir cuál es el estado sin que haga falta un rótulo. */
+  .admin__municipio {
+    padding-inline-start: 1.25rem;
+  }
+
+  .admin__municipio .admin__region-nombre,
+  .admin__municipio .admin__region-conteo {
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+  }
+
+  /* Y la pista más fina: el municipio es detalle del estado, no su par. */
+  .admin__municipio .admin__barra-pista {
+    block-size: 0.35rem;
+  }
+
+  /* La pista da la referencia: sin un fondo visible, una barra corta no se lee
+     como "poco" sino como "casi nada", porque no hay contra qué medirla. */
+  .admin__barra-pista {
+    display: block;
+    block-size: 0.6rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 6%);
+    overflow: hidden;
+  }
+
+  .admin__barra {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background: var(--color-accent, #38bdf8);
+  }
+
+  /* Gris apagado, no el color de acento: "sin ubicación" suele ser una de las
+     barras más largas —cerca de la mitad de las IPs no baja de país— y con el
+     mismo color se leería como el estado que más usa la herramienta, que es
+     justo lo contrario de lo que dice. */
+  .admin__barra--sin-ubicar {
+    background: rgb(255 255 255 / 18%);
+  }
+
+  /* El mismo acento, atenuado. NO un color distinto: el municipio es una parte
+     del estado que tiene encima, y dos colores los presentarían como dos
+     mediciones independientes. La transparencia dice "lo mismo, más abajo". */
+  .admin__barra--municipio {
+    background: color-mix(in srgb, var(--color-accent, #38bdf8) 45%, transparent);
+  }
+
+  /* La separa del bloque de estados reales: son dos cosas distintas y la línea
+     lo dice sin necesidad de un rótulo. */
+  .admin__regiones-lista--cola {
+    margin-block-start: 0.75rem;
+    padding-block-start: 0.75rem;
+    border-block-start: 1px solid rgb(255 255 255 / 10%);
+  }
 }
