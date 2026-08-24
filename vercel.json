@@ -6,5 +6,31 @@
     { "source": "/src/:path*/", "destination": "/:path*/", "permanent": true },
     { "source": "/src/:path*", "destination": "/:path*", "permanent": true },
     { "source": "/index.html", "destination": "/", "permanent": true }
+  ],
+  "headers": [
+    {
+      "source": "/afgi/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
+        },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://yqkvgfqplmbbcebrivpt.supabase.co https://cdn.simpleicons.org; connect-src 'self' https://yqkvgfqplmbbcebrivpt.supabase.co https://extractor-taudux-953578674176.northamerica-south1.run.app https://formsubmit.co https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; form-action 'self' https://formsubmit.co; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
+        },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
   ]
 }
