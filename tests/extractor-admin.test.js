@@ -679,3 +679,251 @@ test("the unlocated row stays apart and has no breakdown", () => {
   assert.match(js, /admin__barra--sin-ubicar/, "y la distingue visualmente");
   assert.match(js, /Sin ubicación/, "con etiqueta legible, no la clave cruda");
 });
+
+/*
+  Un trozo de `admin.js` delimitado por sus propios rótulos `// --- Título ---`.
+
+  Existe porque varios asertos de acá abajo sólo valen DENTRO de una sección:
+  que la actividad lea el nombre del mapa de perfiles no significa nada si el
+  match lo aporta la tabla de límites, que también lo lee. Buscando en el
+  archivo entero, un test verde no probaría lo que dice probar.
+*/
+const seccion = (js, titulo) => {
+  const inicio = js.indexOf(`// --- ${titulo}`);
+  assert.notEqual(inicio, -1, `falta la sección "${titulo}" en admin.js`);
+  const resto = js.slice(inicio + `// --- ${titulo}`.length);
+  const fin = resto.indexOf("// --- ");
+  return fin === -1 ? resto : resto.slice(0, fin);
+};
+
+test("the location section offers a visible switch to leave admins out", () => {
+  /*
+    El filtro tenía que ser VISIBLE, no una exclusión silenciosa del servidor:
+    un mapa que descarta filas sin decirlo es un mapa que miente, y quien lo
+    mira no tiene forma de saber cuántas se fueron.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="filtroAdmins"/, "falta la casilla del filtro");
+  assert.match(
+    html,
+    /id="filtroAdmins"[^>]*\schecked/,
+    "nace marcada: la lectura por defecto es la que no cuenta a quien prueba"
+  );
+  assert.match(
+    html,
+    /Excluir a los administradores/,
+    "la etiqueta dice qué hace, no cómo se llama el campo"
+  );
+});
+
+test("an empty filtered map still offers the filter — {} is data, not absence", () => {
+  /*
+    **`{} || null` da `null` en JavaScript**, y ése era el bug.
+
+    Si en un mes TODAS las extracciones fueron de administración, el servidor
+    manda `por_region_sin_admins: {}` — un dato legítimo que significa "sin
+    administración no hubo nada". Con `||`, el panel lo tomaba como "el
+    servidor no calcula el filtro", escondía la casilla, y mostraba el mapa
+    completo: exactamente el mes en que el filtro más importa.
+
+    Distinguir "no vino el campo" de "vino vacío" exige mirar la ausencia, no
+    la veracidad.
+  */
+  const js = seccion(read(SCRIPT), "Desde dónde se usa");
+
+  assert.doesNotMatch(
+    js,
+    /cuerpo\.por_region_sin_admins\s*\|\|/,
+    "`|| null` convierte un mapa vacío en 'no calculado' y esconde la casilla"
+  );
+  assert.match(
+    js,
+    /por_region_sin_admins\s*\)|por_region_sin_admins"\s*\)|undefined|hasOwnProperty|in cuerpo/,
+    "la ausencia del campo debe distinguirse de un mapa vacío"
+  );
+});
+
+test("the filter is only offered when the server actually computed it", () => {
+  /*
+    Hoy Cloud Run manda un solo agregado. Ofrecer la casilla igual sería
+    prometer un filtro que nadie calcula: se marcaría, no cambiaría nada, y
+    quien mire creería que está viendo el mapa sin administradores.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+  assert.match(
+    html,
+    /id="filtroAdminsCaja"[^>]*\shidden/,
+    "la casilla nace oculta y sólo se revela con el agregado filtrado"
+  );
+
+  const js = seccion(read(SCRIPT), "Desde dónde se usa");
+  assert.match(
+    js,
+    /por_region_sin_admins/,
+    "debe leer el agregado filtrado que manda el servidor"
+  );
+  assert.match(
+    js,
+    /ofrecerFiltroAdmins/,
+    "la revelación es explícita, no un efecto colateral del pintado"
+  );
+});
+
+test("toggling the admin filter costs no extra request", () => {
+  /*
+    Los dos agregados vienen del MISMO viaje, así que alternar es elegir cuál
+    de los dos ya está en memoria. Un `apiFetch` acá volvería a pedir la tabla
+    entera de perfiles para redibujar unas barras que ya se tienen.
+
+    Se cuentan las llamadas porque es el aserto que no se puede satisfacer sin
+    cumplir: hay exactamente dos —leer perfiles y guardar una fila— y el filtro
+    no puede sumar una tercera.
+  */
+  const js = read(SCRIPT);
+  const llamadas = (js.match(/apiFetch\(/g) || []).length;
+
+  assert.equal(
+    llamadas,
+    2,
+    "sólo GET /api/admin/perfiles y PUT /api/admin/acceso: el filtro no viaja"
+  );
+});
+
+test("the panel has a section for who uses it and when", () => {
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="listaActividad"/, "falta el contenedor de actividad");
+  assert.match(
+    html,
+    /Quién lo usa y cuánto/,
+    "el título nombra lo que la sección responde"
+  );
+});
+
+test("neither section's copy claims 'sin cuenta' where it means 'sin sesión' (F47)", () => {
+  /*
+    Las dos secciones cuentan extracciones sin token — incluidas las de
+    cuentas reales que no iniciaron sesión. "No tiene cuenta" mentiría sobre
+    esas filas; specs/authentication/spec.md define el actor como Anónimo
+    (sin Sesión), no como "sin Cuenta".
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.doesNotMatch(
+    html,
+    /no tiene cuenta/i,
+    "la copia no debe volver a prometer algo que sólo describe a una parte de la fila"
+  );
+  assert.match(
+    html,
+    /sesión iniciada/i,
+    "la copia debe hablar de sesión, que es lo que el sistema de verdad sabe"
+  );
+});
+
+test("the activity section stays hidden until the server sends the data", () => {
+  /*
+    Misma regla que el filtro, y por el mismo motivo: sin `actividad` en la
+    respuesta, la sección aparecería vacía o —peor— con un "todavía no hay
+    extracciones" que se leería como que nadie usó la herramienta.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+  assert.match(
+    html,
+    /id="seccionActividad"[^>]*\shidden/,
+    "nace oculta y sólo se revela cuando hay datos que mostrar"
+  );
+});
+
+test("the hour strip always has the day's 24 hours", () => {
+  /*
+    Las 24 celdas son fijas. Pintar sólo las horas con uso convertiría la
+    franja en una lista de horas activas: dos personas con tiras iguales
+    podrían estar usando la herramienta a horas completamente distintas.
+  */
+  const js = read(SCRIPT);
+  assert.match(js, /HORAS_DEL_DIA\s*=\s*24/, "las 24 horas son una constante");
+
+  const css = sinComentariosCss(read(HOJA));
+  assert.match(
+    css,
+    /\.admin__horas\s*\{[^}]*repeat\(24,\s*1fr\)/,
+    "la grilla reserva las 24 columnas siempre"
+  );
+});
+
+test("it draws the hour strip without pulling in a chart library", () => {
+  /*
+    El mismo criterio que las barras por estado: son rectángulos con una
+    intensidad. Una dependencia acá sería peso, un tercero y una superficie de
+    actualización a cambio de nada.
+  */
+  const css = sinComentariosCss(read(HOJA));
+  assert.match(css, /--peso/, "la intensidad sale de una custom property");
+  assert.match(css, /color-mix\(/, "y se resuelve en CSS, no en JavaScript");
+
+  assert.doesNotMatch(
+    read(PAGINA),
+    /chart\.js|apexcharts|d3(?:\.min)?\.js|highcharts/i,
+    "ninguna librería de gráficos entra por esta sección"
+  );
+});
+
+test("activity rows get their name from the profile map, never the raw uid", () => {
+  /*
+    El endpoint agrupa por uuid; el correo y el nombre ya viven en el panel.
+    Pintar la clave cruda mostraría un identificador que no le dice nada a
+    nadie y que además es lo único que no debería salir a pantalla.
+  */
+  const js = seccion(read(SCRIPT), "Quién lo usa y cuánto");
+
+  assert.match(
+    js,
+    /perfilesPorUid\.get\(/,
+    "resuelve la identidad contra lo que el panel ya leyó"
+  );
+});
+
+test("the anonymous bucket is shown grouped and without identity", () => {
+  /*
+    Quien no tiene SESIÓN iniciada no tiene nombre ni correo que mostrar, y son
+    muchos: van en UNA fila agrupada. Que exista la fila importa — omitirla
+    haría ver menos uso del que hubo, el mismo error que "sin ubicación" ya
+    evita.
+
+    La etiqueta es "Sin sesión" y no "Sin cuenta" (F47,
+    specs/authentication/spec.md): esta fila mezcla a quien nunca se registró
+    CON quien tiene cuenta pero no inició sesión — "Sin cuenta" mentiría sobre
+    el segundo grupo.
+  */
+  const js = seccion(read(SCRIPT), "Quién lo usa y cuánto");
+
+  assert.match(
+    js,
+    /ANONIMOS\s*=\s*"anonimos"/,
+    "reconoce la clave con la que el servidor agrupa a quien no tiene sesión iniciada"
+  );
+  assert.match(js, /Sin sesión/, "con etiqueta legible, no la clave cruda");
+  assert.doesNotMatch(
+    js,
+    /"Sin cuenta"/,
+    "la etiqueta vieja mentía sobre quien tiene cuenta y no inició sesión (F47)"
+  );
+});
+
+test("the anonymous row shows no location, only hours — the map already counts it", () => {
+  /*
+    "Desde dónde se usa" ya cuenta a quien no tiene sesión iniciada por
+    estado. Repetir esos estados acá duplicaría el mapa; esta sección aporta
+    horario, no ubicación, así que la fila "Sin sesión" NO calcula lugar —
+    a diferencia de las cuentas con identidad, que sí lo muestran.
+  */
+  const js = seccion(read(SCRIPT), "Quién lo usa y cuánto");
+
+  assert.match(
+    js,
+    /anonimo\s*\?\s*""\s*:\s*lugarDe\(/,
+    "la fila anónima suprime la ubicación; sólo las cuentas con identidad la calculan"
+  );
+});

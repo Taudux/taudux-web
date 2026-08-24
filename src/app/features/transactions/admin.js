@@ -548,6 +548,254 @@
     if (nodo) nodo.textContent = periodo ? `· ${periodo}` : "";
   }
 
+  /*
+    Los DOS agregados de región, del mismo viaje, guardados acá.
+
+    El filtro de administración alterna entre ellos, y esa alternancia no puede
+    costar una consulta: el servidor los calcula en el mismo recorrido y
+    volver a pedirlos traería de nuevo la tabla entera de perfiles para
+    redibujar unas barras que ya están en memoria.
+
+    `sinAdmins` en `null` significa "este servidor no calcula el filtrado", que
+    es distinto de "filtrado y no quedó nada". Por eso no se inicializa en `{}`.
+  */
+  const regionesEnCache = { todos: null, sinAdmins: null, periodo: "" };
+
+  /*
+    La casilla se REVELA, no se pinta siempre.
+
+    Cloud Run puede estar sirviendo una versión anterior a este front: si su
+    respuesta no trae el agregado filtrado, ofrecer el interruptor sería
+    prometer un filtro que nadie calcula. Se marcaría, no cambiaría nada, y
+    quien mire creería estar viendo el mapa sin las pruebas de administración.
+  */
+  function ofrecerFiltroAdmins(hayAgregadoFiltrado) {
+    const caja = el("filtroAdminsCaja");
+    if (caja) caja.hidden = !hayAgregadoFiltrado;
+  }
+
+  function repintarRegiones() {
+    // `!== null` y no `Boolean(...)`: un mapa filtrado vacío es un dato —"sin
+    // administración no hubo nada"— y con `Boolean` la casilla quedaría
+    // marcada pintando el mapa COMPLETO, que es mentir en pantalla.
+    const filtrar = Boolean(el("filtroAdmins")?.checked)
+      && regionesEnCache.sinAdmins !== null;
+    pintarRegiones(
+      filtrar ? regionesEnCache.sinAdmins : regionesEnCache.todos,
+      regionesEnCache.periodo);
+  }
+
+  function recordarRegiones(cuerpo) {
+    regionesEnCache.todos = cuerpo.por_region || {};
+
+    /*
+      `|| null` NO sirve acá, y el motivo es sutil: `{}` es falsy para `||`.
+
+      Un mapa filtrado VACÍO es un dato legítimo — significa "sin
+      administración no hubo ninguna extracción este mes"— y con `||` se
+      confundía con "este servidor no calcula el filtro". El resultado era que
+      la casilla se escondía y el panel mostraba el mapa completo justo el mes
+      en que el filtro más importa.
+
+      Lo que hay que preguntar es si el campo VINO, no si tiene contenido.
+    */
+    const filtrado = cuerpo.por_region_sin_admins;
+    regionesEnCache.sinAdmins = filtrado === undefined || filtrado === null
+      ? null
+      : filtrado;
+
+    regionesEnCache.periodo = cuerpo.periodo || "";
+    ofrecerFiltroAdmins(regionesEnCache.sinAdmins !== null);
+    repintarRegiones();
+  }
+
+  function conectarFiltroAdmins() {
+    const caja = el("filtroAdmins");
+    if (caja) caja.addEventListener("change", repintarRegiones);
+  }
+
+  // --- Quién lo usa y cuánto -----------------------------------------------
+
+  /*
+    Las 24 horas son FIJAS, y ésa es toda la idea de la franja.
+
+    Si se pintaran sólo las horas con uso, quien extrae de 9 a 11 y quien
+    extrae de 19 a 21 tendrían tiras idénticas: tres celdas encendidas pegadas
+    a la izquierda. La POSICIÓN dentro del día es el dato.
+  */
+  const HORAS_DEL_DIA = 24;
+
+  /*
+    La clave con la que el servidor agrupa a quien no tiene SESIÓN iniciada —no
+    "cuenta": una fila con cuenta que no se logueó cae acá también, y llamarla
+    "sin cuenta" mentiría sobre ella (F47). Mismo trato que `SIN_UBICACION`: el
+    nombre lo pone el servidor y acá se repite porque atraviesa JSON.
+  */
+  const ANONIMOS = "anonimos";
+
+  const totalHoras = (horas) => (Array.isArray(horas) ? horas : [])
+    .reduce((suma, n) => suma + (n || 0), 0);
+
+  /*
+    La franja de un día.
+
+    La intensidad la resuelve CSS (`--peso` + `color-mix`): acá sólo se calcula
+    la proporción contra el máximo DE ESA PERSONA. Contra un máximo global, a
+    quien extrae tres veces al mes se le vería la tira apagada entera y no se
+    podría leer a qué hora la usa, que es justamente lo que la franja contesta.
+
+    El `aria-label` no es un extra: quien usa lector de pantalla no puede "ver"
+    la intensidad de ninguna celda, y sin él la sección entera es decorativa
+    para esa persona — el mismo criterio que ya tienen las barras por estado.
+  */
+  function tiraHoraria(horas) {
+    const cuentas = Array.isArray(horas) ? horas : [];
+    const maximo = Math.max(1, ...cuentas.map((n) => n || 0));
+    const total = totalHoras(cuentas);
+
+    const celdas = Array.from({ length: HORAS_DEL_DIA }, (_, hora) => {
+      const cuenta = cuentas[hora] || 0;
+      const titulo = `${String(hora).padStart(2, "0")}:00 — ${cuenta} `
+        + (cuenta === 1 ? "extracción" : "extracciones");
+      return `<span class="admin__hora"
+                    style="--peso: ${Math.round((cuenta / maximo) * 100)}"
+                    title="${escapar(titulo)}"></span>`;
+    }).join("");
+
+    // El pico se busca sobre las cuentas reales, no sobre las 24 celdas: con
+    // todo en cero `indexOf` devolvería 0 y anunciaría "mayor actividad a las
+    // 00", que es una hora que nadie usó.
+    const pico = total ? cuentas.indexOf(Math.max(...cuentas.map((n) => n || 0))) : -1;
+    const resumen = pico === -1
+      ? "Sin actividad este mes"
+      : `Mayor actividad a las ${String(pico).padStart(2, "0")}:00`;
+
+    return `
+      <div class="admin__horas" role="img" aria-label="${escapar(resumen)}">
+        ${celdas}
+      </div>
+      <div class="admin__horas-eje">
+        <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+      </div>`;
+  }
+
+  /*
+    De dónde extrajo esta persona.
+
+    Con un solo estado va el nombre pelado; con varios, cada uno con su conteo
+    — sin el número, dos estados se leerían como si pesaran igual.
+  */
+  function lugarDe(regiones) {
+    const entradas = Object.entries(regiones || {})
+      .sort((a, b) => b[1] - a[1]);
+    if (!entradas.length) return "";
+
+    const solo = entradas.length === 1;
+    return entradas
+      .map(([estado, n]) => {
+        const nombre = estado === SIN_UBICACION ? "Sin ubicación" : estado;
+        return solo ? nombre : `${nombre} ${n}`;
+      })
+      .join(" · ");
+  }
+
+  /*
+    Una tarjeta.
+
+    La identidad NO viene del endpoint de actividad: el agregado llega por uuid
+    y el nombre y el correo ya viven en `perfilesPorUid`, leídos al pintar la
+    tabla de arriba. Pintar la clave cruda mostraría un identificador que no le
+    dice nada a nadie y que es, además, lo único que no debería salir a
+    pantalla.
+
+    Un uuid que no esté en el mapa es una cuenta que se dio de baja después de
+    extraer. Se muestra como tal en vez de omitirla: borrar la fila haría ver
+    menos uso del que hubo, el mismo error que "Sin ubicación" ya evita.
+  */
+  function tarjetaActividad(clave, datos) {
+    const anonimo = clave === ANONIMOS;
+    const perfil = anonimo ? null : perfilesPorUid.get(clave);
+    const total = totalHoras(datos.horas);
+
+    const nombre = anonimo
+      ? "Sin sesión"
+      : (perfil?.nombre || "(cuenta eliminada)");
+    const meta = anonimo
+      ? "identidad anónima, agrupada"
+      : (perfil?.correo || "—");
+    const esAdmin = Boolean(perfil?.esAdmin);
+    // La fila anónima NO calcula ubicación: "Desde dónde se usa" ya la cuenta
+    // por estado, y repetirla acá duplicaría esa sección en vez de aportar lo
+    // que ésta ofrece — identidad y horario.
+    const lugar = anonimo ? "" : lugarDe(datos.regiones);
+
+    return `
+      <li class="admin__actividad-fila${esAdmin ? " admin__actividad-fila--admin" : ""}">
+        <div class="admin__actividad-cabeza">
+          <div class="admin__quien">
+            <span class="admin__usuario">${escapar(nombre)}${esAdmin
+              ? ' <span class="admin__insignia">Admin</span>' : ""}</span>
+            <span class="admin__meta">${escapar(meta)}</span>
+          </div>
+          <span class="admin__actividad-total">
+            ${total} este mes
+          </span>
+        </div>
+        ${lugar
+          ? `<p class="admin__actividad-lugar">${escapar(lugar)}</p>`
+          : ""}
+        ${tiraHoraria(datos.horas)}
+      </li>`;
+  }
+
+  /*
+    La sección entera.
+
+    Se revela sólo con datos: sin el agregado, un "todavía no hay extracciones"
+    se leería como que nadie usó la herramienta, cuando lo cierto es que este
+    servidor todavía no lo calcula. Son dos cosas distintas y sólo una es
+    verdad.
+  */
+  function pintarActividad(actividad, periodo) {
+    const caja = el("listaActividad");
+    const bloque = el("seccionActividad");
+    if (!caja || !bloque) return;
+
+    if (!actividad) {
+      bloque.hidden = true;
+      return;
+    }
+
+    const nodoMes = el("mesActividad");
+    if (nodoMes) nodoMes.textContent = periodo ? `· ${periodo}` : "";
+
+    // Quien no usó la herramienta este mes no aparece — mismo criterio que el
+    // mapa, donde tampoco hay filas en cero.
+    const entradas = Object.entries(actividad)
+      .filter(([, datos]) => totalHoras(datos?.horas) > 0);
+
+    if (!entradas.length) {
+      bloque.hidden = false;
+      caja.innerHTML =
+        '<p class="admin__vacio">Todavía no hay extracciones este mes.</p>';
+      return;
+    }
+
+    // Las cuentas primero, por volumen; el grupo anónimo al final, como "Sin
+    // ubicación" en el mapa: no compite por el primer puesto con quien sí
+    // tiene identidad.
+    const orden = entradas.sort((a, b) => {
+      if (a[0] === ANONIMOS) return 1;
+      if (b[0] === ANONIMOS) return -1;
+      return totalHoras(b[1].horas) - totalHoras(a[1].horas);
+    });
+
+    bloque.hidden = false;
+    caja.innerHTML = `<ul class="admin__actividad">
+        ${orden.map(([clave, datos]) => tarjetaActividad(clave, datos)).join("")}
+      </ul>`;
+  }
+
   // --- Usuarios del sitio --------------------------------------------------
 
   /*
@@ -595,15 +843,24 @@
     // RLS— tiene que pintarse igual: `extra` se queda vacío y cada fila queda
     // visible pero sin editar, porque no se sabe qué tiene guardada.
     let extra = {};
+    /*
+      La actividad se guarda y se pinta DESPUÉS, no acá.
+
+      Sus tarjetas resuelven el nombre y el correo contra `perfilesPorUid`, que
+      todavía no se llenó a esta altura: pintarlas ahora las dejaría a todas
+      como "(cuenta eliminada)".
+    */
+    let actividad = null;
     try {
       const r = await apiFetch("/api/admin/perfiles");
       if (r.ok) {
         const cuerpo = await r.json();
         extra = cuerpo.perfiles || {};
-        // Del MISMO viaje: el endpoint devuelve los dos agregados, así que
-        // "Desde dónde se usa" no cuesta una consulta más. Se pinta acá y no
-        // en su propia carga por eso.
-        pintarRegiones(cuerpo.por_region || {}, cuerpo.periodo);
+        actividad = cuerpo.actividad || null;
+        // Del MISMO viaje: el endpoint devuelve los agregados, así que ni el
+        // mapa ni la actividad cuestan una consulta más. Se pintan acá y no en
+        // su propia carga por eso.
+        recordarRegiones(cuerpo);
       } else {
         console.warn("[admin] /api/admin/perfiles respondió", r.status);
         pintarRegiones(null);
@@ -625,6 +882,10 @@
         // El nombre sale de `perfiles`; todo lo demás, del endpoint.
         nombre: [p.nombre, p.apellidos].filter(Boolean).join(" ").trim()
           || "(sin nombre)",
+        // El rol lo usa la sección de actividad para su insignia. Sale de
+        // `perfiles` —la misma fuente que ya decide el acento de la tabla—, y
+        // no de un campo del endpoint: dos fuentes para el rol fue F23.
+        esAdmin: p.rol === "admin",
         conocido: Boolean(datos),
       });
     });
@@ -657,6 +918,10 @@
     lista.querySelectorAll(".admin__fila").forEach((fila) => {
       fila.dataset.firma = firma(fila);
     });
+
+    // Recién ahora: `perfilesPorUid` ya tiene el nombre y el correo con los que
+    // cada tarjeta resuelve su identidad.
+    pintarActividad(actividad, regionesEnCache.periodo);
   }
 
   /*
@@ -721,6 +986,7 @@
     // Antes de pintar: los listeners cuelgan del contenedor, que ya existe en
     // el markup, así que registrarlos primero no depende de que haya filas.
     conectarTabla();
+    conectarFiltroAdmins();
     cargarUsuariosDelSitio();
   }
 

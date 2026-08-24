@@ -153,14 +153,54 @@
           </h2>
           <p class="admin__ayuda">
             Estados desde los que se extrajo este mes, contando también a quien
-            no tiene cuenta. La ubicación es <strong>aproximada</strong>: se
+            no tiene sesión iniciada. La ubicación es <strong>aproximada</strong>: se
             deduce de la conexión y nunca guardamos la dirección IP. De buena
             parte de las visitas sólo se sabe el país, y ésas aparecen abajo
             como <strong>Sin ubicación</strong>.
           </p>
+          <!-- Nace OCULTA y la revela `admin.js` sólo si la respuesta trae el
+               agregado sin administradores. Ofrecerla siempre sería prometer un
+               filtro que el servidor todavía no calcula: se marcaría, no
+               cambiaría nada, y quien mire creería estar viendo el mapa sin
+               las pruebas de administración.
+
+               Y es VISIBLE a propósito, en vez de una exclusión silenciosa del
+               lado del servidor: un mapa que descarta filas sin decirlo es un
+               mapa que miente, y nadie puede saber cuántas se fueron.
+
+               Su límite, dicho de frente: excluye por ROL, y una fila anónima
+               no tiene `user_id`. Un administrador probando en incógnito sigue
+               contando, porque no hay con qué reconocerlo. -->
+          <label class="admin__filtro" id="filtroAdminsCaja" hidden>
+            <input class="admin__toggle" type="checkbox" id="filtroAdmins" checked>
+            Excluir a los administradores
+          </label>
           <div class="admin__regiones" id="listaRegiones" aria-live="polite">
             <p class="admin__vacio">Cargando…</p>
           </div>
+        </section>
+
+        <!-- Del MISMO viaje que las dos secciones de arriba. Nace oculta por la
+             misma razón que la casilla: sin el agregado `actividad` en la
+             respuesta, esto aparecería vacío o —peor— con un "todavía no hay
+             extracciones" que se lee como que nadie usó la herramienta.
+
+             El horario sale de `creado_en`, que `extractor_uso` ya guardaba
+             desde la migración 0030: no hace falta registrar nada nuevo para
+             contestar a qué hora se usa. -->
+        <section class="panel panel--spacious" id="seccionActividad" hidden>
+          <h2 class="courses__subtitle">
+            Quién lo usa y cuánto
+            <span class="admin__mes" id="mesActividad"></span>
+          </h2>
+          <p class="admin__ayuda">
+            Cuántas extracciones hizo cada cuenta este mes, y desde dónde. La
+            franja de abajo reparte ese total en las 24 horas del día, en hora
+            de México: cuanto más encendida, más extracciones en esa hora. Quien
+            no tiene sesión iniciada aparece agrupado al final,
+            <strong>sin identidad</strong> ni ubicación: eso ya se cuenta arriba.
+          </p>
+          <div class="admin__actividad-caja" id="listaActividad" aria-live="polite"></div>
         </section>
       </div>
     </div>

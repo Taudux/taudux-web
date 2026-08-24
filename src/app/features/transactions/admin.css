@@ -339,4 +339,146 @@
     padding-block-start: 0.75rem;
     border-block-start: 1px solid rgb(255 255 255 / 10%);
   }
+
+  /* El interruptor que saca a administración del mapa.
+   *
+   * Va en un `<label>` y no en un `<span>` suelto al lado del input: así el
+   * texto también alterna la casilla, que en una pantalla táctil es la
+   * diferencia entre un blanco de 18px y uno de toda la línea. */
+  .admin__filtro {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-block-end: 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* `.admin__toggle` trae `margin-block-start: 0.4rem` para alinearse con los
+     inputs numéricos de la tabla. Acá no hay inputs contra los que alinearse:
+     ese margen sólo empujaría la casilla por debajo de su propia etiqueta. */
+  .admin__filtro .admin__toggle {
+    margin-block-start: 0;
+  }
+
+  /* --- Quién lo usa y cuánto --------------------------------------------- */
+
+  .admin__actividad {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Tarjetas y no filas de tabla. Cada persona trae cuatro datos de formas
+     distintas —identidad, un conteo, un lugar y una franja de 24 celdas—, y
+     esa última no entra en una celda sin apretarla hasta volverla ilegible.
+     La tabla de arriba sí es tabla porque sus columnas SÍ se comparan entre
+     filas; acá lo que se compara es la franja, y para eso alcanza con que
+     todas arranquen en la misma vertical. */
+  .admin__actividad-fila {
+    position: relative;
+    background: var(--color-field);
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    padding: 0.9rem 1rem;
+  }
+
+  /* El MISMO tinte y la misma franja que `.admin__fila--ilimitado` en la tabla
+     de arriba: administración se reconoce igual en las dos secciones, o el
+     color deja de significar algo. */
+  .admin__actividad-fila--admin {
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+
+  .admin__actividad-fila--admin::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 3px;
+    background: var(--color-accent);
+    border-start-start-radius: var(--radius-field);
+    border-end-start-radius: var(--radius-field);
+  }
+
+  .admin__actividad-cabeza {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  /* `nowrap`: "10 este mes" partido en dos líneas empuja la cabecera y desalinea
+     la franja de esta tarjeta contra la de las demás. */
+  .admin__actividad-total {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .admin__insignia {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: var(--color-accent);
+    color: #04121c;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    vertical-align: 0.1em;
+  }
+
+  .admin__actividad-lugar {
+    margin: 0.5rem 0 0.55rem;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  /* El municipio, un tono más apagado que el estado: mismo criterio que las
+     barras, donde el detalle nunca compite con lo que lo contiene. */
+  .admin__actividad-muni {
+    color: var(--color-text-subtle);
+  }
+
+  /* Las 24 columnas son FIJAS, no las horas que tuvieron uso.
+   *
+   * Con `repeat(auto-fit, …)` una persona que sólo usa la herramienta de 9 a 11
+   * y otra que la usa de 19 a 21 pintarían tiras idénticas: tres celdas
+   * encendidas pegadas a la izquierda. La posición dentro del día ES el dato;
+   * reservando las 24 columnas, la celda 19 cae siempre en el mismo lugar. */
+  .admin__horas {
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 2px;
+  }
+
+  /* La intensidad se resuelve en CSS y no en JavaScript.
+   *
+   * `--peso` es 0-100 y sale del conteo de esa hora contra el máximo de esa
+   * persona. `color-mix` lo funde con el fondo de la pista, así que una hora
+   * sin uso no desaparece: queda como el surco vacío que da la referencia,
+   * igual que `.admin__barra-pista` hace con las barras. */
+  .admin__hora {
+    block-size: 1.4rem;
+    border-radius: 2px;
+    background: color-mix(in srgb,
+        var(--color-accent, #38bdf8) calc(var(--peso, 0) * 1%),
+        rgb(255 255 255 / 6%));
+  }
+
+  /* Cuatro anclas y no 24 rótulos: con un número bajo cada celda la tira se
+     vuelve ilegible a este tamaño, y para ubicar una hora alcanza con saber
+     dónde caen el amanecer, el mediodía y la tarde. */
+  .admin__horas-eje {
+    display: flex;
+    justify-content: space-between;
+    margin-block-start: 0.25rem;
+    color: var(--color-text-subtle);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+  }
 }
