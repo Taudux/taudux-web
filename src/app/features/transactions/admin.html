@@ -94,6 +94,51 @@
           </p>
         </header>
 
+        <!-- EL INTERRUPTOR VA ACÁ, ARRIBA DE TODO LO QUE AFECTA.
+
+             Vivía dentro de Distribución Geográfica y sólo limpiaba esa
+             sección; las otras dos seguían contando las pruebas de
+             administración mientras el control decía "excluir". Un control que
+             promete más de lo que hace es la misma clase de mentira que costó
+             el bug de 58 contra 7.
+
+             Gobierna los DOS gráficos, y por eso lleva la línea de alcance: que
+             la tabla quede afuera no se adivina mirando. Y queda afuera a
+             propósito — los gráficos MIDEN uso, la tabla ADMINISTRA cuentas.
+             Ocultar filas ahí te esconde tu propia fila y con ella el botón de
+             editar tus límites.
+
+             Eran tres hasta que "Quién lo usa y cuánto" se retiró el
+             2026-08-28.
+
+             Nace OCULTO y lo revela `admin.js` sólo cuando hay algo que
+             filtrar, igual que el resto de los controles de esta pantalla.
+
+             Y es VISIBLE a propósito, en vez de una exclusión silenciosa del
+             lado del servidor: un panel que descarta filas sin decirlo es un
+             panel que miente, y nadie puede saber cuántas se fueron.
+
+             Su límite, dicho de frente: excluye por ROL, y una fila anónima no
+             tiene `user_id`. Un administrador probando en incógnito sigue
+             contando, porque no hay con qué reconocerlo.
+
+             Es un `<button role="switch">` y no un checkbox disfrazado: no hay
+             un solo `appearance: none` en el repo, y así un lector de pantalla
+             lo anuncia como interruptor en vez de como casilla. -->
+        <div class="admin__filtro-global" id="filtroAdminsCaja" hidden>
+          <button type="button" class="admin__interruptor" id="filtroAdmins"
+                  role="switch" aria-checked="true"
+                  aria-describedby="filtroAdminsAlcance">
+            <span class="admin__interruptor-pista" aria-hidden="true">
+              <span class="admin__interruptor-perilla"></span>
+            </span>
+            Excluir a los administradores
+          </button>
+          <p class="admin__filtro-alcance" id="filtroAdminsAlcance">
+            Afecta a los dos gráficos. La tabla de cuentas no cambia.
+          </p>
+        </div>
+
         <!-- Ésta es la única sección que queda, y es la única cuyos datos eran
              ciertos. Las otras cuatro se fueron el 2026-08-20:
 
@@ -148,8 +193,9 @@
              baja de país, casi siempre datos móviles. -->
         <section class="panel panel--spacious">
           <h2 class="courses__subtitle">
-            Desde dónde se usa
+            Distribución Geográfica
             <span class="admin__mes" id="mesRegiones"></span>
+            <span class="admin__insignia" id="totalRegiones" hidden></span>
           </h2>
           <p class="admin__ayuda">
             Estados desde los que se extrajo este mes, contando también a quien
@@ -158,50 +204,74 @@
             parte de las visitas sólo se sabe el país, y ésas aparecen abajo
             como <strong>Sin ubicación</strong>.
           </p>
-          <!-- Nace OCULTA y la revela `admin.js` sólo si la respuesta trae el
-               agregado sin administradores. Ofrecerla siempre sería prometer un
-               filtro que el servidor todavía no calcula: se marcaría, no
-               cambiaría nada, y quien mire creería estar viendo el mapa sin
-               las pruebas de administración.
+          <!--
+            Los tres controles nacen OCULTOS y se revelan solos cuando hay algo
+            que controlar. Con los 2 estados de hoy, ordenar no cambiaría el
+            orden de nada y buscar no escondería ninguna fila.
 
-               Y es VISIBLE a propósito, en vez de una exclusión silenciosa del
-               lado del servidor: un mapa que descarta filas sin decirlo es un
-               mapa que miente, y nadie puede saber cuántas se fueron.
+            Ofrecer un control inerte es exactamente el error que la casilla de
+            arriba venía cometiendo por otra vía: se marcaba, y no pasaba nada.
+          -->
+          <div class="admin__controles">
+            <div class="admin__orden" id="ordenRegiones" role="group"
+                 aria-label="Ordenar los estados" hidden>
+              <button type="button" class="admin__chip admin__chip--activo"
+                      data-medida="total" aria-pressed="true">Total</button>
+              <button type="button" class="admin__chip"
+                      data-medida="cuenta" aria-pressed="false">Con sesión</button>
+              <button type="button" class="admin__chip"
+                      data-medida="anon" aria-pressed="false">Sin sesión</button>
+            </div>
+            <input class="field admin__buscador" type="search" id="buscarRegion"
+                   placeholder="Buscar estado…" aria-label="Buscar estado" hidden>
+          </div>
 
-               Su límite, dicho de frente: excluye por ROL, y una fila anónima
-               no tiene `user_id`. Un administrador probando en incógnito sigue
-               contando, porque no hay con qué reconocerlo. -->
-          <label class="admin__filtro" id="filtroAdminsCaja" hidden>
-            <input class="admin__toggle" type="checkbox" id="filtroAdmins" checked>
-            Excluir a los administradores
-          </label>
           <div class="admin__regiones" id="listaRegiones" aria-live="polite">
             <p class="admin__vacio">Cargando…</p>
           </div>
         </section>
 
-        <!-- Del MISMO viaje que las dos secciones de arriba. Nace oculta por la
-             misma razón que la casilla: sin el agregado `actividad` en la
-             respuesta, esto aparecería vacío o —peor— con un "todavía no hay
-             extracciones" que se lee como que nadie usó la herramienta.
+        <!-- Una SERIE TEMPORAL, no un histograma. La distinción define lo que
+             muestra:
 
-             El horario sale de `creado_en`, que `extractor_uso` ya guardaba
-             desde la migración 0030: no hace falta registrar nada nuevo para
-             contestar a qué hora se usa. -->
-        <section class="panel panel--spacious" id="seccionActividad" hidden>
+               · La franja de 24 horas de las tarjetas contesta "¿a qué HORA se
+                 usa?" — su eje es fijo, siempre las mismas 24 celdas.
+               · Ésta contesta "¿el uso SUBE o BAJA?" — su eje CRECE: hoy son
+                 los días que llevamos midiendo, en un mes serán 30.
+
+             Nace oculta hasta que llegue `por_dia`, igual que todo lo demás de
+             esta pantalla. -->
+        <section class="panel panel--spacious" id="seccionSerie" hidden>
           <h2 class="courses__subtitle">
-            Quién lo usa y cuánto
-            <span class="admin__mes" id="mesActividad"></span>
+            Cuándo se usa
+            <span class="admin__mes" id="mesSerie"></span>
           </h2>
           <p class="admin__ayuda">
-            Cuántas extracciones hizo cada cuenta este mes, y desde dónde. La
-            franja de abajo reparte ese total en las 24 horas del día, en hora
-            de México: cuanto más encendida, más extracciones en esa hora. Quien
-            no tiene sesión iniciada aparece agrupado al final,
-            <strong>sin identidad</strong> ni ubicación: eso ya se cuenta arriba.
+            Extracciones por día, separando a quien tenía sesión iniciada de
+            quien no. Los días sin uso <strong>ocupan su lugar</strong> en el
+            eje: saltárselos convertiría una semana muerta en una línea que
+            sigue subiendo.
           </p>
-          <div class="admin__actividad-caja" id="listaActividad" aria-live="polite"></div>
+          <div class="admin__grafico" id="graficoSerie" aria-live="polite"></div>
         </section>
+
+        <!-- "Quién lo usa y cuánto" se retiró el 2026-08-28.
+
+             Mostraba, por persona, nombre + correo + estado + una franja de 24
+             horas con la hora de cada extracción. Esa franja por cuenta es un
+             PERFIL DE USO, y el aviso de privacidad del sitio dice textualmente
+             que no se crean perfiles — además de no mencionar el extractor ni
+             una sola vez.
+
+             Lo operativo que aportaba ya vivía en otro lado: cuántas hizo cada
+             cuenta está en la tabla de arriba, donde sirve para ajustar los
+             límites, y desde dónde está en Distribución Geográfica, en
+             agregado. Lo único propio era el horario POR PERSONA, que es
+             justamente lo que no debía verse.
+
+             Se fue entera y sin reemplazo. El agregado `actividad` TODAVÍA
+             viaja en la respuesta del servidor: sacarlo de ahí es lo que falta,
+             y cuesta un deploy. -->
       </div>
     </div>
   </main>

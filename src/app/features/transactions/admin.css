@@ -42,6 +42,21 @@
    * 8rem, así que no se mueve nada en pantalla. */
   .courses {
     padding-block-start: var(--espacio-bajo-navbar);
+
+    /* Las dos series del panel, con nombre propio y en UN solo lugar.
+     *
+     * Hasta el 2026-08-27 eran dos intensidades del mismo cian, con este
+     * argumento escrito acá abajo: "dos matices dicen 'dos partes de lo
+     * mismo'; dos colores dirían 'dos mediciones independientes'". El
+     * argumento es bueno en prosa y no sobrevivió a la pantalla — medido
+     * mirando la leyenda real, los dos tonos no se distinguían.
+     *
+     * Se paga un costo y conviene decirlo: el ámbar es `--color-warning`, que
+     * en el resto del sitio significa "cuidado". Por eso NO se usa ese token
+     * directamente sino uno con el nombre de lo que mide acá; el día que la
+     * paleta cambie, cambia en esta línea y no repartida por la hoja. */
+    --serie-con-sesion: var(--color-accent);
+    --serie-sin-sesion: var(--color-warning);
   }
 
   /* Va debajo del título de la lista y dice de dónde salen esos datos. No es
@@ -269,12 +284,41 @@
   /* Los dos niveles comparten la grilla: si el municipio tuviera columnas
      propias, sus barras arrancarían en otra vertical que las del estado y
      dejarían de ser comparables — que es lo único que hace útil una barra. */
+  /* Cuatro columnas fijas —chevron, nombre, barra, número— y el ancho del
+     nombre es una medida CONCRETA y no `max-content`, porque los municipios
+     viven en una lista anidada: dos grillas distintas resuelven `max-content`
+     por separado y sus barras arrancarían en verticales que además cambian con
+     los datos. Con un ancho fijo, las dos columnas miden lo mismo siempre y la
+     única diferencia que queda es la sangría deliberada de la lista anidada —
+     que es la que dice cuál cuelga de cuál. */
   .admin__region,
   .admin__municipio {
     display: grid;
-    grid-template-columns: minmax(6rem, max-content) 1fr auto;
+    grid-template-columns: 0.9rem 11rem 1fr 2.75rem auto;
     align-items: center;
     gap: 0.75rem;
+  }
+
+  /* Con una sola serie a la vista no hay par que poner, y la columna se va en
+     vez de quedarse vacía: dejarla correría la barra y el número a la derecha
+     un espacio que nada ocupa. */
+  .admin__regiones--una-serie .admin__region,
+  .admin__regiones--una-serie .admin__municipio {
+    grid-template-columns: 0.9rem 11rem 1fr auto;
+  }
+
+  /* En pantalla angosta el nombre cede antes que la barra: una barra de dos
+     píxeles no se compara con nada, un nombre en dos líneas se lee igual. */
+  @media (max-width: 40rem) {
+    .admin__region,
+    .admin__municipio {
+      grid-template-columns: 0.9rem 6.5rem 1fr 2.75rem auto;
+    }
+
+    .admin__regiones--una-serie .admin__region,
+    .admin__regiones--una-serie .admin__municipio {
+      grid-template-columns: 0.9rem 6.5rem 1fr auto;
+    }
   }
 
   .admin__region-nombre {
@@ -332,6 +376,17 @@
     background: color-mix(in srgb, var(--color-accent, #38bdf8) 45%, transparent);
   }
 
+  /* Cuando la pestaña elige UNA serie, la barra toma su color entero en vez de
+     apilar dos tramos. Van después de `--municipio` a propósito: con la misma
+     especificidad gana la última, y acá el color de la serie tiene que ganarle
+     al tono genérico del municipio.
+
+     "Sin ubicación" NO recibe estas clases —se filtra en el JS— porque su gris
+     apagado es lo que impide que se lea como el estado que más usa la
+     herramienta, y eso vale en los tres modos. */
+  .admin__barra--cuenta { background: var(--serie-con-sesion); }
+  .admin__barra--anon { background: var(--serie-sin-sesion); }
+
   /* La separa del bloque de estados reales: son dos cosas distintas y la línea
      lo dice sin necesidad de un rótulo. */
   .admin__regiones-lista--cola {
@@ -340,145 +395,407 @@
     border-block-start: 1px solid rgb(255 255 255 / 10%);
   }
 
-  /* El interruptor que saca a administración del mapa.
-   *
-   * Va en un `<label>` y no en un `<span>` suelto al lado del input: así el
-   * texto también alterna la casilla, que en una pantalla táctil es la
-   * diferencia entre un blanco de 18px y uno de toda la línea. */
-  .admin__filtro {
+  /* --- El interruptor de administración (global, 2026-08-27) ------------- */
+
+  /* Vive a nivel PÁGINA, arriba de las tres secciones que gobierna, y por eso
+   * se separa del primer panel con una línea: sin ella se leería como parte de
+   * la tabla de cuentas, que es justamente la sección a la que NO afecta. */
+  .admin__filtro-global {
+    margin-block-end: 1.75rem;
+    padding-block-end: 1.25rem;
+    border-block-end: 1px solid rgb(255 255 255 / 10%);
+  }
+
+  /* Un `<button role="switch">` y no un checkbox disfrazado: no hay un solo
+   * `appearance: none` en el repo, y así un lector de pantalla lo anuncia como
+   * interruptor. El texto va DENTRO del botón, así que el blanco de clic es
+   * toda la etiqueta y no un cuadradito de 18px — en pantalla táctil, esa es
+   * la diferencia entre acertarle y no. */
+  .admin__interruptor {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-block-end: 1rem;
-    color: var(--color-text-muted);
-    font-size: 0.85rem;
+    gap: 0.65rem;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
     cursor: pointer;
-    user-select: none;
   }
 
-  /* `.admin__toggle` trae `margin-block-start: 0.4rem` para alinearse con los
-     inputs numéricos de la tabla. Acá no hay inputs contra los que alinearse:
-     ese margen sólo empujaría la casilla por debajo de su propia etiqueta. */
-  .admin__filtro .admin__toggle {
-    margin-block-start: 0;
+  .admin__interruptor:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    border-radius: var(--radius-field);
   }
 
-  /* --- Quién lo usa y cuánto --------------------------------------------- */
+  .admin__interruptor-pista {
+    position: relative;
+    display: block;
+    flex-shrink: 0;
+    inline-size: 2.6rem;
+    block-size: 1.45rem;
+    border-radius: var(--radius-pill);
+    background: rgb(255 255 255 / 12%);
+    transition: background var(--transition-fast);
+  }
 
-  .admin__actividad {
-    display: grid;
-    gap: 0.75rem;
-    margin: 0;
+  /* Encendido = excluyendo administración, que es el estado por defecto. Toma
+   * el acento del sitio y no un verde propio: el panel ya tiene dos colores con
+   * significado —cian "con sesión", ámbar "sin sesión"— y un tercero sin dato
+   * detrás compite con ellos sin decir nada. */
+  .admin__interruptor[aria-checked="true"] .admin__interruptor-pista {
+    background: var(--color-accent);
+  }
+
+  /* La perilla se mueve; NO se usa `left` porque animar una propiedad de
+   * layout obliga al navegador a recalcular posiciones en cada cuadro.
+   * `transform` va en el compositor. */
+  .admin__interruptor-perilla {
+    position: absolute;
+    inset-block-start: 0.175rem;
+    inset-inline-start: 0.175rem;
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    border-radius: 50%;
+    background: var(--color-text);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+    transition: transform var(--transition-fast);
+  }
+
+  .admin__interruptor[aria-checked="true"] .admin__interruptor-perilla {
+    transform: translateX(1.15rem);
+    background: var(--color-background);
+  }
+
+  /* La línea de alcance NO es decorativa: el interruptor gobierna tres
+   * secciones de cuatro, y que la tabla de cuentas quede afuera no se deduce
+   * mirando. Sin esto, encenderlo y ver la tabla intacta se lee como que el
+   * control está roto. */
+  .admin__filtro-alcance {
+    margin: 0.35rem 0 0 3.25rem;
+    color: var(--color-text-subtle);
+    font-size: 0.78rem;
+  }
+
+  /* El aviso de la sección que NO pudo cumplir el filtro.
+   *
+   * Ámbar como la serie "sin sesión" sería confundirlo con un dato; va en el
+   * gris apagado de las notas, con una barra que lo separa del gráfico. Y
+   * desaparece solo el día que el servidor mande el agregado que le falta. */
+  .admin__nota-sin-filtrar {
+    margin-block-start: 0.75rem;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 2px solid var(--serie-sin-sesion);
+    color: var(--color-text-subtle);
+    font-size: 0.78rem;
+  }
+
+  /* --- Columnas apiladas y serie temporal (2026-08-25) ------------------- */
+
+  /* La leyenda es obligatoria, no decorativa: sin ella los dos colores de una
+     columna apilada son adivinanza. Y el texto acompaña al color — quien no
+     distingue esos dos tonos igual lee cuál es cuál. */
+  .admin__leyenda {
+    display: flex;
+    gap: 1.25rem;
+    margin: 0 0 1rem;
     padding: 0;
     list-style: none;
-  }
-
-  /* Tarjetas y no filas de tabla. Cada persona trae cuatro datos de formas
-     distintas —identidad, un conteo, un lugar y una franja de 24 celdas—, y
-     esa última no entra en una celda sin apretarla hasta volverla ilegible.
-     La tabla de arriba sí es tabla porque sus columnas SÍ se comparan entre
-     filas; acá lo que se compara es la franja, y para eso alcanza con que
-     todas arranquen en la misma vertical. */
-  .admin__actividad-fila {
-    position: relative;
-    background: var(--color-field);
-    border: var(--border-subtle);
-    border-radius: var(--radius-field);
-    padding: 0.9rem 1rem;
-  }
-
-  /* El MISMO tinte y la misma franja que `.admin__fila--ilimitado` en la tabla
-     de arriba: administración se reconoce igual en las dos secciones, o el
-     color deja de significar algo. */
-  .admin__actividad-fila--admin {
-    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
-  }
-
-  .admin__actividad-fila--admin::before {
-    content: "";
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-    inline-size: 3px;
-    background: var(--color-accent);
-    border-start-start-radius: var(--radius-field);
-    border-end-start-radius: var(--radius-field);
-  }
-
-  .admin__actividad-cabeza {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  /* `nowrap`: "10 este mes" partido en dos líneas empuja la cabecera y desalinea
-     la franja de esta tarjeta contra la de las demás. */
-  .admin__actividad-total {
     color: var(--color-text-muted);
     font-size: 0.8rem;
-    white-space: nowrap;
   }
 
+  .admin__leyenda li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  /* La serie que la pestaña activa NO está mostrando. Se apaga en vez de
+     desaparecer: verla tachada dice "existe, no la estás viendo", y sacarla
+     dejaría una leyenda de un solo ítem que se lee como si esa fuera la única
+     serie que hay.
+
+     Dos indicios y no uno —opacidad y tachado—: con sólo opacidad, en una
+     pantalla mala o con poca vista, la diferencia no se nota. */
+  .admin__leyenda-item--apagado {
+    opacity: 0.4;
+    text-decoration: line-through;
+  }
+
+  .admin__leyenda-color {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    border-radius: 2px;
+  }
+
+  /* Dos colores, no dos intensidades del mismo — y el cambio se decidió
+     MIRANDO esta leyenda: a 0.75rem, el cian al 100% y el cian al 40% eran
+     el mismo cuadradito. Un indicio que no se distingue no es un indicio.
+     El texto sigue al lado, porque el color nunca alcanza solo. */
+  .admin__leyenda-color--cuenta { background: var(--serie-con-sesion); }
+  .admin__leyenda-color--anon { background: var(--serie-sin-sesion); }
+
+  /* --- Distribución Geográfica (2026-08-27) ------------------------------ */
+
+  /* La insignia del total, al lado del mes. Dice de cuántas extracciones habla
+     todo lo de abajo — y respeta el filtro de administración, así que cambia
+     cuando se marca la casilla. Que cambie ES la señal de que el filtro hace
+     algo: la versión anterior no movía un solo número. */
+  /* OJO al tocar esto: hasta el 2026-08-28 había DOS `.admin__insignia` en esta
+   * hoja —ésta y la de la insignia "Admin" de las tarjetas de actividad— y la
+   * de abajo ganaba propiedad por propiedad, porque venía después con la misma
+   * especificidad. Lo que se veía en pantalla era una MEZCLA de las dos.
+   *
+   * Al retirar la sección de actividad, esta regla quedó sola. Se le incorporó
+   * lo que de verdad estaba rindiendo, para que la insignia no cambie de
+   * aspecto por un borrado que no tenía nada que ver con ella. */
   .admin__insignia {
     display: inline-block;
+    margin-inline-start: 0.5rem;
     padding: 0.1rem 0.4rem;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--color-accent);
     color: #04121c;
+    font-family: var(--font-body);
     font-size: 0.6rem;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     vertical-align: 0.1em;
   }
 
-  .admin__actividad-lugar {
-    margin: 0.5rem 0 0.55rem;
+  /* Los controles se envuelven en pantallas chicas en vez de comprimir el
+     buscador hasta que no quepa una palabra. */
+  .admin__controles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-block-end: 1rem;
+  }
+
+  .admin__orden {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  /* Botones y no un `<select>`: los tres criterios caben a la vista y el que
+     está activo se lee sin abrir nada. */
+  .admin__chip {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding: 0.3rem 0.8rem;
+    background: transparent;
     color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  .admin__chip:hover {
+    color: var(--color-text);
+    border-color: var(--serie-con-sesion);
+  }
+
+  /* El activo se marca por DOS cosas —color y borde—, no sólo por color: con
+     un único indicio, quien no distinga bien los tonos no sabe cuál está
+     puesto, y el orden de la lista quedaría inexplicado. */
+  .admin__chip--activo {
+    border-color: var(--serie-con-sesion);
+    color: var(--serie-con-sesion);
+  }
+
+  .admin__buscador {
+    flex: 1 1 12rem;
+    max-inline-size: 18rem;
     font-size: 0.8rem;
   }
 
-  /* El municipio, un tono más apagado que el estado: mismo criterio que las
-     barras, donde el detalle nunca compite con lo que lo contiene. */
-  .admin__actividad-muni {
+  .admin__region-bloque {
+    display: block;
+  }
+
+  /* La fila es un `<button>`: abre y cierra sus municipios, así que tiene que
+     alcanzarse con el teclado y anunciarse como control. Un `<div>` con
+     `onclick` no hace ninguna de las dos cosas. */
+  .admin__region {
+    inline-size: 100%;
+    border: 0;
+    padding: 0.35rem 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  /* "Sin ubicación" no abre nada —no tiene municipios que mostrar—, así que no
+     es un botón ni finge serlo.
+
+     Y por eso mismo no tiene chevron: su texto salta a la segunda columna, la
+     misma que ocupan los nombres de los estados. Sin esto caía en la columna
+     de 0.9rem reservada al chevron y la fila se apilaba en tres renglones. */
+  .admin__region--plana {
+    cursor: default;
+  }
+
+  .admin__region--plana .admin__region-nombre {
+    grid-column: 2;
+  }
+
+  .admin__region:hover .admin__region-nombre {
+    color: var(--serie-con-sesion);
+  }
+
+  .admin__region:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-field);
+  }
+
+  /* Rota al abrirse. `aria-expanded` es lo que lo dice de verdad; esto es la
+     versión visual de la misma información. */
+  .admin__chevron {
+    inline-size: 0.55rem;
+    block-size: 0.55rem;
+    border-inline-end: 2px solid var(--color-text-subtle);
+    border-block-start: 2px solid var(--color-text-subtle);
+    transform: rotate(45deg);
+    transition: transform var(--transition-fast);
+  }
+
+  .admin__region[aria-expanded="true"] .admin__chevron {
+    transform: rotate(135deg);
+  }
+
+  /* El par exacto: lo que la barra dice en proporción, dicho en números.
+   *
+   * Y CADA UNO EN EL COLOR DE SU SERIE, que es lo que lo vuelve útil: el par
+   * enseña solo cuál color es cuál, así que la leyenda deja de ser el requisito
+   * para leer la barra y pasa a ser respaldo.
+   *
+   * `tabular-nums` para que las columnas de números no bailen de fila en fila:
+   * con cifras de ancho variable, "1·4" y "52·4" desalinean el punto y la vista
+   * pierde la columna. */
+  .admin__region-par {
+    justify-self: end;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .admin__par-cuenta { color: var(--serie-con-sesion); }
+  .admin__par-anon { color: var(--serie-sin-sesion); }
+
+  /* El separador va apagado a propósito: es puntuación, no un tercer dato. */
+  .admin__par-punto {
+    margin-inline: 0.15rem;
     color: var(--color-text-subtle);
   }
 
-  /* Las 24 columnas son FIJAS, no las horas que tuvieron uso.
-   *
-   * Con `repeat(auto-fit, …)` una persona que sólo usa la herramienta de 9 a 11
-   * y otra que la usa de 19 a 21 pintarían tiras idénticas: tres celdas
-   * encendidas pegadas a la izquierda. La posición dentro del día ES el dato;
-   * reservando las 24 columnas, la celda 19 cae siempre en el mismo lugar. */
-  .admin__horas {
+  .admin__region-conteo {
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  /* Las dos series dentro de la misma barra. Horizontales, así que van en
+     fila; la suma de sus dos anchos es el 100% de su propia barra. */
+  .admin__barra {
+    display: flex;
+  }
+
+  .admin__barra-parte {
+    display: block;
+    block-size: 100%;
+  }
+
+  .admin__barra-parte--cuenta { background: var(--serie-con-sesion); }
+  .admin__barra-parte--anon { background: var(--serie-sin-sesion); }
+
+  /* El detalle de un estado. Sangrado y con una guía a la izquierda: la
+     jerarquía se lee por el estilo, sin necesidad de un rótulo que la explique.
+     Es lo que las columnas apiladas habían perdido. */
+  .admin__municipios {
     display: grid;
-    grid-template-columns: repeat(24, 1fr);
-    gap: 2px;
+    gap: 0.35rem;
+    margin: 0.25rem 0 0.6rem;
+    padding: 0 0 0 0.6rem;
+    border-inline-start: 1px solid rgb(255 255 255 / 10%);
+    list-style: none;
   }
 
-  /* La intensidad se resuelve en CSS y no en JavaScript.
-   *
-   * `--peso` es 0-100 y sale del conteo de esa hora contra el máximo de esa
-   * persona. `color-mix` lo funde con el fondo de la pista, así que una hora
-   * sin uso no desaparece: queda como el surco vacío que da la referencia,
-   * igual que `.admin__barra-pista` hace con las barras. */
-  .admin__hora {
-    block-size: 1.4rem;
-    border-radius: 2px;
-    background: color-mix(in srgb,
-        var(--color-accent, #38bdf8) calc(var(--peso, 0) * 1%),
-        rgb(255 255 255 / 6%));
+  /* Sin esto la lista nace ABIERTA, y el chevron miente diciendo que está
+     cerrada. El `display: none` del atributo `hidden` lo pone la hoja del
+     navegador, y CUALQUIER `display` de autor le gana por especificidad —
+     incluida la regla de acá arriba. */
+  .admin__municipios[hidden] {
+    display: none;
   }
 
-  /* Cuatro anclas y no 24 rótulos: con un número bajo cada celda la tira se
-     vuelve ilegible a este tamaño, y para ubicar una hora alcanza con saber
-     dónde caen el amanecer, el mediodía y la tarde. */
-  .admin__horas-eje {
+  /* El nombre del municipio salta a la segunda columna: la primera es la del
+     chevron, y dejarla vacía es lo que alinea su barra con la del estado que
+     tiene encima. Sin eso, las dos barras arrancarían en verticales distintas
+     y dejarían de ser comparables. */
+  .admin__municipio .admin__region-nombre {
+    grid-column: 2;
+  }
+
+  /* Ni "cargar más" ni paginado: despliega el resto ahí mismo. Con 18 estados
+     no hay nada que traer del servidor — ya está todo en memoria, del mismo
+     viaje. */
+  .admin__mas {
+    inline-size: 100%;
+    margin-block-start: 0.75rem;
+    border: 0;
+    border-block-start: 1px solid rgb(255 255 255 / 10%);
+    padding: 0.6rem 0 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .admin__mas:hover {
+    color: var(--serie-con-sesion);
+  }
+  /* La serie temporal. `preserveAspectRatio="none"` en el SVG la estira a lo
+     ancho del panel; el alto lo fija esta regla. */
+  .admin__serie {
+    inline-size: 100%;
+    block-size: 10rem;
+    display: block;
+    overflow: visible;
+  }
+
+  /* `vector-effect` mantiene el grosor constante pese al estirado del viewBox:
+     sin él, la línea se deforma y se ve más gruesa en un eje que en el otro. */
+  .admin__serie-linea {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* Los MISMOS tokens que la sección geográfica, y no por prolijidad: las dos
+     secciones parten el uso en las mismas dos series y se leen en la misma
+     pantalla. Si cada una eligiera su paleta, el panel hablaría dos idiomas de
+     color y el ámbar significaría una cosa arriba y otra abajo. */
+  .admin__serie-linea--cuenta { stroke: var(--serie-con-sesion); }
+  .admin__serie-linea--anon { stroke: var(--serie-sin-sesion); }
+
+  .admin__serie-eje {
     display: flex;
     justify-content: space-between;
-    margin-block-start: 0.25rem;
+    margin-block-start: 0.35rem;
     color: var(--color-text-subtle);
-    font-size: 0.62rem;
-    letter-spacing: 0.06em;
+    font-size: 0.7rem;
   }
+
 }

@@ -558,7 +558,7 @@ test("its stylesheet keeps only the rules the profile list still uses", () => {
 });
 
 /* ---------------------------------------------------------------------------
- * "Desde dónde se usa" — las barras por estado.
+ * "Distribución Geográfica" — las filas por estado.
  *
  * El dato que manda sobre este diseño: medido contra la base GeoIP real, cerca
  * de la mitad de las IPs no baja de país. "Sin ubicación" no es un caso borde
@@ -579,6 +579,11 @@ test("the panel has a section for where the tool is used from", () => {
     /<div[^>]*id="listaRegiones"[^>]*aria-live="polite"/,
     "se llena por red después de cargar: sin aria-live, quien usa lector de " +
       "pantalla no se entera de que aparecieron datos"
+  );
+  assert.match(
+    pagina,
+    /Distribución Geográfica/,
+    "y la sección se llama por lo que muestra"
   );
 });
 
@@ -630,9 +635,12 @@ test("each state shows its municipalities grouped underneath", () => {
   /*
     Estado y municipio resuelven SIEMPRE juntos (medido: 6 de 10 con las dos,
     4 sin ninguna, nunca una sin la otra), así que todo estado a la vista
-    tiene detalle debajo. Se pintan agrupados y siempre visibles — sin clic:
-    lo que interesa es leer de un vistazo cuánto pesa el estado Y cómo se
-    reparte adentro.
+    tiene detalle debajo.
+
+    Desde el rediseño de 2026-08-27 ese detalle vive detrás de un chevron y no
+    a la vista: con una fila por estado, mostrar todos los municipios siempre
+    haría la lista ilegible en cuanto haya más de un puñado de estados. La
+    jerarquía sigue leyéndose — es lo que las columnas apiladas habían perdido.
   */
   const js = read(SCRIPT);
 
@@ -663,6 +671,14 @@ test("a state's total is summed from its municipalities, never sent apart", () =
     js,
     /Object\.values\([^)]*\)\s*\.reduce/,
     "el total del estado se calcula sumando sus municipios"
+  );
+
+  // Y lo mismo vale para CADA serie: un `{anon, cuenta}` de estado calculado
+  // aparte del de sus municipios son, otra vez, dos números para lo mismo.
+  assert.match(
+    js,
+    /acc\.anon \+|anon: acc\.anon/,
+    "las dos series del estado también se suman de sus municipios"
   );
 });
 
@@ -696,19 +712,19 @@ const seccion = (js, titulo) => {
   return fin === -1 ? resto : resto.slice(0, fin);
 };
 
-test("the location section offers a visible switch to leave admins out", () => {
+test("the panel offers a visible switch to leave admins out", () => {
   /*
     El filtro tenía que ser VISIBLE, no una exclusión silenciosa del servidor:
-    un mapa que descarta filas sin decirlo es un mapa que miente, y quien lo
+    un panel que descarta filas sin decirlo es un panel que miente, y quien lo
     mira no tiene forma de saber cuántas se fueron.
   */
   const html = sinComentariosHtml(read(PAGINA));
 
-  assert.match(html, /id="filtroAdmins"/, "falta la casilla del filtro");
+  assert.match(html, /id="filtroAdmins"/, "falta el interruptor del filtro");
   assert.match(
     html,
-    /id="filtroAdmins"[^>]*\schecked/,
-    "nace marcada: la lectura por defecto es la que no cuenta a quien prueba"
+    /id="filtroAdmins"[\s\S]{0,120}?aria-checked="true"/,
+    "nace encendido: la lectura por defecto es la que no cuenta a quien prueba"
   );
   assert.match(
     html,
@@ -730,7 +746,7 @@ test("an empty filtered map still offers the filter — {} is data, not absence"
     Distinguir "no vino el campo" de "vino vacío" exige mirar la ausencia, no
     la veracidad.
   */
-  const js = seccion(read(SCRIPT), "Desde dónde se usa");
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
 
   assert.doesNotMatch(
     js,
@@ -757,7 +773,7 @@ test("the filter is only offered when the server actually computed it", () => {
     "la casilla nace oculta y sólo se revela con el agregado filtrado"
   );
 
-  const js = seccion(read(SCRIPT), "Desde dónde se usa");
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
   assert.match(
     js,
     /por_region_sin_admins/,
@@ -790,23 +806,47 @@ test("toggling the admin filter costs no extra request", () => {
   );
 });
 
-test("the panel has a section for who uses it and when", () => {
-  const html = sinComentariosHtml(read(PAGINA));
+test("the panel no longer says WHO used it and WHEN", () => {
+  /*
+    "Quién lo usa y cuánto" se retiró el 2026-08-28, a pedido de Jorge:
+    *"pero aún veo quién lo hace y cuándo, no debería"*.
 
-  assert.match(html, /id="listaActividad"/, "falta el contenedor de actividad");
-  assert.match(
-    html,
-    /Quién lo usa y cuánto/,
-    "el título nombra lo que la sección responde"
-  );
+    Mostraba, por persona, nombre + correo + estado + una franja de 24 horas
+    con la hora de cada extracción. Esa franja por cuenta es un PERFIL DE USO, y
+    el aviso de privacidad del sitio dice textualmente que no se crean perfiles
+    — además de no mencionar el extractor ni una sola vez.
+
+    Lo que la sección aportaba de operativo ya vivía en otro lado:
+
+      · cuántas hizo cada cuenta → la tabla "Usuarios del sitio", donde sirve
+        para ajustar los límites;
+      · desde dónde → "Distribución Geográfica", en agregado.
+
+    Lo único propio era el horario por persona, y es justamente lo que no
+    debía verse. Se fue entera y sin reemplazo.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+  const js = read(SCRIPT);
+  const css = sinComentariosCss(read(HOJA));
+
+  ["seccionActividad", "listaActividad", "mesActividad"].forEach((id) => {
+    assert.doesNotMatch(html, new RegExp(`id="${id}"`), `#${id} se fue`);
+  });
+
+  assert.doesNotMatch(js, /function pintarActividad/,
+    "y su pintor con ella");
+  assert.doesNotMatch(js, /function tarjetaActividad/,
+    "y las tarjetas que identificaban a cada cuenta");
+  assert.doesNotMatch(css, /admin__actividad/,
+    "y sus reglas: una hoja que viste markup que no existe es deuda muerta");
 });
 
-test("neither section's copy claims 'sin cuenta' where it means 'sin sesión' (F47)", () => {
+test("the panel's copy claims 'sin sesión', never 'sin cuenta' (F47)", () => {
   /*
-    Las dos secciones cuentan extracciones sin token — incluidas las de
-    cuentas reales que no iniciaron sesión. "No tiene cuenta" mentiría sobre
-    esas filas; specs/authentication/spec.md define el actor como Anónimo
-    (sin Sesión), no como "sin Cuenta".
+    El panel cuenta extracciones sin token — incluidas las de cuentas reales
+    que no iniciaron sesión. "No tiene cuenta" mentiría sobre esas filas;
+    specs/authentication/spec.md define el actor como Anónimo (sin Sesión), no
+    como "sin Cuenta".
   */
   const html = sinComentariosHtml(read(PAGINA));
 
@@ -822,108 +862,696 @@ test("neither section's copy claims 'sin cuenta' where it means 'sin sesión' (F
   );
 });
 
-test("the activity section stays hidden until the server sends the data", () => {
-  /*
-    Misma regla que el filtro, y por el mismo motivo: sin `actividad` en la
-    respuesta, la sección aparecería vacía o —peor— con un "todavía no hay
-    extracciones" que se leería como que nadie usó la herramienta.
-  */
+/* --------------------------------------------------------------------------
+   Distribución Geográfica (2026-08-27): UNA sola vista.
+
+   Hasta hoy la sección tenía dos. `#listaRegiones` llevaba las barras por
+   estado, el filtro de administración y "Sin ubicación"; `#graficoMunicipios`
+   llevaba las columnas apiladas, que aportaban la partición en dos series. Se
+   excluían a mano con `hidden`.
+
+   Y esa duplicación MENTÍA en producción. Medido en Chrome el 2026-08-27, con
+   "Excluir a los administradores" MARCADA la pantalla decía 58 extracciones
+   cuando las reales sin administración eran 7. El filtro funcionaba perfecto
+   —alternaba 58 ↔ 7 sin un error en consola— sobre el contenedor que la otra
+   vista dejaba oculto.
+
+   Un bug que no falla: sólo miente. Ninguna suite lo atrapó, ningún log lo
+   registró. Una vista sola no puede volver a desincronizarse.
+   -------------------------------------------------------------------------- */
+
+test("the geographic section is one view, not two", () => {
   const html = sinComentariosHtml(read(PAGINA));
-  assert.match(
+
+  assert.match(html, /id="listaRegiones"/,
+    "el contenedor único sigue siendo éste");
+  assert.doesNotMatch(
     html,
-    /id="seccionActividad"[^>]*\shidden/,
-    "nace oculta y sólo se revela cuando hay datos que mostrar"
+    /id="graficoMunicipios"/,
+    "la segunda vista se retira: dos contenedores para el mismo dato es lo " +
+      "que dejó al filtro pintando donde nadie mira"
   );
 });
 
-test("the hour strip always has the day's 24 hours", () => {
+test("the admin filter repaints what is ON SCREEN, not a hidden container", () => {
   /*
-    Las 24 celdas son fijas. Pintar sólo las horas con uso convertiría la
-    franja en una lista de horas activas: dos personas con tiras iguales
-    podrían estar usando la herramienta a horas completamente distintas.
+    El defecto que originó este rediseño, blindado. `repintarRegiones` tiene
+    que alimentar al MISMO pintor que está a la vista.
   */
   const js = read(SCRIPT);
-  assert.match(js, /HORAS_DEL_DIA\s*=\s*24/, "las 24 horas son una constante");
+
+  assert.doesNotMatch(
+    js,
+    /pintarMunicipios/,
+    "el segundo pintor se va con su contenedor"
+  );
+  assert.match(
+    js,
+    /function repintarRegiones\(\)[\s\S]{0,600}?pintarRegiones\(/,
+    "el repintado del filtro llama al único pintor que existe"
+  );
+});
+
+test("the section reads the two-series aggregate, and survives without it", () => {
+  /*
+    Cloud Run puede estar sirviendo una versión anterior. Sin `por_municipio`
+    no hay series que pintar, pero los totales de `por_region` sí están: la
+    sección degrada a barras de un color en vez de quedarse vacía.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(js, /cuerpo\.por_municipio/,
+    "debe leer el agregado de dos series de la respuesta");
+
+  const dentro = seccion(js, "Distribución geográfica");
+  assert.match(dentro, /haySeries/,
+    "y distinguir explícitamente el caso en que no lo tiene");
+});
+
+test("admin rows are subtracted from the session series, never from anonymous", () => {
+  /*
+    El servidor NO manda `por_municipio_sin_admins`, y no hace falta: las filas
+    de administración son lo que sobra al restar el mapa filtrado del completo,
+    y TODAS tienen sesión —un admin siempre tiene `user_id`, verificado en
+    app.py:2846 y 2870—, así que salen del lado "con sesión".
+
+    Restarlas del lado anónimo inventaría anónimos negativos.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(
+    js,
+    /Math\.max\(0,[\s\S]{0,80}?cuenta/,
+    "la resta va contra la serie con sesión, y nunca baja de cero"
+  );
+  assert.doesNotMatch(
+    js,
+    /anon\s*-\s*deAdmins/,
+    "el conteo anónimo no se toca: ningún admin cae de ese lado"
+  );
+});
+
+test("each row is split into two series, and the legend names them", () => {
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  // Las dos series con nombre, no "serie 1" y "serie 2".
+  assert.match(js, /Sin sesión/, "una serie es quien no inició sesión");
+  assert.match(
+    js,
+    /Con sesión/,
+    "y la otra quien sí — 'Con cuenta' contradecía la regla F47 que el propio " +
+      "repo escribe en app.py: alguien registrado que no se logueó cae del " +
+      "lado anónimo, y la etiqueta lo negaba"
+  );
+  assert.match(js, /leyenda/i, "y una leyenda que las distinga por color");
+});
+
+test("choosing a series shows THAT series, not both", () => {
+  /*
+    Las pestañas reordenaban y nada más. Contra los datos reales —2 estados—
+    ordenar no movía una sola fila: tocar "Con sesión" no cambiaba nada en
+    pantalla, y un control inerte es lo que esta pantalla tiene escrito tres
+    veces que no se hace.
+
+    Ahora la pestaña elige QUÉ SE MIDE, y todo la sigue: la barra, el número de
+    la fila, la escala del ancho, el orden y la insignia.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(js, /vistaRegiones\.medida/, "la pestaña elige la medida");
+  assert.match(
+    js,
+    /fila\[medida\] \/ maximo/,
+    "el ancho sale de la medida activa, no siempre del total"
+  );
+  assert.match(
+    js,
+    /\.sort\([^)]*\) => b\[medida\] - a\[medida\]\)/,
+    "y el orden también, sin una segunda variable que pueda discrepar"
+  );
+  assert.match(
+    js,
+    /soloUna/,
+    "y hay un caso explícito para 'se está mirando una sola serie'"
+  );
+});
+
+test("a row with zero in the active series disappears", () => {
+  /*
+    Medido en producción: Corregidora tiene `0·1` — ninguna extracción con
+    sesión. Bajo "Con sesión" tiene que irse, no quedarse con una barra vacía
+    ocupando lugar y sugiriendo un uso que no hubo.
+
+    Es la misma regla de "nada en cero" que el código ya aplica a los
+    municipios; lo nuevo es que ahora depende de la medida activa.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(
+    js,
+    /f\[medida\] > 0/,
+    "las filas se filtran por la medida activa, no por el total"
+  );
+
+  /*
+    Y sus MUNICIPIOS también. Encontrado mirando la pantalla: los estados se
+    filtraban bien y Corregidora seguía apareciendo con un `0` adentro de
+    Querétaro, porque el detalle venía filtrado por el total desde
+    `filasDeRegiones` y nadie lo revisaba al pintar.
+  */
+  assert.match(
+    js,
+    /municipios[\s\S]{0,120}?m\[medida\] > 0/,
+    "el detalle de cada estado también se filtra por la medida activa"
+  );
+});
+
+test("the pair column shows up only when both series do", () => {
+  /*
+    Con una sola serie a la vista, el par sería el mismo número dos veces: a la
+    izquierda como par y a la derecha como total.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(
+    js,
+    /soloUna[\s\S]{0,120}?admin__par-cuenta|admin__par-cuenta[\s\S]{0,200}?soloUna/,
+    "el par depende de estar mirando las dos series"
+  );
 
   const css = sinComentariosCss(read(HOJA));
   assert.match(
     css,
-    /\.admin__horas\s*\{[^}]*repeat\(24,\s*1fr\)/,
-    "la grilla reserva las 24 columnas siempre"
+    /--una-serie[\s\S]{0,200}?grid-template-columns/,
+    "y la grilla pierde esa columna en vez de dejarla vacía"
   );
 });
 
-test("it draws the hour strip without pulling in a chart library", () => {
+test("the legend marks the series that is NOT being shown", () => {
   /*
-    El mismo criterio que las barras por estado: son rectángulos con una
-    intensidad. Una dependencia acá sería peso, un tercero y una superficie de
-    actualización a cambio de nada.
+    Una leyenda que afirma las dos series mientras la pantalla muestra una sola
+    miente en dos de los tres modos.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+  assert.match(js, /apagad/i, "la serie que no se muestra se marca como tal");
+
+  const css = sinComentariosCss(read(HOJA));
+  assert.match(
+    css,
+    /apagad[\s\S]{0,160}?opacity|apagad[\s\S]{0,160}?text-decoration/,
+    "y se distingue por algo más que el texto"
+  );
+});
+
+test("the badge and the footer do not repeat the same number", () => {
+  /*
+    Decían "7 EJECUCIONES" arriba y "7 extracciones" abajo: el mismo dato dos
+    veces y con dos palabras distintas, que es peor que repetirlo — invita a
+    creer que miden cosas diferentes.
+
+    Queda la insignia. El pie conserva sólo lo que ella no dice.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  /*
+    Se cuenta, no se prohíbe: este aserto distinguía el pie de la insignia POR
+    LA PALABRA —una decía "extracciones" y la otra "ejecuciones"— y dejó de
+    servir en cuanto las dos dijeron lo mismo, que era justamente el arreglo.
+
+    El invariante de verdad es que el total se enuncie UNA sola vez.
+  */
+  const veces = (js.match(/\$\{total\} \$\{total === 1 \? "extracci/g) || []).length;
+  assert.equal(veces, 1, "el total se dice una sola vez en toda la sección");
+
+  assert.match(
+    js,
+    /insignia\.textContent[\s\S]{0,140}?\$\{total\}/,
+    "y esa vez es la insignia del encabezado, no el pie"
+  );
+  assert.match(js, /sin ubicar/, "el pie conserva lo que la insignia no cuenta");
+});
+
+test("a series with no use says so, and leaves the tabs reachable", () => {
+  /*
+    Defecto introducido al hacer que las pestañas filtren, y encontrado MIRANDO:
+    con un mes de una sola extracción con sesión, tocar "Sin sesión" dejaba la
+    sección con la leyenda, una lista vacía y un aviso de "0 registradas". La
+    guarda de vacío miraba `filas` —que sí tenía datos— y no `conDato`, que es
+    lo que la medida activa deja.
+
+    Y hay una trampa peor detrás: `vaciar()` esconde los controles. Si esta
+    rama la usara, las pestañas desaparecerían y NO HABRÍA CÓMO VOLVER a Total.
+    Una serie sin uso no es "no hay datos": las otras dos siguen teniendo.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(js, /!conDato\.length/,
+    "hay un caso propio para 'esta serie no tuvo uso'");
+  assert.match(js, /Ninguna extracción/,
+    "y lo dice, en vez de dejar la lista en blanco");
+  assert.match(
+    js,
+    /!conDato\.length[\s\S]{0,500}?ofrecerControles\(0, haySeries\)/,
+    "y las pestañas se quedan, o el usuario queda encerrado en esa serie"
+  );
+});
+
+test("the panel counts 'extracciones', with one word and not two", () => {
+  /*
+    La insignia decía "7 EJECUCIONES" mientras el resto de la pantalla dice
+    extracciones: las tarjetas de actividad, el aviso de muestra, los mensajes
+    de vacío, el párrafo de "Cuándo se usa" y hasta el nombre de la tabla del
+    servidor (`extractor_uso`).
+
+    La palabra llegó del mockup y quedó siendo la única de su clase. Es la mitad
+    que faltaba del mismo defecto: en la pasada anterior se quitó el número
+    duplicado del pie y la palabra equivocada se quedó arriba.
+
+    EL ASERTO VA ACOTADO A LA LÍNEA DE LA INSIGNIA, no al archivo entero, porque
+    el comentario que documenta esta corrección cita la palabra vieja. Un
+    `doesNotMatch` global castigaría explicar bien el arreglo — el incentivo
+    exacto contra el que advierte el encabezado de este archivo.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(
+    js,
+    /insignia\.textContent[\s\S]{0,140}?extracci/,
+    "la insignia cuenta extracciones, la misma palabra que el resto del panel"
+  );
+  assert.doesNotMatch(
+    js,
+    /insignia\.textContent[\s\S]{0,140}?ejecuci/,
+    "dos palabras para lo mismo invitan a creer que miden cosas distintas"
+  );
+});
+
+test("municipalities are revealed by an accessible control", () => {
+  /*
+    Un div que se abre sin `aria-expanded` es invisible para quien navega con
+    lector de pantalla, y un `<div>` con onclick no se alcanza con el teclado.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(js, /aria-expanded/, "el control dice si está abierto o cerrado");
+  assert.match(js, /<button/, "y es un botón: se alcanza con el teclado");
+});
+
+test("the two counts sit in their own column, each in its series' colour", () => {
+  /*
+    El par exacto vivía en un segundo renglón bajo el nombre y duplicaba el
+    alto de CADA fila para repetir, en números, lo que la barra ya dice en
+    proporción. En su propia columna la fila baja a un renglón.
+
+    Y coloreado importa más de lo que parece: el par enseña por sí solo cuál
+    color es cuál, así que la leyenda deja de ser un requisito para entender la
+    barra y pasa a ser respaldo. Un gráfico que no se puede leer sin mirar
+    arriba y volver es un gráfico que se lee mal.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(js, /admin__par-cuenta/, "el número con sesión lleva su clase");
+  assert.match(js, /admin__par-anon/, "y el anónimo la suya");
+  assert.doesNotMatch(
+    js,
+    /admin__region-detalle/,
+    "y ya no cuelga de un segundo renglón bajo el nombre"
+  );
+
+  const css = sinComentariosCss(read(HOJA));
+  assert.match(
+    css,
+    /\.admin__par-cuenta\s*\{[^}]*--serie-con-sesion/,
+    "cada número toma el color de SU serie, no uno decorativo"
+  );
+  assert.match(
+    css,
+    /\.admin__par-anon\s*\{[^}]*--serie-sin-sesion/,
+    "y el otro el de la suya, o el par no enseñaría nada"
+  );
+});
+
+test("a collapsed state really hides its municipalities", () => {
+  /*
+    Encontrado MIRANDO la pantalla, no corriendo la suite: la lista nacía
+    abierta con el chevron diciendo que estaba cerrada.
+
+    El `display: none` del atributo `hidden` lo pone la hoja del navegador, y
+    cualquier `display` de autor le gana. `.admin__municipios` necesita
+    `display: grid` para alinear sus barras, así que tiene que devolver
+    explícitamente el `none` que le pisó.
   */
   const css = sinComentariosCss(read(HOJA));
-  assert.match(css, /--peso/, "la intensidad sale de una custom property");
-  assert.match(css, /color-mix\(/, "y se resuelve en CSS, no en JavaScript");
 
+  assert.match(
+    css,
+    /\.admin__municipios\[hidden\]\s*\{[^}]*display:\s*none/,
+    "un `display` de autor pisa al del atributo hidden: hay que reponerlo"
+  );
+});
+
+test("the controls stay hidden while there is nothing to control", () => {
+  /*
+    Hoy hay 2 estados. Ofrecer "ordenar", "buscar" y "ver los N restantes"
+    sobre dos filas es prometer una herramienta que no hace nada — que es
+    exactamente el error que la casilla de administración venía cometiendo.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="ordenRegiones"[^>]*\shidden/,
+    "las pestañas nacen ocultas");
+  assert.match(html, /id="buscarRegion"[^>]*\shidden/,
+    "el buscador nace oculto");
+
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+  assert.match(js, /CORTE_ESTADOS/,
+    "y el corte de la lista es una constante con nombre, no un número suelto");
+});
+
+test("the two series speak one language of colour across the panel", () => {
+  /*
+    Dos colores —cian con sesión, ámbar sin sesión— en vez de dos intensidades
+    del mismo cian. Medido en pantalla el 2026-08-27: en la leyenda real los
+    dos matices no se distinguían.
+
+    Y si la sección cambia de paleta pero la serie temporal no, la misma
+    pantalla queda hablando dos idiomas de color.
+  */
+  const css = sinComentariosCss(read(HOJA));
+
+  assert.match(css, /--serie-con-sesion/, "la serie con sesión tiene token propio");
+  assert.match(css, /--serie-sin-sesion/, "y la serie sin sesión también");
+  assert.match(
+    css,
+    /\.admin__serie-linea--anon\s*\{[^}]*--serie-sin-sesion/,
+    "la serie temporal adopta el mismo token que la sección geográfica"
+  );
+});
+
+test("bar widths are computed on the MAXIMUM, never on the total", () => {
+  /*
+    Heredado del mapa que reemplaza, y por la misma razón medida: con muchos
+    municipios, los porcentajes sobre el total dan columnas de dos píxeles que
+    no se comparan entre sí. Sobre el máximo, la mayor llena el alto y el
+    resto se lee contra ella.
+  */
+  /*
+    Hay DOS divisiones en juego y sólo una sería un error:
+
+      · la ALTURA de la columna → sobre el máximo. Dividirla por el total de
+        todas achataría las chicas hasta lo ilegible.
+      · la PROPORCIÓN dentro de la columna (cuánto es anónimo, cuánto cuenta)
+        → sobre el total DE ESA columna, que es lo correcto: las dos partes
+        tienen que sumar el 100% de su propia barra.
+
+    El primer aserto prohibía "dividir por total" a secas y castigaba la
+    segunda, que está bien. Ahora se piden las dos por separado.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(
+    js,
+    /const maximo = Math\.max\(/,
+    "la escala de ancho sale del máximo de las filas"
+  );
+  assert.match(
+    js,
+    /\/ maximo\) \* 100/,
+    "y el ancho se calcula contra ese máximo, no contra la suma de todas"
+  );
+  assert.match(
+    js,
+    /\/ fila\.total\) \* 100/,
+    "la proporción interna sí va sobre el total de su propia fila"
+  );
+});
+
+test("'Sin ubicación' stays visible, apart, and out of the ranking", () => {
+  /*
+    Cerca de la mitad de las IPs no baja de país (medido contra la base GeoIP
+    real). Descartarlas haría ver menos uso del que hubo; mezclarlas con los
+    municipios inventaría uno que no existe.
+
+    Y desde que la lista se corta en 5, hay un tercer error posible: dejarla
+    competir por el ranking empujaría fuera a un estado real. Va aparte, al
+    final, y no entra ni en el orden ni en el corte.
+  */
+  const js = seccion(read(SCRIPT), "Distribución geográfica");
+
+  assert.match(js, /sin_ubicacion/, "reconoce la clave del servidor");
+  assert.match(js, /Sin ubicación/, "con etiqueta legible");
+  assert.match(
+    js,
+    /!== SIN_UBICACION/,
+    "y queda fuera del orden y del corte, no compitiendo con los estados reales"
+  );
+
+  /*
+    Encontrado MIRANDO la pantalla: su fila no lleva chevron, así que el nombre
+    caía en la columna de 0.9rem reservada para él y la fila se apilaba en tres
+    renglones. Es la única fila de la lista con esa forma, y por eso es la
+    única que ningún otro test cubre.
+  */
+  const css = sinComentariosCss(read(HOJA));
+  assert.match(
+    css,
+    /\.admin__region--plana .admin__region-nombre\s*\{[^}]*grid-column:\s*2/,
+    "sin chevron, su nombre tiene que saltar a la columna de los nombres"
+  );
+});
+
+test("the panel has a time series, and it is NOT the hour histogram", () => {
+  /*
+    Son dos gráficos distintos y responden preguntas distintas:
+
+      · La franja de 24 horas (en las tarjetas) → ¿a qué HORA se usa?
+        Su eje es fijo: siempre las mismas 24 celdas.
+      · Esta serie → ¿el uso SUBE o BAJA? Su eje CRECE con el tiempo.
+
+    Se fija por test porque la confusión ya ocurrió al planificar.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="seccionSerie"/, "falta la sección de la serie");
+  assert.match(html, /id="graficoSerie"/, "falta su contenedor");
+  assert.match(
+    html,
+    /id="seccionSerie"[^>]*\shidden/,
+    "nace oculta hasta que el servidor mande por_dia"
+  );
+});
+
+test("days with no use keep their slot on the axis", () => {
+  /*
+    Saltarse los días vacíos convertiría una semana muerta en una línea que
+    sigue subiendo — exactamente la mentira que un gráfico de tendencia puede
+    contar sin que nadie lo note.
+
+    Mismo criterio que las 24 horas de la franja: la POSICIÓN en el eje es el
+    dato.
+  */
+  const js = read(SCRIPT);
+  const serie = seccion(js, "Cuándo se usa");
+
+  assert.match(js, /cuerpo\.por_dia/, "debe leer el agregado de días");
+  assert.match(serie, /<polyline/i,
+    "se dibuja con SVG inline, sin librería");
+
+  /*
+    El aserto que fija la propiedad: el rango se recorre día por día con un
+    cursor, en vez de iterar sólo las claves que el servidor mandó. El servidor
+    manda únicamente los días CON extracciones; sin este relleno, una semana
+    muerta desaparecería del eje y la línea seguiría subiendo.
+  */
+  assert.match(serie, /setUTCDate\(/,
+    "el eje se rellena día a día, no salteando los vacíos");
+  assert.match(serie, /porDia\[clave\] \|\| \{\}/,
+    "un día sin datos vale 0, no se omite");
+});
+
+test("neither new section pulls in a chart library", () => {
+  /*
+    No es preferencia: el CSP desplegado el 2026-08-23 sólo admite scripts de
+    `cdn.jsdelivr.net` y `googletagmanager.com`. Una librería exigiría tocar
+    `vercel.json` y volver a desplegar — y no hace falta: una columna es un
+    rectángulo con altura en porcentaje, y una línea es un `<polyline>`.
+  */
   assert.doesNotMatch(
     read(PAGINA),
-    /chart\.js|apexcharts|d3(?:\.min)?\.js|highcharts/i,
-    "ninguna librería de gráficos entra por esta sección"
+    /chart\.js|apexcharts|d3(?:\.min)?\.js|highcharts|echarts|plotly/i,
+    "ninguna librería de gráficos entra por estas secciones"
   );
 });
 
-test("activity rows get their name from the profile map, never the raw uid", () => {
+test("the panel warns when the sample is too small to read a trend", () => {
   /*
-    El endpoint agrupa por uuid; el correo y el nombre ya viven en el panel.
-    Pintar la clave cruda mostraría un identificador que no le dice nada a
-    nadie y que además es lo único que no debería salir a pantalla.
-  */
-  const js = seccion(read(SCRIPT), "Quién lo usa y cuánto");
+    Medido el 2026-08-25: 7 extracciones sin contar administración, y la tabla
+    se escribe desde el 21. Un gráfico sobre eso sugiere una tendencia que no
+    existe.
 
+    La nota no es cosmética: es la misma regla que ya le costó cuatro secciones
+    a esta pantalla — una pantalla que muestra datos falsos es peor que una
+    pantalla que no está.
+  */
+  const js = read(SCRIPT);
+
+  assert.match(js, /MUESTRA_MINIMA/, "debe haber un umbral con nombre");
   assert.match(
     js,
-    /perfilesPorUid\.get\(/,
-    "resuelve la identidad contra lo que el panel ya leyó"
+    /pocos datos|muestra pequeña|todavía hay pocas/i,
+    "y una nota legible cuando no se alcanza"
   );
 });
 
-test("the anonymous bucket is shown grouped and without identity", () => {
-  /*
-    Quien no tiene SESIÓN iniciada no tiene nombre ni correo que mostrar, y son
-    muchos: van en UNA fila agrupada. Que exista la fila importa — omitirla
-    haría ver menos uso del que hubo, el mismo error que "sin ubicación" ya
-    evita.
+/* ---------------------------------------------------------------------------
+ * El filtro de administración sube a control GLOBAL (2026-08-27).
+ *
+ * Vivía dentro de Distribución Geográfica y sólo limpiaba esa sección. Las
+ * otras dos seguían contando las pruebas de administración mientras el control
+ * decía "excluir" — la misma clase de mentira que costó el bug 58 ↔ 7.
+ *
+ * Tres de las cuatro secciones lo honran. La cuarta —"Usuarios del sitio"— NO,
+ * y es deliberado: los gráficos MIDEN uso, la tabla ADMINISTRA cuentas. Ocultar
+ * filas ahí te esconde tu propia fila y con ella el botón de editar tus
+ * límites.
+ * ------------------------------------------------------------------------ */
 
-    La etiqueta es "Sin sesión" y no "Sin cuenta" (F47,
-    specs/authentication/spec.md): esta fila mezcla a quien nunca se registró
-    CON quien tiene cuenta pero no inició sesión — "Sin cuenta" mentiría sobre
-    el segundo grupo.
-  */
-  const js = seccion(read(SCRIPT), "Quién lo usa y cuánto");
+test("the admin filter is a page-level control, not a section one", () => {
+  const html = sinComentariosHtml(read(PAGINA));
+  const contenido = html.slice(html.indexOf('id="adminContent"'));
 
-  assert.match(
-    js,
-    /ANONIMOS\s*=\s*"anonimos"/,
-    "reconoce la clave con la que el servidor agrupa a quien no tiene sesión iniciada"
+  const posControl = contenido.indexOf('id="filtroAdminsCaja"');
+  const posPrimeraSeccion = contenido.indexOf('<section class="panel');
+
+  assert.notEqual(posControl, -1, "el control tiene que existir");
+  assert.ok(
+    posControl < posPrimeraSeccion,
+    "va ARRIBA de todo lo que afecta, no dentro de una sección: un control " +
+      "que gobierna tres secciones no puede vivir dentro de una de ellas"
   );
-  assert.match(js, /Sin sesión/, "con etiqueta legible, no la clave cruda");
+});
+
+test("the switch announces itself as a switch, and reaches the keyboard", () => {
+  /*
+    No hay ni un `role="switch"` en el resto del repo, así que esto se
+    construye: los cinco checkboxes del sitio son nativos con `accent-color`.
+
+    Se hace con `<button>` y no con un checkbox disfrazado para no necesitar
+    `appearance: none` —que el repo no usa en ningún lado— y para que un lector
+    de pantalla lo anuncie como interruptor y no como casilla.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+  const boton = html.match(/<button[^>]*id="filtroAdmins"[\s\S]*?>/)?.[0] ?? "";
+
+  assert.notEqual(boton, "", "el interruptor tiene que ser un <button>");
+  assert.match(boton, /role="switch"/, "y anunciarse como interruptor");
+  assert.match(
+    boton,
+    /aria-checked="true"/,
+    "encendido de arranque: excluir administración es el estado por defecto"
+  );
+
   assert.doesNotMatch(
-    js,
-    /"Sin cuenta"/,
-    "la etiqueta vieja mentía sobre quien tiene cuenta y no inició sesión (F47)"
+    html,
+    /id="filtroAdmins"[^>]*type="checkbox"/,
+    "la casilla vieja se retira: dos controles para lo mismo se desincronizan"
+  );
+
+  const css = sinComentariosCss(read(HOJA));
+  assert.match(
+    css,
+    /\.admin__interruptor/,
+    "y NO se llama `.admin__switch`: ese nombre era el interruptor del alta " +
+      "de accesos borrada por no otorgar nada (F30), y un test afirma su ausencia"
   );
 });
 
-test("the anonymous row shows no location, only hours — the map already counts it", () => {
+test("one single place decides whether admins are being excluded", () => {
   /*
-    "Desde dónde se usa" ya cuenta a quien no tiene sesión iniciada por
-    estado. Repetir esos estados acá duplicaría el mapa; esta sección aporta
-    horario, no ubicación, así que la fila "Sin sesión" NO calcula lugar —
-    a diferencia de las cuentas con identidad, que sí lo muestran.
+    El estado se leía del DOM dentro de `filasDeRegiones`. Con tres consumidores,
+    tres lecturas sueltas es como se desincronizan las secciones — que es
+    exactamente el bug que este rediseño vino a cerrar.
   */
-  const js = seccion(read(SCRIPT), "Quién lo usa y cuánto");
+  const js = read(SCRIPT);
+  const lecturas = (js.match(/getAttribute\("aria-checked"\)/g) || []).length;
 
-  assert.match(
-    js,
-    /anonimo\s*\?\s*""\s*:\s*lugarDe\(/,
-    "la fila anónima suprime la ubicación; sólo las cuentas con identidad la calculan"
+  assert.equal(
+    lecturas,
+    1,
+    "un solo lector del interruptor; el resto pregunta por `excluyendoAdmins()`"
   );
+});
+
+test("flipping it repaints both charts, not one", () => {
+  /*
+    Eran tres hasta que "Quién lo usa y cuánto" se retiró el 2026-08-28. El
+    aserto se ajusta al alcance real: si mañana vuelve a haber una sección que
+    el interruptor deba gobernar y no se agrega acá, este test no la reclamará
+    — por eso también se revisa la línea de alcance que el control declara.
+  */
+  const js = read(SCRIPT);
+  const cuerpo = js.match(/function repintarTodo\(\)[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.notEqual(cuerpo, "", "falta el repintado global");
+  assert.match(cuerpo, /pintarRegiones\(/, "la geográfica");
+  assert.match(cuerpo, /pintarSerie\(/, "y la serie temporal");
+  assert.doesNotMatch(cuerpo, /pintarActividad\(/,
+    "la sección de actividad ya no existe");
+
+  const html = sinComentariosHtml(read(PAGINA));
+  assert.match(html, /Afecta a los dos gráficos/i,
+    "y el control declara el alcance que de verdad tiene");
+});
+
+test("the accounts table is NOT filtered — it is a registry, not a measurement", () => {
+  /*
+    Filtrarla escondería tu propia fila y con ella el botón de editar tus
+    límites, y nada en pantalla diría por qué desapareció.
+  */
+  const js = read(SCRIPT);
+  const armado = js.match(/const orden = \[\.\.\.perfiles\][\s\S]{0,400}/)?.[0] ?? "";
+
+  assert.notEqual(armado, "", "falta el armado de la tabla");
+  assert.doesNotMatch(
+    armado,
+    /excluyendoAdmins/,
+    "la tabla lista a todos, esté el interruptor donde esté"
+  );
+});
+
+test("the time series says so when it could NOT honour the filter", () => {
+  /*
+    `por_dia` colapsa el rol en `anon`/`cuenta` y NO es derivable: `actividad`
+    guarda la HORA del mes, no la fecha, así que restar daría el total correcto
+    pero habría que inventar cómo repartirlo entre días.
+
+    Hasta que el servidor mande `por_dia_sin_admins`, la sección lo DICE. Un
+    control que promete y una sección que no cumple, en silencio, es el bug que
+    este trabajo vino a cerrar.
+  */
+  const js = read(SCRIPT);
+  assert.match(js, /por_dia_sin_admins/, "consume el agregado filtrado");
+
+  const serie = seccion(js, "Cuándo se usa");
+  assert.match(
+    serie,
+    /admin__nota-sin-filtrar/,
+    "y cuando no vino, avisa en vez de callarse"
+  );
+  assert.match(
+    serie,
+    /cuenta las pruebas de administración/i,
+    "con una frase que se entienda, no un icono"
+  );
+});
+
+test("the control states what it governs and what it leaves alone", () => {
+  /*
+    Gobierna tres secciones de cuatro. Eso no se adivina mirando: sin la línea
+    de alcance, quien lo encienda esperaría que la tabla también cambie.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /La tabla de cuentas no cambia/i,
+    "el control dice a qué NO afecta, que es lo que nadie deduce");
 });

@@ -409,7 +409,101 @@
     }
   }
 
-  // --- Desde dónde se usa --------------------------------------------------
+  // --- El filtro de administración -----------------------------------------
+
+  /*
+    UN SOLO LUGAR DECIDE SI SE ESTÁ FILTRANDO.
+
+    El estado se leía del DOM adentro de la sección geográfica, que era la única
+    que lo consultaba. Ahora lo consultan tres, y tres lecturas sueltas del DOM
+    es exactamente como se desincronizan: la lección del bug de 58 contra 7, en
+    el que un control correcto alimentaba a un pintor que nadie veía.
+
+    Se lee `aria-checked` y no una variable propia porque el atributo ES el
+    estado: un lector de pantalla anuncia eso, y guardar una copia al lado abre
+    la puerta a que las dos digan cosas distintas.
+  */
+  function excluyendoAdmins() {
+    return el("filtroAdmins")?.getAttribute("aria-checked") === "true";
+  }
+
+  /*
+    Los agregados que las secciones filtrables necesitan para REpintarse.
+
+    Sin esto, alternar el interruptor obligaría a volver a pedir
+    `/api/admin/perfiles` — la tabla entera de perfiles otra vez, para redibujar
+    unos gráficos cuyos datos ya están en memoria. El mapa geográfico guarda los
+    suyos aparte, en `regionesEnCache`.
+
+    `porDiaSinAdmins` en `null` significa "este servidor no lo calcula", que es
+    distinto de "filtrado y no quedó nada". Por eso no arranca en `{}`.
+  */
+  const panelEnCache = {
+    porDia: null,
+    porDiaSinAdmins: null,
+    periodo: "",
+  };
+
+  /*
+    El interruptor se REVELA, no se pinta siempre. Mismo criterio que el resto
+    de los controles de esta pantalla: ofrecer uno inerte es prometer algo que
+    no pasa, y esta pantalla ya perdió cuatro secciones por prometer de más.
+  */
+  function ofrecerFiltroAdmins(hayAlgoQueFiltrar) {
+    const caja = el("filtroAdminsCaja");
+    if (caja) caja.hidden = !hayAlgoQueFiltrar;
+  }
+
+  /*
+    Las TRES secciones que el interruptor gobierna, repintadas juntas.
+
+    La tabla de cuentas NO está acá y es deliberado: los gráficos miden uso, la
+    tabla administra cuentas. Filtrarla escondería la fila de quien esté mirando
+    y con ella el botón de editar sus propios límites.
+
+    Eran TRES hasta el 2026-08-28: también estaba "Quién lo usa y cuánto", que
+    se retiró entera por mostrar un perfil de uso por persona.
+  */
+  function repintarTodo() {
+    pintarRegiones();
+    pintarSerie();
+  }
+
+  /*
+    Los agregados de las dos secciones que no son el mapa, del mismo viaje.
+
+    `por_dia_sin_admins` puede no venir —Cloud Run puede estar sirviendo una
+    versión anterior a este front— y ahí `null` significa "este servidor no lo
+    calcula". La serie lo distingue de "filtrado y no quedó nada" y avisa en
+    pantalla en vez de callarse.
+  */
+  function recordarPanel(cuerpo) {
+    /*
+      `cuerpo.actividad` se ignora a propósito. El servidor lo sigue mandando
+      —sacarlo de ahí cuesta un deploy y es lo que falta—, pero nada del front
+      lo lee desde que "Quién lo usa y cuánto" se retiró: guardarlo dejaría en
+      memoria del navegador un perfil por persona que ninguna pantalla usa.
+    */
+    panelEnCache.porDia = cuerpo.por_dia || null;
+
+    const filtrado = cuerpo.por_dia_sin_admins;
+    panelEnCache.porDiaSinAdmins = filtrado === undefined || filtrado === null
+      ? null
+      : filtrado;
+
+    panelEnCache.periodo = cuerpo.periodo || "";
+  }
+
+  function conectarFiltroAdmins() {
+    const boton = el("filtroAdmins");
+    if (!boton) return;
+    boton.addEventListener("click", () => {
+      boton.setAttribute("aria-checked", String(!excluyendoAdmins()));
+      repintarTodo();
+    });
+  }
+
+  // --- Distribución geográfica ---------------------------------------------
 
   /*
     La clave con la que el SERVIDOR agrupa las extracciones cuya IP no bajó de
@@ -420,128 +514,75 @@
   const SIN_UBICACION = "sin_ubicacion";
 
   /*
-    Barras horizontales por estado, ordenadas por volumen.
+    Cuántos estados se ven antes de "ver los N restantes". "Sin ubicación" no
+    entra en la cuenta: va aparte y siempre visible.
+  */
+  const CORTE_ESTADOS = 5;
+
+  /*
+    UNA SOLA VISTA, Y POR QUÉ IMPORTA.
+
+    Hasta el 2026-08-27 esta sección tenía DOS contenedores para el mismo dato:
+    las barras por estado y las columnas apiladas por municipio, que se
+    excluían a mano con `hidden`. Esa duplicación mentía en pantalla.
+
+    Medido en Chrome: con "Excluir a los administradores" MARCADA el panel
+    decía 58 extracciones cuando las reales sin administración eran 7. El
+    filtro funcionaba perfecto —alternaba 58 ↔ 7, sin un error en consola—
+    sobre el contenedor que la otra vista dejaba oculto. Un bug que no falla:
+    sólo miente, y por eso ninguna suite lo atrapó.
+
+    Ahora hay UN pintor y UN contenedor. No pueden desincronizarse.
 
     POR QUÉ NO HAY LIBRERÍA DE GRÁFICOS. Son rectángulos con un ancho en
     porcentaje: traer una dependencia para dibujarlos sería sumar peso, un
-    tercero y una superficie de actualización a cambio de nada. El día que
-    haga falta un eje de tiempo o interacción, se reconsidera.
+    tercero y una superficie de actualización a cambio de nada. Y el CSP
+    desplegado el 2026-08-23 sólo admite scripts de `cdn.jsdelivr.net` y
+    `googletagmanager.com`, así que exigiría además tocar `vercel.json`.
 
-    POR QUÉ "SIN UBICACIÓN" VA APARTE Y NO SE ESCONDE. Medido contra la base
-    GeoIP real, cerca de la mitad de las IPs no baja de país. Los dos errores
-    posibles son opuestos y los dos mienten: descartar esas filas hace ver
-    menos uso del que hubo, y mezclarlas con los estados inventa uno que no
-    existe. Van visibles, al final, y en gris apagado para que no compitan con
-    los estados reales.
+    POR QUÉ "SIN UBICACIÓN" VA APARTE. Medido contra la base GeoIP real, cerca
+    de la mitad de las IPs no baja de país. Los errores posibles son TRES y los
+    tres mienten: descartar esas filas hace ver menos uso del que hubo;
+    mezclarlas con los estados inventa uno que no existe; y dejarlas competir
+    por el corte de 5 empuja fuera a un estado real.
 
-    Y la proporción se calcula sobre el MÁXIMO, no sobre el total: con muchos
-    estados, los porcentajes sobre el total dan barras de dos píxeles que no
-    se comparan entre sí. Sobre el máximo, el mayor llena la fila y el resto
-    se lee contra él.
+    Y el ancho se calcula sobre el MÁXIMO, no sobre el total: con muchos
+    estados, los porcentajes sobre el total dan barras de dos píxeles que no se
+    comparan entre sí. Sobre el máximo, el mayor llena la fila y el resto se
+    lee contra él.
   */
-  function pintarRegiones(porRegion, periodo) {
-    const caja = el("listaRegiones");
-    if (!caja) return;
 
-    siExisteMes(periodo);
-
-    if (porRegion === null) {
-      // El endpoint falló. La tabla de arriba ya avisa por su lado; acá se
-      // dice que no se sabe, en vez de pintar un cero que se leería como
-      // "nadie usó la herramienta".
-      caja.innerHTML =
-        '<p class="admin__vacio">No se pudo leer desde dónde se usa.</p>';
-      return;
-    }
-
-    const entradas = Object.entries(porRegion);
-    if (!entradas.length) {
-      caja.innerHTML =
-        '<p class="admin__vacio">Todavía no hay extracciones este mes.</p>';
-      return;
-    }
-
+  /*
+    El estado de la vista vive acá y NO en el DOM, porque el markup se regenera
+    entero con `innerHTML` en cada repintado: leerlo del DOM lo perdería en
+    cuanto el filtro de administración vuelva a pintar.
+  */
+  const vistaRegiones = {
     /*
-      El total de un estado SE SUMA de sus municipios; el servidor no manda un
-      total aparte. Dos números para lo mismo pueden discrepar, y ésa es la
-      clase de bug que no falla: sólo miente. Ver `_uso_todos_remoto()`.
+      Qué se está midiendo: `total`, `cuenta` (con sesión) o `anon` (sin ella).
+
+      Son las MISMAS claves que trae cada fila, así que `fila[medida]` da el
+      valor activo sin ninguna tabla de traducción en el medio — y sin una
+      segunda variable que pueda discrepar de la primera.
+
+      Antes esto se llamaba `orden` y sólo reordenaba la lista. Contra los datos
+      reales —2 estados— reordenar no movía una sola fila: tocar "Con sesión" no
+      cambiaba nada, y un control inerte es lo que esta pantalla tiene escrito
+      tres veces que no se hace. Ahora la pestaña elige la medida y el orden
+      sale de ella, así que un solo control hace las dos cosas.
     */
-    const sumar = (municipios) =>
-      Object.values(municipios).reduce((suma, n) => suma + n, 0);
+    medida: "total",
+    busqueda: "",
+    abiertos: new Set(),
+    verTodo: false,
+  };
 
-    const totalDe = new Map(entradas.map(([estado, m]) => [estado, sumar(m)]));
-
-    const total = [...totalDe.values()].reduce((suma, n) => suma + n, 0);
-    const sinUbicar = totalDe.get(SIN_UBICACION) || 0;
-
-    // Los estados reales, de mayor a menor; "sin ubicación" sale de la lista y
-    // se agrega al final, para que no compita por el primer puesto.
-    const estados = entradas
-      .filter(([clave]) => clave !== SIN_UBICACION)
-      .sort((a, b) => totalDe.get(b[0]) - totalDe.get(a[0]));
-
-    // El máximo sale de los TOTALES de estado, no de los municipios sueltos:
-    // así la barra del estado y la de su municipio más grande se leen en la
-    // misma escala, que es lo que permite compararlas de un vistazo.
-    const maximo = Math.max(1, ...totalDe.values());
-
-    const barra = (etiqueta, cantidad, clases = "", nivel = "region") => `
-      <li class="admin__${nivel}">
-        <span class="admin__region-nombre">${escapar(etiqueta)}</span>
-        <span class="admin__barra-pista">
-          <span class="admin__barra ${clases}"
-                style="width: ${Math.round((cantidad / maximo) * 100)}%"></span>
-        </span>
-        <span class="admin__region-conteo">${cantidad}</span>
-      </li>`;
-
-    /*
-      Cada estado con sus municipios debajo, siempre visibles — sin clic.
-      Estado y municipio resuelven SIEMPRE juntos (medido), así que ningún
-      estado queda sin detalle.
-
-      Un municipio bajo la clave `SIN_UBICACION` sólo aparece si el estado se
-      supo y el municipio no: hoy no pasa, pero podría llegar de una base
-      GeoIP vieja. Se muestra como "Sin municipio" para no repetir la etiqueta
-      de la fila de abajo, que significa otra cosa.
-    */
-    const filas = estados.map(([estado, municipios]) => {
-      const detalle = Object.entries(municipios)
-        .sort((a, b) => b[1] - a[1])
-        .map(([municipio, n]) => barra(
-          municipio === SIN_UBICACION ? "Sin municipio" : municipio,
-          n, "admin__barra--municipio", "municipio"))
-        .join("");
-      return barra(estado, totalDe.get(estado)) + detalle;
-    }).join("");
-
-    const cola = sinUbicar
-      ? `<ul class="admin__regiones-lista admin__regiones-lista--cola">
-           ${barra("Sin ubicación", sinUbicar, "admin__barra--sin-ubicar")}
-         </ul>`
-      : "";
-
-    const porcentaje = total ? Math.round((sinUbicar / total) * 100) : 0;
-
-    caja.innerHTML = `
-      <ul class="admin__regiones-lista">${filas}</ul>
-      ${cola}
-      <p class="admin__consumo">
-        ${total} ${total === 1 ? "extracción" : "extracciones"}${sinUbicar
-          ? ` · ${sinUbicar} sin ubicar (${porcentaje}%)`
-          : ""}
-      </p>`;
-
-    // Los DOS niveles: quien usa lector de pantalla no puede "ver" el ancho de
-    // ninguna barra. Sin esto la sección entera es decorativa para esa persona.
-    caja.querySelectorAll(".admin__region, .admin__municipio").forEach((fila) => {
-      const nombre = fila.querySelector(".admin__region-nombre").textContent;
-      const conteo = fila.querySelector(".admin__region-conteo").textContent;
-      const pista = fila.querySelector(".admin__barra-pista");
-      pista.setAttribute("role", "img");
-      pista.setAttribute("aria-label", `${nombre}: ${conteo}`);
-    });
-  }
+  /*
+    Sin acentos y en minúsculas, para que "queretaro" encuentre "Querétaro".
+    `NFD` separa la letra de su tilde y el rango ̀-ͯ borra la tilde.
+  */
+  const plano = (texto) =>
+    String(texto).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
   function siExisteMes(periodo) {
     const nodo = el("mesRegiones");
@@ -549,40 +590,415 @@
   }
 
   /*
-    Los DOS agregados de región, del mismo viaje, guardados acá.
+    Los agregados de región, del mismo viaje, guardados acá.
 
     El filtro de administración alterna entre ellos, y esa alternancia no puede
-    costar una consulta: el servidor los calcula en el mismo recorrido y
-    volver a pedirlos traería de nuevo la tabla entera de perfiles para
-    redibujar unas barras que ya están en memoria.
+    costar una consulta: el servidor los calcula en el mismo recorrido y volver
+    a pedirlos traería de nuevo la tabla entera de perfiles para redibujar unas
+    barras que ya están en memoria.
 
     `sinAdmins` en `null` significa "este servidor no calcula el filtrado", que
     es distinto de "filtrado y no quedó nada". Por eso no se inicializa en `{}`.
   */
-  const regionesEnCache = { todos: null, sinAdmins: null, periodo: "" };
+  const regionesEnCache = {
+    todos: null,
+    sinAdmins: null,
+    porMunicipio: null,
+    periodo: "",
+  };
 
   /*
-    La casilla se REVELA, no se pinta siempre.
-
-    Cloud Run puede estar sirviendo una versión anterior a este front: si su
-    respuesta no trae el agregado filtrado, ofrecer el interruptor sería
-    prometer un filtro que nadie calcula. Se marcaría, no cambiaría nada, y
-    quien mire creería estar viendo el mapa sin las pruebas de administración.
+    Y los otros dos controles por el mismo criterio: no se ofrecen mientras no
+    haya nada que controlar. Con los 2 estados de hoy, ordenar no cambiaría el
+    orden de nada y buscar no escondería ninguna fila. Un control inerte es
+    exactamente lo que la casilla de administración venía siendo.
   */
-  function ofrecerFiltroAdmins(hayAgregadoFiltrado) {
-    const caja = el("filtroAdminsCaja");
-    if (caja) caja.hidden = !hayAgregadoFiltrado;
+  function ofrecerControles(cuantosEstados, haySeries) {
+    const medidas = el("ordenRegiones");
+    const buscador = el("buscarRegion");
+
+    // Las pestañas ya no ordenan: eligen la medida. Con UN solo estado siguen
+    // haciendo algo —cambian la barra y el número—, así que lo único que las
+    // vuelve inertes es que no haya dos series que elegir.
+    if (medidas) medidas.hidden = !haySeries;
+    if (buscador) buscador.hidden = cuantosEstados <= CORTE_ESTADOS;
+  }
+
+  /*
+    LAS FILAS, con sus dos series, a partir de los agregados en memoria.
+
+    De dónde sale cada número, que es la parte que no se puede improvisar:
+
+      · Las series (`anon` / `cuenta`) salen de `por_municipio`, el único
+        agregado que las trae partidas.
+
+      · El filtro de administración NO tiene agregado por series —el servidor
+        manda `por_region_sin_admins` con totales pelados—, así que se DERIVA:
+        la diferencia entre el mapa completo y el filtrado son exactamente las
+        filas de administración, y TODAS tienen `user_id` (app.py:2846 y 2870),
+        así que todas caen del lado "con sesión". Restarlas de `anon`
+        inventaría anónimos negativos.
+
+      · El total del estado —y el de cada serie— se SUMA de sus municipios. Un
+        contador aparte sería un segundo número para lo mismo, y dos números
+        para lo mismo pueden discrepar.
+
+    `Math.max(0, …)` cubre un Cloud Run viejo sirviendo agregados que no cuadran
+    entre sí: antes mostrar cero que un negativo.
+  */
+  function filasDeRegiones() {
+    const haySeries = regionesEnCache.porMunicipio !== null;
+    const todos = regionesEnCache.todos || {};
+    const fuente = haySeries ? regionesEnCache.porMunicipio : todos;
+
+    // `!== null` y no `Boolean(...)`: un mapa filtrado vacío es un dato —"sin
+    // administración no hubo nada"— y con `Boolean` el interruptor quedaría
+    // encendido pintando el mapa COMPLETO, que es mentir en pantalla.
+    const filtrar = excluyendoAdmins() && regionesEnCache.sinAdmins !== null;
+    const sinAdmins = filtrar ? regionesEnCache.sinAdmins : null;
+
+    const deAdmins = (estado, municipio) => (sinAdmins === null ? 0 : Math.max(
+      0,
+      (todos[estado]?.[municipio] ?? 0) - (sinAdmins[estado]?.[municipio] ?? 0)));
+
+    const celdaDe = (estado, municipio, cruda) => {
+      const quitar = deAdmins(estado, municipio);
+      if (!haySeries) {
+        return { anon: 0, cuenta: 0, total: Math.max(0, (cruda || 0) - quitar) };
+      }
+      const anon = cruda.anon || 0;
+      const cuenta = Math.max(0, (cruda.cuenta || 0) - quitar);
+      return { anon, cuenta, total: anon + cuenta };
+    };
+
+    const filas = [];
+    for (const [estado, municipios] of Object.entries(fuente)) {
+      // Nada en cero: un municipio sin uso no ocupa lugar.
+      const detalle = Object.entries(municipios)
+        .map(([municipio, cruda]) => ({
+          municipio, ...celdaDe(estado, municipio, cruda),
+        }))
+        .filter((m) => m.total > 0)
+        .sort((a, b) => b.total - a.total);
+
+      const suma = Object.values(detalle).reduce((acc, m) => ({
+        anon: acc.anon + m.anon,
+        cuenta: acc.cuenta + m.cuenta,
+        total: acc.total + m.total,
+      }), { anon: 0, cuenta: 0, total: 0 });
+
+      if (suma.total > 0) filas.push({ estado, ...suma, municipios: detalle });
+    }
+
+    return { filas, haySeries };
+  }
+
+  /*
+    El umbral por debajo del cual un gráfico miente más de lo que informa.
+
+    Medido el 2026-08-25: 7 extracciones sin contar administración, y la tabla
+    se escribe desde el 21. Dibujar una tendencia sobre eso sugiere una forma
+    que no existe — y esta pantalla ya perdió cuatro secciones por mostrar
+    datos que se creían ciertos.
+
+    No se ocultan los gráficos por debajo del umbral: se muestran CON la
+    advertencia. Esconder el dato sería el error opuesto.
+  */
+  const MUESTRA_MINIMA = 30;
+
+  function avisoDeMuestra(total, desde) {
+    if (total >= MUESTRA_MINIMA) return "";
+    return `<p class="admin__consumo">
+      Todavía hay pocas extracciones para leer una tendencia
+      (${total} ${total === 1 ? "registrada" : "registradas"}${desde
+        ? ` desde el ${escapar(desde)}` : ""}).
+    </p>`;
+  }
+
+  /*
+    La leyenda es obligatoria, no decorativa: sin ella los dos colores de una
+    barra apilada son adivinanza. Y el texto acompaña al color, para quien no
+    los distinga.
+
+    "Con sesión" y no "Con cuenta": alguien registrado que NO inició sesión cae
+    del lado anónimo —su fila no tiene `user_id` y el servidor no puede saber
+    quién es (F47, app.py:2694)—, así que la etiqueta vieja mentía sobre esas
+    filas.
+  */
+  const leyendaDe = (medida = "total") => {
+    // La serie que NO se está mostrando se marca apagada. Una leyenda que
+    // afirma las dos mientras la pantalla enseña una sola miente en dos de los
+    // tres modos.
+    const apagada = (serie) => (medida !== "total" && medida !== serie
+      ? " admin__leyenda-item--apagado" : "");
+    return `
+    <ul class="admin__leyenda">
+      <li class="${apagada("cuenta").trim()}"><span class="admin__leyenda-color admin__leyenda-color--cuenta"></span>Con sesión</li>
+      <li class="${apagada("anon").trim()}"><span class="admin__leyenda-color admin__leyenda-color--anon"></span>Sin sesión (IP)</li>
+    </ul>`;
+  };
+
+  function pintarRegiones() {
+    const caja = el("listaRegiones");
+    if (!caja) return;
+
+    siExisteMes(regionesEnCache.periodo);
+
+    const insignia = el("totalRegiones");
+    const vaciar = (mensaje) => {
+      caja.innerHTML = `<p class="admin__vacio">${mensaje}</p>`;
+      ofrecerControles(0);
+      if (insignia) insignia.hidden = true;
+    };
+
+    if (regionesEnCache.todos === null) {
+      vaciar("No se pudo leer desde dónde se usa.");
+      return;
+    }
+
+    const { filas, haySeries } = filasDeRegiones();
+    if (!filas.length) {
+      vaciar("Todavía no hay extracciones este mes.");
+      return;
+    }
+
+    /*
+      La medida activa gobierna TODO lo de abajo: qué filas se ven, cómo se
+      ordenan, de qué tamaño es la barra, qué número va a la derecha y qué dice
+      la insignia. Un solo valor, para que ninguna parte de la pantalla pueda
+      quedar hablando de otra cosa.
+    */
+    const medida = vistaRegiones.medida;
+    const soloUna = medida !== "total";
+
+    /*
+      Nada en cero EN LA MEDIDA ACTIVA. Medido en producción: Corregidora tiene
+      `0·1` —ninguna extracción con sesión—, así que bajo "Con sesión" se va en
+      vez de quedarse con una barra vacía sugiriendo un uso que no hubo.
+    */
+    const conDato = filas.filter((f) => f[medida] > 0);
+
+    /*
+      Una serie SIN USO no es "no hay datos": las otras dos siguen teniendo.
+
+      Por eso esta rama no llama a `vaciar()`, que esconde los controles: si las
+      pestañas desaparecieran acá, no habría cómo volver a Total y quien la
+      tocara quedaría encerrado en una sección en blanco.
+    */
+    if (!conDato.length) {
+      ofrecerControles(0, haySeries);
+      caja.classList.toggle("admin__regiones--una-serie", true);
+      if (insignia) {
+        insignia.hidden = false;
+        insignia.textContent = "0 extracciones";
+      }
+      caja.innerHTML = (haySeries ? leyendaDe(medida) : "")
+        + `<p class="admin__vacio">Ninguna extracción ${medida === "cuenta"
+            ? "con sesión iniciada" : "sin sesión"} este mes.</p>`;
+      return;
+    }
+
+    // "Sin ubicación" no compite: queda fuera del orden y fuera del corte.
+    const sinUbicar = conDato.find((f) => f.estado === SIN_UBICACION) || null;
+    const estados = conDato.filter((f) => f.estado !== SIN_UBICACION);
+
+    ofrecerControles(estados.length, haySeries);
+
+    const buscando = vistaRegiones.busqueda.trim();
+    const buscados = buscando
+      ? estados.filter((f) => plano(f.estado).includes(plano(buscando)))
+      : estados;
+
+    const ordenados = [...buscados].sort((a, b) => b[medida] - a[medida]);
+
+    // Buscando no se recorta: quien escribió un nombre quiere verlo, esté en
+    // el puesto 3 o en el 18.
+    const recorta = !vistaRegiones.verTodo && !buscando
+      && ordenados.length > CORTE_ESTADOS;
+    const visibles = recorta ? ordenados.slice(0, CORTE_ESTADOS) : ordenados;
+    const restantes = ordenados.length - visibles.length;
+
+    /*
+      El máximo sale de lo que se está MOSTRANDO, "Sin ubicación" incluida: si
+      quedara fuera del cálculo, su barra podría pasarse del 100% del ancho.
+    */
+    const maximo = Math.max(
+      1, ...visibles.map((f) => f[medida]), sinUbicar ? sinUbicar[medida] : 0);
+
+    const pista = (fila, clases = "") => {
+      const ancho = (fila[medida] / maximo) * 100;
+      const parte = (n) => (fila.total ? (n / fila.total) * 100 : 0);
+
+      // Con una sola serie a la vista, la barra toma su color entero. "Sin
+      // ubicación" NO: su gris apagado es lo que impide que se lea como el
+      // estado que más usa la herramienta, y eso vale en los tres modos.
+      const tono = soloUna && !clases.includes("sin-ubicar")
+        ? ` admin__barra--${medida}` : "";
+
+      return `
+        <span class="admin__barra-pista">
+          <span class="admin__barra ${clases}${tono}" style="width: ${ancho.toFixed(2)}%">
+            ${haySeries && !soloUna ? `
+            <span class="admin__barra-parte admin__barra-parte--cuenta"
+                  style="width: ${parte(fila.cuenta).toFixed(2)}%"></span>
+            <span class="admin__barra-parte admin__barra-parte--anon"
+                  style="width: ${parte(fila.anon).toFixed(2)}%"></span>` : ""}
+          </span>
+        </span>`;
+    };
+
+    /*
+      El par exacto, en su propia columna y CADA NÚMERO EN EL COLOR DE SU SERIE.
+
+      Vivía en un segundo renglón bajo el nombre, y ahí duplicaba el alto de
+      cada fila para repetir en números lo que la barra ya dice en proporción.
+
+      Coloreado gana algo que el subtítulo no daba: el par enseña por sí solo
+      cuál color es cuál, así que la leyenda deja de ser el requisito para
+      entender la barra y pasa a ser respaldo. Un gráfico que obliga a mirar
+      arriba y volver es un gráfico que se lee mal.
+    */
+    /*
+      La columna del par existe SÓLO cuando se miran las dos series. Con una
+      sola a la vista sería el mismo número dos veces: a la izquierda como par
+      y a la derecha como total de la fila.
+    */
+    const columnaPar = (fila) => (haySeries && !soloUna
+      ? `<span class="admin__region-par">`
+        + `<span class="admin__par-cuenta">${fila.cuenta}</span>`
+        + `<span class="admin__par-punto">·</span>`
+        + `<span class="admin__par-anon">${fila.anon}</span>`
+        + `</span>`
+      : "");
+
+    // El rótulo hablado nombra la MEDIDA activa. Sin esto, quien use lector de
+    // pantalla oiría "5" mientras la pantalla dice "1".
+    const leible = (nombre, fila) => {
+      if (!haySeries) return `${nombre}: ${fila.total}`;
+      if (medida === "cuenta") return `${nombre}: ${fila.cuenta} con sesión`;
+      if (medida === "anon") return `${nombre}: ${fila.anon} sin sesión`;
+      return `${nombre}: ${fila.total} — ${fila.cuenta} con sesión, ${fila.anon} sin sesión`;
+    };
+
+    const filaMunicipio = (m) => {
+      const nombre = m.municipio === SIN_UBICACION ? "Sin municipio" : m.municipio;
+      return `
+        <li class="admin__municipio" role="img"
+            aria-label="${escapar(leible(nombre, m))}">
+          <span class="admin__region-nombre">${escapar(nombre)}</span>
+          ${pista(m, "admin__barra--municipio")}
+          ${columnaPar(m)}
+          <span class="admin__region-conteo">${m[medida]}</span>
+        </li>`;
+    };
+
+    const filaEstado = (fila) => {
+      const abierta = vistaRegiones.abiertos.has(fila.estado);
+      const id = `municipiosDe-${plano(fila.estado).replace(/[^a-z0-9]+/g, "-")}`;
+      return `
+        <li class="admin__region-bloque">
+          <button type="button" class="admin__region"
+                  data-estado="${escapar(fila.estado)}"
+                  aria-expanded="${abierta}" aria-controls="${id}"
+                  aria-label="${escapar(leible(fila.estado, fila))}">
+            <span class="admin__chevron" aria-hidden="true"></span>
+            <span class="admin__region-nombre">${escapar(fila.estado)}</span>
+            ${pista(fila)}
+            ${columnaPar(fila)}
+            <span class="admin__region-conteo">${fila[medida]}</span>
+          </button>
+          <ul class="admin__municipios" id="${id}"${abierta ? "" : " hidden"}>
+            ${fila.municipios
+              .filter((m) => m[medida] > 0)
+              .sort((a, b) => b[medida] - a[medida])
+              .map(filaMunicipio).join("")}
+          </ul>
+        </li>`;
+    };
+
+    /*
+      "Sin ubicación" no lleva chevron: no tiene municipios que mostrar — es
+      justamente el grupo de las filas cuya IP no bajó de país. Un bloque de
+      detalle vacío debajo sería peor que nada.
+    */
+    const cola = sinUbicar
+      ? `<ul class="admin__regiones-lista admin__regiones-lista--cola">
+           <li class="admin__region admin__region--plana" role="img"
+               aria-label="${escapar(leible("Sin ubicación", sinUbicar))}">
+             <span class="admin__region-nombre">Sin ubicación</span>
+             ${pista(sinUbicar, "admin__barra--sin-ubicar")}
+             ${columnaPar(sinUbicar)}
+             <span class="admin__region-conteo">${sinUbicar[medida]}</span>
+           </li>
+         </ul>`
+      : "";
+
+    const expansor = restantes > 0
+      ? `<button type="button" class="admin__mas" id="verMasRegiones">
+           Ver los ${restantes} ${restantes === 1
+             ? "estado restante" : "estados restantes"}
+         </button>`
+      : (vistaRegiones.verTodo && ordenados.length > CORTE_ESTADOS
+        ? `<button type="button" class="admin__mas" id="verMasRegiones">Ver menos</button>`
+        : "");
+
+    const sinCoincidencias = buscando && !ordenados.length
+      ? `<p class="admin__vacio">Ningún estado coincide con “${escapar(buscando)}”.</p>`
+      : "";
+
+    const total = conDato.reduce((s, f) => s + f[medida], 0);
+    const sinUbicarTotal = sinUbicar ? sinUbicar[medida] : 0;
+    const porcentaje = total ? Math.round((sinUbicarTotal / total) * 100) : 0;
+
+    if (insignia) {
+      insignia.hidden = false;
+      insignia.textContent =
+        `${total} ${total === 1 ? "extracción" : "extracciones"}`;
+    }
+
+    // La grilla pierde la columna del par cuando no hay par que poner: dejarla
+    // vacía correría la barra y el número a la derecha sin razón visible.
+    caja.classList.toggle("admin__regiones--una-serie", soloUna || !haySeries);
+
+    /*
+      El pie NO repite el total: eso ya lo dice la insignia del encabezado.
+
+      El defecto tenía dos mitades y se corrigieron en dos pasadas. La primera:
+      el mismo número aparecía arriba y abajo. La segunda: arriba lo acompañaba
+      OTRA palabra —"ejecuciones"—, traída del mockup y única en toda la
+      pantalla, donde el resto dice extracciones.
+
+      Dos palabras para la misma cosa son peores que repetir el número, porque
+      invitan a creer que miden cosas distintas.
+
+      Acá queda sólo lo que la insignia NO cuenta.
+    */
+    caja.innerHTML =
+      (haySeries ? leyendaDe(medida) : "")
+      + `<ul class="admin__regiones-lista">${visibles.map(filaEstado).join("")}</ul>`
+      + sinCoincidencias
+      + cola
+      + expansor
+      + (sinUbicarTotal
+        ? `<p class="admin__consumo">
+             ${sinUbicarTotal} sin ubicar (${porcentaje}%)
+           </p>`
+        : "")
+      + avisoDeMuestra(total, regionesEnCache.periodo);
   }
 
   function repintarRegiones() {
-    // `!== null` y no `Boolean(...)`: un mapa filtrado vacío es un dato —"sin
-    // administración no hubo nada"— y con `Boolean` la casilla quedaría
-    // marcada pintando el mapa COMPLETO, que es mentir en pantalla.
-    const filtrar = Boolean(el("filtroAdmins")?.checked)
-      && regionesEnCache.sinAdmins !== null;
-    pintarRegiones(
-      filtrar ? regionesEnCache.sinAdmins : regionesEnCache.todos,
-      regionesEnCache.periodo);
+    // El filtro sólo elige QUÉ agregado se lee; el pintor es siempre el mismo,
+    // y es el que está en pantalla. Ésa es toda la corrección del bug 58 ↔ 7.
+    pintarRegiones();
+  }
+
+  function fallarRegiones() {
+    regionesEnCache.todos = null;
+    regionesEnCache.sinAdmins = null;
+    regionesEnCache.porMunicipio = null;
+    ofrecerFiltroAdmins(false);
+    repintarRegiones();
   }
 
   function recordarRegiones(cuerpo) {
@@ -604,196 +1020,190 @@
       ? null
       : filtrado;
 
+    // Mismo criterio para el agregado de dos series: sin él la sección degrada
+    // a barras de un solo color en vez de quedarse vacía.
+    const series = cuerpo.por_municipio;
+    regionesEnCache.porMunicipio = series === undefined || series === null
+      ? null
+      : series;
+
     regionesEnCache.periodo = cuerpo.periodo || "";
-    ofrecerFiltroAdmins(regionesEnCache.sinAdmins !== null);
+
+    /*
+      El interruptor se ofrece si AL MENOS UNO de los dos gráficos que gobierna
+      puede honrarlo, y el que no pueda lo dice en su propio cuerpo. Es lo que
+      permite un control global sin que ninguna sección mienta por omisión.
+    */
+    ofrecerFiltroAdmins(
+      regionesEnCache.sinAdmins !== null
+      || panelEnCache.porDiaSinAdmins !== null);
     repintarRegiones();
   }
 
-  function conectarFiltroAdmins() {
-    const caja = el("filtroAdmins");
-    if (caja) caja.addEventListener("change", repintarRegiones);
+  /*
+    Los eventos van DELEGADOS sobre los contenedores, no atados a cada fila: el
+    markup se regenera entero con `innerHTML` en cada repintado, y los
+    listeners atados a los nodos viejos se irían con ellos.
+  */
+  function conectarRegiones() {
+    const caja = el("listaRegiones");
+    if (caja) {
+      caja.addEventListener("click", (evento) => {
+        const abridor = evento.target.closest(".admin__region[data-estado]");
+        if (abridor) {
+          const estado = abridor.dataset.estado;
+          if (vistaRegiones.abiertos.has(estado)) {
+            vistaRegiones.abiertos.delete(estado);
+          } else {
+            vistaRegiones.abiertos.add(estado);
+          }
+          repintarRegiones();
+          return;
+        }
+        if (evento.target.closest("#verMasRegiones")) {
+          vistaRegiones.verTodo = !vistaRegiones.verTodo;
+          repintarRegiones();
+        }
+      });
+    }
+
+    const orden = el("ordenRegiones");
+    if (orden) {
+      orden.addEventListener("click", (evento) => {
+        const chip = evento.target.closest("[data-medida]");
+        if (!chip) return;
+        vistaRegiones.medida = chip.dataset.medida;
+        orden.querySelectorAll("[data-medida]").forEach((otro) => {
+          const activo = otro === chip;
+          otro.classList.toggle("admin__chip--activo", activo);
+          otro.setAttribute("aria-pressed", String(activo));
+        });
+        repintarRegiones();
+      });
+    }
+
+    const buscador = el("buscarRegion");
+    if (buscador) {
+      buscador.addEventListener("input", () => {
+        vistaRegiones.busqueda = buscador.value;
+        repintarRegiones();
+      });
+    }
   }
 
-  // --- Quién lo usa y cuánto -----------------------------------------------
+  // --- Cuándo se usa -------------------------------------------------------
 
   /*
-    Las 24 horas son FIJAS, y ésa es toda la idea de la franja.
+    La serie temporal. **No es un histograma**, y la diferencia decide qué se
+    dibuja:
 
-    Si se pintaran sólo las horas con uso, quien extrae de 9 a 11 y quien
-    extrae de 19 a 21 tendrían tiras idénticas: tres celdas encendidas pegadas
-    a la izquierda. La POSICIÓN dentro del día es el dato.
+      · La franja de 24 horas de las tarjetas contesta "¿a qué HORA se usa?".
+        Su eje es FIJO: siempre las mismas 24 celdas, acumulando todo el mes.
+      · Ésta contesta "¿el uso SUBE o BAJA?". Su eje CRECE con el tiempo.
+
+    Se dibuja con SVG inline y dos `<polyline>`, sin librería: el CSP desplegado
+    el 2026-08-23 sólo admite scripts de `cdn.jsdelivr.net` y
+    `googletagmanager.com`, así que traer una exigiría tocar `vercel.json` y
+    volver a desplegar. Y no hace falta.
   */
-  const HORAS_DEL_DIA = 24;
-
-  /*
-    La clave con la que el servidor agrupa a quien no tiene SESIÓN iniciada —no
-    "cuenta": una fila con cuenta que no se logueó cae acá también, y llamarla
-    "sin cuenta" mentiría sobre ella (F47). Mismo trato que `SIN_UBICACION`: el
-    nombre lo pone el servidor y acá se repite porque atraviesa JSON.
-  */
-  const ANONIMOS = "anonimos";
-
-  const totalHoras = (horas) => (Array.isArray(horas) ? horas : [])
-    .reduce((suma, n) => suma + (n || 0), 0);
-
-  /*
-    La franja de un día.
-
-    La intensidad la resuelve CSS (`--peso` + `color-mix`): acá sólo se calcula
-    la proporción contra el máximo DE ESA PERSONA. Contra un máximo global, a
-    quien extrae tres veces al mes se le vería la tira apagada entera y no se
-    podría leer a qué hora la usa, que es justamente lo que la franja contesta.
-
-    El `aria-label` no es un extra: quien usa lector de pantalla no puede "ver"
-    la intensidad de ninguna celda, y sin él la sección entera es decorativa
-    para esa persona — el mismo criterio que ya tienen las barras por estado.
-  */
-  function tiraHoraria(horas) {
-    const cuentas = Array.isArray(horas) ? horas : [];
-    const maximo = Math.max(1, ...cuentas.map((n) => n || 0));
-    const total = totalHoras(cuentas);
-
-    const celdas = Array.from({ length: HORAS_DEL_DIA }, (_, hora) => {
-      const cuenta = cuentas[hora] || 0;
-      const titulo = `${String(hora).padStart(2, "0")}:00 — ${cuenta} `
-        + (cuenta === 1 ? "extracción" : "extracciones");
-      return `<span class="admin__hora"
-                    style="--peso: ${Math.round((cuenta / maximo) * 100)}"
-                    title="${escapar(titulo)}"></span>`;
-    }).join("");
-
-    // El pico se busca sobre las cuentas reales, no sobre las 24 celdas: con
-    // todo en cero `indexOf` devolvería 0 y anunciaría "mayor actividad a las
-    // 00", que es una hora que nadie usó.
-    const pico = total ? cuentas.indexOf(Math.max(...cuentas.map((n) => n || 0))) : -1;
-    const resumen = pico === -1
-      ? "Sin actividad este mes"
-      : `Mayor actividad a las ${String(pico).padStart(2, "0")}:00`;
-
-    return `
-      <div class="admin__horas" role="img" aria-label="${escapar(resumen)}">
-        ${celdas}
-      </div>
-      <div class="admin__horas-eje">
-        <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
-      </div>`;
-  }
-
-  /*
-    De dónde extrajo esta persona.
-
-    Con un solo estado va el nombre pelado; con varios, cada uno con su conteo
-    — sin el número, dos estados se leerían como si pesaran igual.
-  */
-  function lugarDe(regiones) {
-    const entradas = Object.entries(regiones || {})
-      .sort((a, b) => b[1] - a[1]);
-    if (!entradas.length) return "";
-
-    const solo = entradas.length === 1;
-    return entradas
-      .map(([estado, n]) => {
-        const nombre = estado === SIN_UBICACION ? "Sin ubicación" : estado;
-        return solo ? nombre : `${nombre} ${n}`;
-      })
-      .join(" · ");
-  }
-
-  /*
-    Una tarjeta.
-
-    La identidad NO viene del endpoint de actividad: el agregado llega por uuid
-    y el nombre y el correo ya viven en `perfilesPorUid`, leídos al pintar la
-    tabla de arriba. Pintar la clave cruda mostraría un identificador que no le
-    dice nada a nadie y que es, además, lo único que no debería salir a
-    pantalla.
-
-    Un uuid que no esté en el mapa es una cuenta que se dio de baja después de
-    extraer. Se muestra como tal en vez de omitirla: borrar la fila haría ver
-    menos uso del que hubo, el mismo error que "Sin ubicación" ya evita.
-  */
-  function tarjetaActividad(clave, datos) {
-    const anonimo = clave === ANONIMOS;
-    const perfil = anonimo ? null : perfilesPorUid.get(clave);
-    const total = totalHoras(datos.horas);
-
-    const nombre = anonimo
-      ? "Sin sesión"
-      : (perfil?.nombre || "(cuenta eliminada)");
-    const meta = anonimo
-      ? "identidad anónima, agrupada"
-      : (perfil?.correo || "—");
-    const esAdmin = Boolean(perfil?.esAdmin);
-    // La fila anónima NO calcula ubicación: "Desde dónde se usa" ya la cuenta
-    // por estado, y repetirla acá duplicaría esa sección en vez de aportar lo
-    // que ésta ofrece — identidad y horario.
-    const lugar = anonimo ? "" : lugarDe(datos.regiones);
-
-    return `
-      <li class="admin__actividad-fila${esAdmin ? " admin__actividad-fila--admin" : ""}">
-        <div class="admin__actividad-cabeza">
-          <div class="admin__quien">
-            <span class="admin__usuario">${escapar(nombre)}${esAdmin
-              ? ' <span class="admin__insignia">Admin</span>' : ""}</span>
-            <span class="admin__meta">${escapar(meta)}</span>
-          </div>
-          <span class="admin__actividad-total">
-            ${total} este mes
-          </span>
-        </div>
-        ${lugar
-          ? `<p class="admin__actividad-lugar">${escapar(lugar)}</p>`
-          : ""}
-        ${tiraHoraria(datos.horas)}
-      </li>`;
-  }
-
-  /*
-    La sección entera.
-
-    Se revela sólo con datos: sin el agregado, un "todavía no hay extracciones"
-    se leería como que nadie usó la herramienta, cuando lo cierto es que este
-    servidor todavía no lo calcula. Son dos cosas distintas y sólo una es
-    verdad.
-  */
-  function pintarActividad(actividad, periodo) {
-    const caja = el("listaActividad");
-    const bloque = el("seccionActividad");
+  function pintarSerie() {
+    const caja = el("graficoSerie");
+    const bloque = el("seccionSerie");
     if (!caja || !bloque) return;
 
-    if (!actividad) {
+    /*
+      LA ÚNICA SECCIÓN QUE PUEDE NO CUMPLIR EL FILTRO — Y LO DICE.
+
+      `por_dia` parte el uso en "con sesión" y "sin sesión", NO por rol: acá un
+      administrador cuenta como alguien con sesión. Y NO se puede derivar:
+      `actividad` guarda la HORA del mes de cada cuenta, no la FECHA, así que
+      restarle los administradores daría el total correcto del mes pero habría
+      que inventar cómo repartirlo entre los días. Inventar esa distribución es
+      exactamente lo que esta sección promete no hacer.
+
+      Hasta que el servidor mande `por_dia_sin_admins`, la sección lo AVISA. Un
+      interruptor que promete y un gráfico que no cumple, en silencio, es el bug
+      que este panel ya pagó una vez.
+    */
+    const filtrando = excluyendoAdmins();
+    const puedeFiltrar = panelEnCache.porDiaSinAdmins !== null;
+    const porDia = filtrando && puedeFiltrar
+      ? panelEnCache.porDiaSinAdmins
+      : panelEnCache.porDia;
+
+    if (!porDia) {
       bloque.hidden = true;
       return;
     }
 
-    const nodoMes = el("mesActividad");
+    const nota = filtrando && !puedeFiltrar
+      ? `<p class="admin__nota-sin-filtrar">
+           Esta sección todavía cuenta las pruebas de administración: el
+           servidor no manda el desglose por día sin administradores.
+         </p>`
+      : "";
+
+    const periodo = panelEnCache.periodo;
+    const nodoMes = el("mesSerie");
     if (nodoMes) nodoMes.textContent = periodo ? `· ${periodo}` : "";
 
-    // Quien no usó la herramienta este mes no aparece — mismo criterio que el
-    // mapa, donde tampoco hay filas en cero.
-    const entradas = Object.entries(actividad)
-      .filter(([, datos]) => totalHoras(datos?.horas) > 0);
+    /*
+      Los días sin uso OCUPAN SU LUGAR.
 
-    if (!entradas.length) {
+      El servidor manda sólo los días que tuvieron extracciones; acá se rellena
+      el rango completo. Saltárselos convertiría una semana muerta en una línea
+      que sigue subiendo — la mentira que un gráfico de tendencia puede contar
+      sin que nadie la note.
+    */
+    const fechas = Object.keys(porDia).sort();
+    if (!fechas.length) {
       bloque.hidden = false;
       caja.innerHTML =
         '<p class="admin__vacio">Todavía no hay extracciones este mes.</p>';
       return;
     }
 
-    // Las cuentas primero, por volumen; el grupo anónimo al final, como "Sin
-    // ubicación" en el mapa: no compite por el primer puesto con quien sí
-    // tiene identidad.
-    const orden = entradas.sort((a, b) => {
-      if (a[0] === ANONIMOS) return 1;
-      if (b[0] === ANONIMOS) return -1;
-      return totalHoras(b[1].horas) - totalHoras(a[1].horas);
-    });
+    const dias = [];
+    const cursor = new Date(`${fechas[0]}T00:00:00Z`);
+    const fin = new Date(`${fechas[fechas.length - 1]}T00:00:00Z`);
+    while (cursor <= fin) {
+      const clave = cursor.toISOString().slice(0, 10);
+      const d = porDia[clave] || {};
+      dias.push({ clave, anon: d.anon || 0, cuenta: d.cuenta || 0 });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    const maximo = Math.max(1, ...dias.map((d) => Math.max(d.anon, d.cuenta)));
+    const ANCHO = 100;
+    const ALTO = 40;
+    const x = (i) => (dias.length === 1 ? ANCHO / 2
+      : (i / (dias.length - 1)) * ANCHO);
+    const y = (n) => ALTO - (n / maximo) * ALTO;
+
+    const puntos = (campo) =>
+      dias.map((d, i) => `${x(i).toFixed(2)},${y(d[campo]).toFixed(2)}`).join(" ");
+
+    const total = dias.reduce((s, d) => s + d.anon + d.cuenta, 0);
+
+    // `preserveAspectRatio="none"` deja que el SVG se estire a lo ancho del
+    // panel sin dejar franjas vacías a los lados; el alto lo fija el CSS.
+    caja.innerHTML = leyendaDe() + `
+      <svg class="admin__serie" viewBox="0 0 ${ANCHO} ${ALTO}"
+           preserveAspectRatio="none" role="img"
+           aria-label="Extracciones por día: ${total} en ${dias.length} días">
+        <polyline class="admin__serie-linea admin__serie-linea--cuenta"
+                  points="${puntos("cuenta")}" />
+        <polyline class="admin__serie-linea admin__serie-linea--anon"
+                  points="${puntos("anon")}" />
+      </svg>
+      <div class="admin__serie-eje">
+        <span>${escapar(dias[0].clave.slice(5))}</span>
+        <span>${escapar(dias[dias.length - 1].clave.slice(5))}</span>
+      </div>`
+      + avisoDeMuestra(total, dias[0].clave)
+      + nota;
 
     bloque.hidden = false;
-    caja.innerHTML = `<ul class="admin__actividad">
-        ${orden.map(([clave, datos]) => tarjetaActividad(clave, datos)).join("")}
-      </ul>`;
   }
 
   // --- Usuarios del sitio --------------------------------------------------
@@ -843,31 +1253,28 @@
     // RLS— tiene que pintarse igual: `extra` se queda vacío y cada fila queda
     // visible pero sin editar, porque no se sabe qué tiene guardada.
     let extra = {};
-    /*
-      La actividad se guarda y se pinta DESPUÉS, no acá.
-
-      Sus tarjetas resuelven el nombre y el correo contra `perfilesPorUid`, que
-      todavía no se llenó a esta altura: pintarlas ahora las dejaría a todas
-      como "(cuenta eliminada)".
-    */
-    let actividad = null;
     try {
       const r = await apiFetch("/api/admin/perfiles");
       if (r.ok) {
         const cuerpo = await r.json();
         extra = cuerpo.perfiles || {};
-        actividad = cuerpo.actividad || null;
-        // Del MISMO viaje: el endpoint devuelve los agregados, así que ni el
-        // mapa ni la actividad cuestan una consulta más. Se pintan acá y no en
-        // su propia carga por eso.
+        recordarPanel(cuerpo);
+        // Del MISMO viaje: el endpoint devuelve los agregados, así que los dos
+        // gráficos no cuestan una consulta más. Se pintan acá y no en su propia
+        // carga por eso.
+        // `recordarRegiones` se lleva TODOS los agregados geográficos —el
+        // completo, el filtrado y el de dos series— porque una sola vista los
+        // combina. Antes había dos pintores y el filtro alimentaba al que
+        // estaba oculto.
         recordarRegiones(cuerpo);
+        pintarSerie();
       } else {
         console.warn("[admin] /api/admin/perfiles respondió", r.status);
-        pintarRegiones(null);
+        fallarRegiones();
       }
     } catch (error) {
       console.warn("[admin] no se pudo leer correo/consumo:", error);
-      pintarRegiones(null);
+      fallarRegiones();
     }
 
     // Administración primero: es lo que se busca al abrir esta lista.
@@ -882,10 +1289,10 @@
         // El nombre sale de `perfiles`; todo lo demás, del endpoint.
         nombre: [p.nombre, p.apellidos].filter(Boolean).join(" ").trim()
           || "(sin nombre)",
-        // El rol lo usa la sección de actividad para su insignia. Sale de
-        // `perfiles` —la misma fuente que ya decide el acento de la tabla—, y
-        // no de un campo del endpoint: dos fuentes para el rol fue F23.
-        esAdmin: p.rol === "admin",
+        // `esAdmin` vivía acá para la insignia de las tarjetas de actividad.
+        // Se fue con ellas el 2026-08-28: nadie lo leía ya, y un campo que se
+        // calcula y no se usa es lo que hace creer que algo depende de él.
+        // El acento de las filas de administración sale de `p.rol` directo.
         conocido: Boolean(datos),
       });
     });
@@ -918,10 +1325,6 @@
     lista.querySelectorAll(".admin__fila").forEach((fila) => {
       fila.dataset.firma = firma(fila);
     });
-
-    // Recién ahora: `perfilesPorUid` ya tiene el nombre y el correo con los que
-    // cada tarjeta resuelve su identidad.
-    pintarActividad(actividad, regionesEnCache.periodo);
   }
 
   /*
@@ -986,6 +1389,7 @@
     // Antes de pintar: los listeners cuelgan del contenedor, que ya existe en
     // el markup, así que registrarlos primero no depende de que haya filas.
     conectarTabla();
+    conectarRegiones();
     conectarFiltroAdmins();
     cargarUsuariosDelSitio();
   }
