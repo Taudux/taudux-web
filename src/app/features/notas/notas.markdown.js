@@ -213,14 +213,21 @@ async function renderizarFormulas(contenedor) {
 async function renderizarNota({ markdown, contenedor, arbol, vista }) {
   await cargarScriptExterno(CDN_MARKED);
 
-  contenedor.innerHTML = convertirMarkdownAHtml(markdown, arbol, vista);
+  /*
+    El archivo trae al inicio el bloque de metadatos del que tools/notas.js
+    saca el título y el resumen. Es información de autoría, no contenido: sin
+    quitarlo, el lector vería "titulo: …" impreso como primer párrafo.
+  */
+  const { cuerpo } = separarFrontmatter(markdown);
+
+  contenedor.innerHTML = convertirMarkdownAHtml(cuerpo, arbol, vista);
   const indice = prepararEncabezados(contenedor);
   prepararEnlaces(contenedor);
   prepararTablas(contenedor);
 
   const pendientes = [];
   if (tieneCodigo(contenedor.innerHTML)) pendientes.push(resaltarCodigo(contenedor));
-  if (tieneFormulas(markdown)) pendientes.push(renderizarFormulas(contenedor));
+  if (tieneFormulas(cuerpo)) pendientes.push(renderizarFormulas(contenedor));
 
   await Promise.allSettled(pendientes);
   return indice;

@@ -13,6 +13,7 @@ const {
   vistaDeGrafo,
   buscarEnNotas,
   extraerWikilinks,
+  separarFrontmatter,
   validarManifiestoDeNotas,
   VISTA_NOTAS_PREDETERMINADA,
 } = require(path.join(ROOT, "src/app/core/notas/notas.arbol.js"));
@@ -397,4 +398,97 @@ test("un manifiesto sin áreas es un error, no una portada en blanco", () => {
   assert.equal(validarManifiestoDeNotas({ areas: [] }).ok, false);
   assert.equal(validarManifiestoDeNotas({}).ok, false);
   assert.equal(validarManifiestoDeNotas(null).ok, false);
+});
+
+/* ------------------------------------------------------------------ */
+/* Frontmatter                                                         */
+/* ------------------------------------------------------------------ */
+
+/*
+  El mismo parser lo usan tools/notas.js para generar el manifiesto y el sitio
+  para quitar el bloque antes de renderizar. Si se equivoca, o el índice queda
+  sin título o el lector ve "titulo: …" impreso como primer párrafo de la nota.
+*/
+
+test("el bloque de metadatos se separa del cuerpo", () => {
+  const archivo = [
+    "---",
+    "titulo: Regresión lineal",
+    "resumen: El modelo más simple que sirve de verdad.",
+    "---",
+    "",
+    "El cuerpo empieza aquí.",
+  ].join("\n");
+
+  const { datos, cuerpo, tieneFrontmatter, errores } = separarFrontmatter(archivo);
+  assert.equal(tieneFrontmatter, true);
+  assert.deepEqual(errores, []);
+  assert.equal(datos.titulo, "Regresión lineal");
+  assert.equal(datos.resumen, "El modelo más simple que sirve de verdad.");
+  assert.equal(cuerpo.trim(), "El cuerpo empieza aquí.");
+});
+
+/* Un resumen como "MAE, RMSE y R²: qué mide cada una" tiene dos puntos en medio:
+   el valor es todo lo que sigue a la primera clave, no hasta el siguiente ":". */
+test("un valor puede contener dos puntos y comas", () => {
+  const { datos } = separarFrontmatter(
+    "---\nresumen: MAE, RMSE y R²: qué mide cada una y por qué importa.\n---\n"
+  );
+  assert.equal(datos.resumen, "MAE, RMSE y R²: qué mide cada una y por qué importa.");
+});
+
+test("las etiquetas se leen en línea o en bloque", () => {
+  const enLinea = separarFrontmatter("---\netiquetas: [regresión, modelos lineales]\n---\n");
+  assert.deepEqual(enLinea.datos.etiquetas, ["regresión", "modelos lineales"]);
+
+  const enBloque = separarFrontmatter(
+    "---\netiquetas:\n  - regresión\n  - modelos lineales\n---\n"
+  );
+  assert.deepEqual(enBloque.datos.etiquetas, ["regresión", "modelos lineales"]);
+
+  assert.deepEqual(separarFrontmatter("---\netiquetas: []\n---\n").datos.etiquetas, []);
+});
+
+test("los booleanos y los números no llegan como texto", () => {
+  const { datos } = separarFrontmatter("---\npublicada: false\norden: 2\n---\n");
+  assert.equal(datos.publicada, false);
+  assert.equal(datos.orden, 2);
+});
+
+test("las comillas se retiran, para poder escribir un valor que parezca otra cosa", () => {
+  const { datos } = separarFrontmatter('---\ntitulo: "true"\n---\n');
+  assert.equal(datos.titulo, "true");
+});
+
+/*
+  Un "resumen" mal escrito que se descarta en silencio es una tarjeta vacía que
+  nadie entiende. El parser reporta y quien genera el manifiesto se planta.
+*/
+test("una línea que no se entiende se reporta en vez de ignorarse", () => {
+  const { errores, datos } = separarFrontmatter("---\ntitulo: Uno\nesto no es válido\n---\n");
+  assert.equal(errores.length, 1);
+  assert.match(errores[0], /línea 2/);
+  /* Lo que sí se entendió se conserva: el error señala una línea, no tira todo. */
+  assert.equal(datos.titulo, "Uno");
+});
+
+test("un archivo sin bloque de metadatos no es un error, pero se nota", () => {
+  const { datos, cuerpo, tieneFrontmatter } = separarFrontmatter("Solo cuerpo, sin bloque.");
+  assert.equal(tieneFrontmatter, false);
+  assert.deepEqual(datos, {});
+  assert.equal(cuerpo, "Solo cuerpo, sin bloque.");
+});
+
+/* Tres guiones a mitad de la nota son una línea horizontal de markdown, no el
+   fin de los metadatos: el bloque solo cuenta si abre en la primera línea. */
+test("un separador --- dentro del texto no se confunde con el bloque", () => {
+  const { tieneFrontmatter, cuerpo } = separarFrontmatter("Un párrafo.\n\n---\n\nOtro párrafo.");
+  assert.equal(tieneFrontmatter, false);
+  assert.equal(cuerpo.includes("---"), true);
+});
+
+test("el bloque se reconoce aunque el archivo venga con saltos de Windows", () => {
+  const { datos, cuerpo } = separarFrontmatter("---\r\ntitulo: Uno\r\n---\r\n\r\nCuerpo.");
+  assert.equal(datos.titulo, "Uno");
+  assert.equal(cuerpo.trim(), "Cuerpo.");
 });

@@ -24,7 +24,13 @@ const RUTA_MANIFIESTO_NOTAS = `${RUTA_BASE_NOTAS}/manifiesto.json`;
 const TITULO_RAIZ_NOTAS = "Notas";
 
 const VISTAS_NOTAS = Object.freeze(["lista", "grafo"]);
-const VISTA_NOTAS_PREDETERMINADA = "lista";
+/*
+  El mapa es la vista de entrada. Un listado de tarjetas lo tiene cualquier
+  sitio; lo que esta sección aporta es ver el conocimiento como una red, y
+  esconderlo detrás de un segundo clic lo convierte en un extra que casi nadie
+  descubre. El listado sigue a un clic para quien prefiera leer en columna.
+*/
+const VISTA_NOTAS_PREDETERMINADA = "grafo";
 
 function esTextoUtil(valor) {
   return typeof valor === "string" && valor.trim().length > 0;
@@ -51,8 +57,25 @@ function crearNodo({ tipo, origen, segmentos }) {
   return {
     tipo,
     slug: textoNormalizado(origen.slug),
+    /*
+      El título cae al slug cuando falta, para que la página degrade en vez de
+      mostrar una tarjeta en blanco. Eso mismo enmascararía el olvido ante la
+      validación, así que `declarado` conserva lo que el manifiesto dijo de
+      verdad y es contra eso que se revisan los campos obligatorios.
+    */
+    declarado: {
+      titulo: textoNormalizado(origen.titulo),
+      resumen: textoNormalizado(origen.resumen),
+    },
     titulo: textoNormalizado(origen.titulo) || textoNormalizado(origen.slug),
     resumen: textoNormalizado(origen.resumen),
+    /*
+      Texto largo de contexto, solo en las áreas: de dónde salió la disciplina,
+      quién la empujó y para qué se usa. Es distinto del resumen —que es la línea
+      de la tarjeta— y se muestra encima del mapa mientras se navega el área
+      entera, como ancla de en qué disciplina está parado el lector.
+    */
+    descripcion: textoNormalizado(origen.descripcion),
     segmentos,
     ruta: segmentos.join("/"),
     etiquetas: arregloDe(origen.etiquetas).filter(esTextoUtil).map(textoNormalizado),
@@ -250,6 +273,17 @@ function resolverRutaDeNotas(arbol, segmentos) {
   Migas desde la portada hasta el nodo, incluido. Se arma con el índice y no
   guardando padres en cada nodo, por lo dicho en crearNodo sobre los ciclos.
 */
+/*
+  El área a la que pertenece un nodo, a cualquier profundidad. La descripción que
+  se muestra arriba del mapa es siempre la del área y no la del nivel actual: al
+  bajar a Clustering o a DBSCAN, lo que el lector necesita recordar es que sigue
+  dentro de Machine Learning.
+*/
+function areaDeNodo(arbol, nodo) {
+  if (!nodo || !nodo.segmentos.length) return null;
+  return arbol.porRuta.get(nodo.segmentos[0]) || null;
+}
+
 function migasDeNotas(arbol, nodo) {
   if (!nodo) return [];
   const migas = [];
@@ -302,14 +336,27 @@ function relacionesEntreNotas(arbol) {
   las áreas, en vez de aparecer solo al llegar a las hojas.
 */
 function vistaDeGrafo(arbol, nodo) {
-  const centro = nodo || arbol.raiz;
-  const hijos = hijosNavegables(centro);
+  const actual = nodo || arbol.raiz;
+  const hijos = hijosNavegables(actual);
 
-  const aristas = hijos.map((hijo) => ({
-    origen: centro.ruta,
-    destino: hijo.ruta,
-    tipo: "jerarquia",
-  }));
+  /*
+    En la portada NO hay centro. La raíz es un contenedor que inventamos para
+    tener dónde colgar las áreas, no un concepto: dibujarla convertiría a
+    "Notas" en el nodo más general del mapa, por encima de Machine Learning o
+    Ciberseguridad, que es exactamente al revés de como se ordena el
+    conocimiento. Las áreas flotan sueltas, y si un día se agrega un concepto
+    más general —Inteligencia artificial sobre Machine Learning—, ese concepto
+    pasa a ser un área y queda arriba por derecho propio, no por andamiaje.
+  */
+  const centro = actual.tipo === "raiz" ? null : actual;
+
+  const aristas = centro
+    ? hijos.map((hijo) => ({
+        origen: centro.ruta,
+        destino: hijo.ruta,
+        tipo: "jerarquia",
+      }))
+    : [];
 
   /* slug de nota -> ruta del hijo visible bajo el que cuelga. */
   const ramaDeNota = new Map();
@@ -464,6 +511,105 @@ function reemplazarWikilinks(markdown, resolver) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Frontmatter                                                         */
+/* ------------------------------------------------------------------ */
+
+/*
+  Los metadatos de cada nota —título, resumen, etiquetas— viven en un bloque
+  delimitado por --- al inicio del archivo, igual que en Obsidian. De ahí los
+  lee tools/notas.js para generar el manifiesto, y de ahí los tiene que quitar
+  el sitio antes de renderizar el cuerpo.
+
+  Esas dos necesidades usan ESTA función y no dos copias, porque un parser de
+  frontmatter duplicado que se desincroniza deja el bloque impreso como texto en
+  medio de la nota publicada.
+
+  Es un subconjunto de YAML deliberadamente chico, no YAML:
+    clave: valor              (con o sin comillas; true/false y números se convierten)
+    clave: [uno, dos]         (lista en línea)
+    clave:                    (lista en bloque)
+      - uno
+      - dos
+  Cualquier otra sintaxis se reporta como error en vez de ignorarse: un
+  "resumen:" mal escrito que se descarta en silencio es una tarjeta sin resumen
+  que nadie entiende por qué salió vacía.
+*/
+const DELIMITADOR_FRONTMATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+
+function convertirEscalarDeFrontmatter(texto) {
+  const valor = texto.trim();
+  if (valor === "true") return true;
+  if (valor === "false") return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(valor)) return Number(valor);
+  const entrecomillado = valor.match(/^"([\s\S]*)"$/) || valor.match(/^'([\s\S]*)'$/);
+  return entrecomillado ? entrecomillado[1] : valor;
+}
+
+function convertirListaEnLinea(texto) {
+  const interior = texto.trim().slice(1, -1).trim();
+  if (!interior) return [];
+  return interior.split(",").map((parte) => convertirEscalarDeFrontmatter(parte));
+}
+
+function analizarFrontmatter(bloque) {
+  const datos = {};
+  const errores = [];
+  const lineas = bloque.split(/\r?\n/);
+
+  for (let indice = 0; indice < lineas.length; indice += 1) {
+    const linea = lineas[indice];
+    if (!linea.trim() || linea.trim().startsWith("#")) continue;
+
+    const coincidencia = linea.match(/^([A-Za-zÁÉÍÓÚÑáéíóúñ_][\w-]*)[ \t]*:[ \t]*(.*)$/);
+    if (!coincidencia) {
+      errores.push(`línea ${indice + 1}: no se entiende «${linea.trim()}»`);
+      continue;
+    }
+
+    const [, clave, resto] = coincidencia;
+
+    if (resto.trim().startsWith("[") && resto.trim().endsWith("]")) {
+      datos[clave] = convertirListaEnLinea(resto);
+      continue;
+    }
+
+    if (resto.trim()) {
+      datos[clave] = convertirEscalarDeFrontmatter(resto);
+      continue;
+    }
+
+    /* Sin valor en la misma línea: o es una lista en bloque, o está vacío. */
+    const elementos = [];
+    while (indice + 1 < lineas.length && /^[ \t]*-[ \t]+/.test(lineas[indice + 1])) {
+      indice += 1;
+      elementos.push(convertirEscalarDeFrontmatter(lineas[indice].replace(/^[ \t]*-[ \t]+/, "")));
+    }
+    datos[clave] = elementos;
+  }
+
+  return { datos, errores };
+}
+
+/*
+  Separa metadatos de contenido. Un archivo sin frontmatter no es un error:
+  devuelve datos vacíos y el texto entero como cuerpo, y es la herramienta de
+  generación la que decide si esa nota puede publicarse así.
+*/
+function separarFrontmatter(texto) {
+  const contenido = typeof texto === "string" ? texto.replace(/^﻿/, "") : "";
+  const coincidencia = contenido.match(DELIMITADOR_FRONTMATTER);
+  if (!coincidencia) return { datos: {}, cuerpo: contenido, errores: [], tieneFrontmatter: false };
+
+  const { datos, errores } = analizarFrontmatter(coincidencia[1]);
+  return {
+    datos,
+    cuerpo: contenido.slice(coincidencia[0].length),
+    errores,
+    tieneFrontmatter: true,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* Validación del manifiesto (la usan los tests)                       */
 /* ------------------------------------------------------------------ */
 
@@ -493,8 +639,8 @@ function validarManifiestoDeNotas(manifiesto) {
       if (nodo.slug && !/^[a-z0-9-]+$/.test(nodo.slug)) {
         errores.push(`${donde}: el slug "${nodo.slug}" solo admite minúsculas, dígitos y guiones`);
       }
-      if (!nodo.titulo) errores.push(`${donde}: falta título`);
-      if (!nodo.resumen) {
+      if (!nodo.declarado.titulo) errores.push(`${donde}: falta título`);
+      if (!nodo.declarado.resumen) {
         /* El resumen es lo que se lee en la tarjeta y en el tooltip del grafo. */
         errores.push(`${donde}: falta resumen`);
       }
@@ -562,6 +708,7 @@ if (typeof module === "object" && module.exports) {
     construirHashNotas,
     resolverRutaDeNotas,
     migasDeNotas,
+    areaDeNodo,
     hijosNavegables,
     relacionesEntreNotas,
     vistaDeGrafo,
@@ -569,6 +716,8 @@ if (typeof module === "object" && module.exports) {
     normalizarParaBusqueda,
     extraerWikilinks,
     reemplazarWikilinks,
+    separarFrontmatter,
+    analizarFrontmatter,
     escaparHtml,
     sinCodigo,
     validarManifiestoDeNotas,

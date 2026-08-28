@@ -5,6 +5,7 @@
       "slug": "machine-learning",
       "titulo": "Machine Learning",
       "resumen": "Cómo un modelo aprende de los datos: con respuestas conocidas de por medio, o sin ninguna.",
+      "descripcion": "El término lo acuñó Arthur Samuel en 1959, mientras escribía en IBM un programa que jugaba damas mejor que él mismo: la idea de que una máquina pudiera mejorar con la experiencia sin que nadie le programara cada regla. Los cimientos venían de antes —el test de Turing en 1950, el perceptrón de Frank Rosenblatt en 1958— y el campo pasó dos inviernos largos, en los setenta y en los noventa, cuando la promesa superó a la capacidad de cómputo. Lo que lo revivió no fue una idea nueva sino tres cosas que llegaron juntas: datos en volumen, GPUs baratas y algoritmos de optimización que por fin escalaban. Hoy decide qué correo es spam, qué transacción es fraude, qué tratamiento sugiere un historial clínico y qué ruta toma un vehículo autónomo.",
       "hijos": [
         {
           "slug": "aprendizaje-supervisado",
@@ -17,7 +18,7 @@
               "resumen": "La idea completa en una página: datos con respuesta, función que la aproxima y error que se minimiza.",
               "archivo": "machine-learning/aprendizaje-supervisado/que-es-el-aprendizaje-supervisado.md",
               "etiquetas": ["fundamentos"],
-              "relacionadas": ["que-es-el-aprendizaje-no-supervisado", "regresion-lineal"]
+              "relacionadas": ["regresion-lineal", "que-es-el-aprendizaje-no-supervisado", "que-es-el-aprendizaje-por-refuerzo"]
             }
           ],
           "hijos": [
@@ -32,7 +33,7 @@
                   "resumen": "El modelo más simple que sirve de verdad, y la razón por la que sigue siendo la primera parada.",
                   "archivo": "machine-learning/aprendizaje-supervisado/regresion/regresion-lineal.md",
                   "etiquetas": ["regresión", "modelos lineales"],
-                  "relacionadas": ["metricas-de-regresion", "regresion-logistica", "analisis-de-componentes-principales"]
+                  "relacionadas": ["analisis-de-componentes-principales", "metricas-de-regresion", "regresion-logistica"]
                 },
                 {
                   "slug": "metricas-de-regresion",
@@ -55,7 +56,7 @@
                   "resumen": "Un modelo lineal que devuelve probabilidades, y por qué no es una regresión.",
                   "archivo": "machine-learning/aprendizaje-supervisado/clasificacion/regresion-logistica.md",
                   "etiquetas": ["clasificación", "modelos lineales"],
-                  "relacionadas": ["matriz-de-confusion"]
+                  "relacionadas": ["matriz-de-confusion", "arboles-de-decision"]
                 },
                 {
                   "slug": "matriz-de-confusion",
@@ -64,6 +65,45 @@
                   "archivo": "machine-learning/aprendizaje-supervisado/clasificacion/matriz-de-confusion.md",
                   "etiquetas": ["clasificación", "evaluación"],
                   "relacionadas": ["regresion-logistica", "metricas-de-regresion"]
+                },
+                {
+                  "slug": "k-vecinos-mas-cercanos",
+                  "titulo": "K vecinos más cercanos (KNN)",
+                  "resumen": "Clasificar preguntándole a los k ejemplos más parecidos, y por qué es supervisado pese al nombre.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/clasificacion/k-vecinos-mas-cercanos.md",
+                  "etiquetas": ["clasificación", "basado en distancia"],
+                  "relacionadas": ["k-means", "escalado-de-variables", "matriz-de-confusion"]
+                }
+              ]
+            },
+            {
+              "slug": "arboles-y-ensambles",
+              "titulo": "Árboles y ensambles",
+              "resumen": "Modelos que parten el espacio con preguntas, y qué pasa cuando se combinan cientos de ellos.",
+              "notas": [
+                {
+                  "slug": "arboles-de-decision",
+                  "titulo": "Árboles de decisión",
+                  "resumen": "Partir los datos con preguntas sucesivas hasta aislar cada clase, y por qué un árbol solo casi nunca basta.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/arboles-y-ensambles/arboles-de-decision.md",
+                  "etiquetas": ["clasificación", "regresión", "árboles"],
+                  "relacionadas": ["k-vecinos-mas-cercanos", "random-forest", "matriz-de-confusion"]
+                },
+                {
+                  "slug": "random-forest",
+                  "titulo": "Random Forest",
+                  "resumen": "Cientos de árboles mediocres y decorrelacionados que juntos superan a cualquiera de ellos.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/arboles-y-ensambles/random-forest.md",
+                  "etiquetas": ["ensambles", "árboles"],
+                  "relacionadas": ["arboles-de-decision", "boosting"]
+                },
+                {
+                  "slug": "boosting",
+                  "titulo": "Boosting",
+                  "resumen": "Árboles en cadena, cada uno corrigiendo lo que el anterior falló. Lo mejor en datos tabulares, y lo más fácil de romper.",
+                  "archivo": "machine-learning/aprendizaje-supervisado/arboles-y-ensambles/boosting.md",
+                  "etiquetas": ["ensambles", "árboles"],
+                  "relacionadas": ["random-forest", "metricas-de-regresion"]
                 }
               ]
             }
@@ -75,12 +115,20 @@
           "resumen": "Encontrar estructura en datos que nadie etiquetó: grupos, ejes y patrones.",
           "notas": [
             {
+              "slug": "escalado-de-variables",
+              "titulo": "Escalado de variables",
+              "resumen": "Por qué casi todo lo no supervisado falla en silencio si no escalas, y cuál de los cuatro escaladores usar.",
+              "archivo": "machine-learning/aprendizaje-no-supervisado/escalado-de-variables.md",
+              "etiquetas": ["preparación de datos", "fundamentos"],
+              "relacionadas": ["k-means", "dbscan", "k-vecinos-mas-cercanos", "analisis-de-componentes-principales"]
+            },
+            {
               "slug": "que-es-el-aprendizaje-no-supervisado",
               "titulo": "¿Qué es el aprendizaje no supervisado?",
               "resumen": "Qué se puede aprender sin respuestas y, sobre todo, cómo se sabe si el resultado sirve.",
               "archivo": "machine-learning/aprendizaje-no-supervisado/que-es-el-aprendizaje-no-supervisado.md",
               "etiquetas": ["fundamentos"],
-              "relacionadas": ["k-means", "que-es-el-aprendizaje-supervisado"]
+              "relacionadas": ["k-means", "que-es-el-aprendizaje-supervisado", "escalado-de-variables", "apriori-y-fp-growth"]
             }
           ],
           "hijos": [
@@ -95,7 +143,15 @@
                   "resumen": "El algoritmo de agrupamiento más usado, sus supuestos ocultos y cómo elegir la k.",
                   "archivo": "machine-learning/aprendizaje-no-supervisado/clustering/k-means.md",
                   "etiquetas": ["clustering"],
-                  "relacionadas": ["clustering-jerarquico", "analisis-de-componentes-principales"]
+                  "relacionadas": ["clustering-jerarquico", "analisis-de-componentes-principales", "dbscan", "escalado-de-variables"]
+                },
+                {
+                  "slug": "dbscan",
+                  "titulo": "DBSCAN",
+                  "resumen": "Agrupar por densidad en vez de por centroides: encuentra formas curvas, no le dices cuántos grupos hay y marca el ruido solo.",
+                  "archivo": "machine-learning/aprendizaje-no-supervisado/clustering/dbscan.md",
+                  "etiquetas": ["clustering", "densidad"],
+                  "relacionadas": ["k-means", "escalado-de-variables"]
                 },
                 {
                   "slug": "clustering-jerarquico",
@@ -118,9 +174,174 @@
                   "resumen": "Rotar los datos hacia sus direcciones de mayor varianza, y qué significa realmente cada componente.",
                   "archivo": "machine-learning/aprendizaje-no-supervisado/reduccion-de-dimensionalidad/analisis-de-componentes-principales.md",
                   "etiquetas": ["reducción de dimensionalidad", "álgebra lineal"],
-                  "relacionadas": ["regresion-lineal", "k-means"]
+                  "relacionadas": ["regresion-lineal", "k-means", "escalado-de-variables"]
                 }
               ]
+            },
+            {
+              "slug": "reglas-de-asociacion",
+              "titulo": "Reglas de asociación",
+              "resumen": "Qué cosas ocurren juntas: el patrón detrás del \"quien compra esto también compra aquello\".",
+              "notas": [
+                {
+                  "slug": "apriori-y-fp-growth",
+                  "titulo": "Apriori y FP-Growth",
+                  "resumen": "Encontrar qué cosas ocurren juntas, y las tres métricas que separan un patrón real de una coincidencia.",
+                  "archivo": "machine-learning/aprendizaje-no-supervisado/reglas-de-asociacion/apriori-y-fp-growth.md",
+                  "etiquetas": ["reglas de asociación", "minería de patrones"],
+                  "relacionadas": ["que-es-el-aprendizaje-no-supervisado"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "slug": "aprendizaje-por-refuerzo",
+          "titulo": "Aprendizaje por refuerzo",
+          "resumen": "Aprender a decidir por ensayo y error, optimizando la recompensa acumulada en el tiempo.",
+          "notas": [
+            {
+              "slug": "que-es-el-aprendizaje-por-refuerzo",
+              "titulo": "¿Qué es el aprendizaje por refuerzo?",
+              "resumen": "Aprender a decidir por ensayo y error, cuando nadie te dice la respuesta correcta y las consecuencias tardan en llegar.",
+              "archivo": "machine-learning/aprendizaje-por-refuerzo/que-es-el-aprendizaje-por-refuerzo.md",
+              "etiquetas": ["fundamentos"],
+              "relacionadas": ["que-es-el-aprendizaje-no-supervisado", "que-es-el-aprendizaje-supervisado", "exploracion-y-explotacion", "procesos-de-decision-de-markov"]
+            }
+          ],
+          "hijos": [
+            {
+              "slug": "fundamentos",
+              "titulo": "Fundamentos",
+              "resumen": "El vocabulario mínimo: estados, acciones, recompensas, política y valor.",
+              "notas": [
+                {
+                  "slug": "procesos-de-decision-de-markov",
+                  "titulo": "Procesos de decisión de Markov",
+                  "resumen": "El marco formal del refuerzo: estados, acciones, transiciones y el supuesto que lo vuelve tratable.",
+                  "archivo": "machine-learning/aprendizaje-por-refuerzo/fundamentos/procesos-de-decision-de-markov.md",
+                  "etiquetas": ["fundamentos", "teoría"],
+                  "relacionadas": ["politica-valor-y-recompensa"]
+                },
+                {
+                  "slug": "politica-valor-y-recompensa",
+                  "titulo": "Política, valor y recompensa",
+                  "resumen": "Las tres piezas que se confunden entre sí, y la ecuación que las conecta.",
+                  "archivo": "machine-learning/aprendizaje-por-refuerzo/fundamentos/politica-valor-y-recompensa.md",
+                  "etiquetas": ["fundamentos", "teoría"],
+                  "relacionadas": ["aprendizaje-por-diferencias-temporales", "procesos-de-decision-de-markov"]
+                },
+                {
+                  "slug": "exploracion-y-explotacion",
+                  "titulo": "Exploración y explotación",
+                  "resumen": "El dilema de fondo del refuerzo: usar lo que ya sabes que funciona, o arriesgar para descubrir algo mejor.",
+                  "archivo": "machine-learning/aprendizaje-por-refuerzo/fundamentos/exploracion-y-explotacion.md",
+                  "etiquetas": ["fundamentos"],
+                  "relacionadas": ["q-learning"]
+                }
+              ]
+            },
+            {
+              "slug": "metodos",
+              "titulo": "Métodos",
+              "resumen": "Los algoritmos que convierten la experiencia acumulada en una política que decide bien.",
+              "notas": [
+                {
+                  "slug": "aprendizaje-por-diferencias-temporales",
+                  "titulo": "Diferencias temporales (TD)",
+                  "resumen": "Aprender de cada paso sin esperar el final, corrigiendo una predicción con la siguiente.",
+                  "archivo": "machine-learning/aprendizaje-por-refuerzo/metodos/aprendizaje-por-diferencias-temporales.md",
+                  "etiquetas": ["métodos", "teoría"],
+                  "relacionadas": ["q-learning", "politica-valor-y-recompensa"]
+                },
+                {
+                  "slug": "q-learning",
+                  "titulo": "Q-learning",
+                  "resumen": "El algoritmo que aprende la política óptima sin modelo del entorno y sin seguir esa política mientras aprende.",
+                  "archivo": "machine-learning/aprendizaje-por-refuerzo/metodos/q-learning.md",
+                  "etiquetas": ["métodos"],
+                  "relacionadas": ["aprendizaje-por-diferencias-temporales", "deep-q-networks", "exploracion-y-explotacion"]
+                },
+                {
+                  "slug": "deep-q-networks",
+                  "titulo": "Deep Q-Networks (DQN)",
+                  "resumen": "Cambiar la tabla por una red neuronal, y los dos trucos sin los cuales eso no converge.",
+                  "archivo": "machine-learning/aprendizaje-por-refuerzo/metodos/deep-q-networks.md",
+                  "etiquetas": ["métodos", "redes neuronales"],
+                  "relacionadas": ["q-learning"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "ciberseguridad",
+      "titulo": "Ciberseguridad",
+      "resumen": "Proteger sistemas y datos: qué se protege, de quién, y cuánto cuesta equivocarse.",
+      "descripcion": "Nació como una curiosidad de laboratorio: en 1971 Bob Thomas escribió Creeper, un programa que se copiaba entre computadoras de ARPANET y mostraba «atrápame si puedes»; Ray Tomlinson —el mismo del correo electrónico— respondió con Reaper, el primer antivirus, cuyo único trabajo era perseguirlo. Dejó de ser un juego en 1988, cuando el gusano de Morris tumbó cerca del diez por ciento de la internet de entonces y llevó a la primera condena bajo la ley de fraude informático de Estados Unidos. La disciplina se formalizó alrededor de tres propiedades —confidencialidad, integridad y disponibilidad— y hoy sostiene desde el candado de cada sitio que visitas hasta la banca, las redes eléctricas y los expedientes médicos.",
+      "notas": [
+        {
+          "slug": "que-es-la-ciberseguridad",
+          "titulo": "¿Qué es la ciberseguridad?",
+          "resumen": "La tríada de confidencialidad, integridad y disponibilidad, y por qué no se pueden maximizar las tres.",
+          "archivo": "ciberseguridad/que-es-la-ciberseguridad.md",
+          "etiquetas": ["fundamentos"],
+          "relacionadas": ["cifrado-simetrico-y-asimetrico", "deteccion-de-anomalias"]
+        }
+      ],
+      "hijos": [
+        {
+          "slug": "criptografia",
+          "titulo": "Criptografía",
+          "resumen": "Las matemáticas que hacen que un mensaje solo lo lea quien debe.",
+          "notas": [
+            {
+              "slug": "cifrado-simetrico-y-asimetrico",
+              "titulo": "Cifrado simétrico y asimétrico",
+              "resumen": "Dos familias que resuelven problemas distintos y por eso casi siempre se usan juntas.",
+              "archivo": "ciberseguridad/criptografia/cifrado-simetrico-y-asimetrico.md",
+              "etiquetas": ["criptografía"],
+              "relacionadas": ["funciones-hash"]
+            },
+            {
+              "slug": "funciones-hash",
+              "titulo": "Funciones hash",
+              "resumen": "Huellas de tamaño fijo, y por qué guardar contraseñas con SHA-256 está mal.",
+              "archivo": "ciberseguridad/criptografia/funciones-hash.md",
+              "etiquetas": ["criptografía"],
+              "relacionadas": ["cifrado-simetrico-y-asimetrico"]
+            }
+          ]
+        },
+        {
+          "slug": "seguridad-de-aplicaciones",
+          "titulo": "Seguridad de aplicaciones",
+          "resumen": "Los huecos que se abren al escribir código, y cómo cerrarlos de raíz.",
+          "notas": [
+            {
+              "slug": "inyeccion-sql",
+              "titulo": "Inyección SQL",
+              "resumen": "Por qué escapar comillas no alcanza y las consultas parametrizadas sí.",
+              "archivo": "ciberseguridad/seguridad-de-aplicaciones/inyeccion-sql.md",
+              "etiquetas": ["aplicaciones", "sql"],
+              "relacionadas": []
+            }
+          ]
+        },
+        {
+          "slug": "deteccion-de-amenazas",
+          "titulo": "Detección de amenazas",
+          "resumen": "Encontrar lo que no está en ninguna lista de firmas.",
+          "notas": [
+            {
+              "slug": "deteccion-de-anomalias",
+              "titulo": "Detección de anomalías",
+              "resumen": "Describir lo normal para marcar lo que se sale, con las herramientas del clustering.",
+              "archivo": "ciberseguridad/deteccion-de-amenazas/deteccion-de-anomalias.md",
+              "etiquetas": ["detección", "clustering"],
+              "relacionadas": ["dbscan", "k-means"]
             }
           ]
         }

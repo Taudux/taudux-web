@@ -54,3 +54,13 @@ Porque etiquetar es caro y los datos sin etiquetar sobran. Y porque muchas veces
 lo no supervisado es un **paso previo**, no el destino: reducir dimensiones antes
 de entrenar, encontrar segmentos que después alguien etiqueta a mano, o explorar
 un conjunto nuevo antes de decidir qué pregunta vale la pena hacerle.
+
+## Antes de cualquier algoritmo
+
+Todo lo anterior se apoya en distancias, y una distancia entre columnas con
+unidades distintas no significa nada. El escalado no es un paso de limpieza
+opcional: es parte del modelo. Ver [[escalado-de-variables]].
+
+Y si lo que buscas no son grupos de observaciones sino cosas que ocurren juntas
+—productos en el mismo ticket, síntomas en el mismo paciente— el planteamiento
+cambia por completo: [[apriori-y-fp-growth]].

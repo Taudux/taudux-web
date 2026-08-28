@@ -1,15 +1,133 @@
 /* Área de notas: índice por secciones, mapa de conocimiento y vista de lectura. */
 
 @layer features {
+  /*
+    PALETA
+    Los tres colores de marca son negro, azul aqua (#0cc0df) y azul vívido
+    (#1149a5). Se usan como base, no como fondo directo: un #1149a5 pleno detrás
+    de párrafos largos satura la vista en minutos y lee más a presentación que a
+    documento. El negro puro tiene el defecto contrario — contraste máximo, que
+    cansa igual.
+
+    La salida es mezclar el vívido CON el negro: queda una tinta azul profunda
+    que conserva la identidad, baja el contraste a un rango cómodo y deja al aqua
+    hacer de acento sobre ella. Todo se deriva con color-mix desde los tres
+    valores de marca, así que cambiar uno reajusta la sección entera.
+  */
+  .notas-page {
+    --marca-negro: #000000;
+    --marca-aqua: #0cc0df;
+    --marca-vivido: #1149a5;
+
+    /*
+      El porcentaje es la perilla de toda la sección: cuánto azul lleva el negro.
+      Por debajo de ~25% el fondo se lee negro y se pierde el propósito; por
+      encima de ~40% empieza a competir con el texto y a cansar en lecturas
+      largas. 30% deja una tinta azul reconocible con el contraste todavía
+      cómodo.
+    */
+    --color-background: color-mix(in srgb, var(--marca-vivido) 30%, var(--marca-negro));
+    /* Más profundo que el fondo: es el hueco donde caen el código y el mapa. */
+    --color-background-deep: color-mix(in srgb, var(--marca-vivido) 16%, var(--marca-negro));
+    /* Más claro que el fondo: es lo que se levanta sobre él, como una tarjeta. */
+    --superficie: color-mix(in srgb, var(--marca-vivido) 46%, var(--marca-negro));
+
+    --color-accent: var(--marca-aqua);
+    --color-accent-dark: var(--marca-vivido);
+
+    /* Blanco puro sobre fondo oscuro vibra en los bordes de las letras; este
+       tiene una pizca del azul del fondo y se lee más estable. */
+    --color-text: #e8eff7;
+    --color-text-muted: #bccbdb;
+    --color-text-subtle: #8ba3bd;
+
+    --gradient-heading: linear-gradient(
+      100deg,
+      var(--color-text),
+      color-mix(in srgb, var(--marca-aqua) 70%, var(--color-text))
+    );
+    --color-border: color-mix(in srgb, var(--marca-aqua) 22%, transparent);
+    --border-subtle: 1px solid color-mix(in srgb, var(--marca-aqua) 20%, transparent);
+    --glow-accent: 0 0 18px color-mix(in srgb, var(--marca-aqua) 30%, transparent);
+    --shadow-panel: 0 1px 24px color-mix(in srgb, var(--marca-negro) 55%, transparent);
+
+    /*
+      Tipografía académica para leer, tecnológica para operar. La serif es la del
+      texto y los títulos de nota —es lo que se lee largo—; los botones, pestañas
+      y etiquetas siguen con la del resto del sitio para que la sección no se
+      sienta de otra página.
+    */
+    --font-lectura: "Source Serif 4", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  }
+
+  /*
+    Un `display` de clase le gana al atributo `hidden` del navegador, así que un
+    panel oculto se muestra igual y vacío. Pasó exactamente eso con el aviso de
+    error. Esta regla lo cierra para toda la sección en vez de dejar el arreglo
+    dependiendo de recordarlo en cada componente nuevo.
+  */
+  .notas-page [hidden] {
+    display: none !important;
+  }
+
+  /*
+    El panel compartido levanta con un velo blanco translúcido, que sobre un
+    fondo azul se lee gris sucio. Acá levanta con más azul, que es la misma idea
+    aplicada a esta paleta.
+  */
+  .notas-page .panel {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--superficie) 62%, transparent),
+      color-mix(in srgb, var(--superficie) 34%, transparent)
+    );
+  }
+
+  /*
+    La pizarra de QED cubre la ventana y se queda fija: es fondo de página, no
+    contenido que scrollee. z-index negativo la manda detrás de todo, y como el
+    lienzo del mapa tiene fondo opaco, la pizarra solo se ve por fuera de él.
+  */
+  .notas__pizarra {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-behind);
+    pointer-events: none;
+  }
+
+  /*
+    SIN background propio, a propósito. Un elemento con z-index negativo se pinta
+    antes que los fondos de los bloques en flujo, así que un fondo opaco acá
+    tapaba por completo la pizarra fija de atrás. El color de la sección lo pone
+    el <body>, que sí queda por debajo de ella.
+  */
   .notas {
+    position: relative;
     min-height: 100vh;
     padding-block: calc(var(--navbar-height) + 2rem) 4rem;
     padding-inline: 2rem;
-    background-color: var(--color-background);
   }
 
   .notas__header {
-    margin-bottom: 2rem;
+    margin-bottom: 1.75rem;
+  }
+
+  /*
+    Título y controles en una sola fila. Antes los botones vivían en una barra
+    propia encima del lienzo, ocupando el lugar que ahora usa la descripción del
+    área —que es lo que de verdad merece ese espacio—.
+  */
+  .notas__encabezado-fila {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.25rem 2rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .notas__identidad {
+    min-inline-size: 0;
   }
 
   .notas__eyebrow {
@@ -22,14 +140,32 @@
   }
 
   .notas__title {
+    font-family: var(--font-lectura);
+    font-weight: 600;
     font-size: clamp(1.9rem, 4vw, 2.7rem);
+    letter-spacing: -0.01em;
+    line-height: 1.15;
     margin-bottom: 0.75rem;
   }
 
+  /*
+    La descripción del área: historia, precursores y aplicaciones. Se queda fija
+    mientras se navegan los temas de esa área, como ancla de contexto.
+  */
+  /*
+    Ocupa todo el ancho del lienzo, pero repartida en columnas: un párrafo a
+    1600 px de ancho son renglones de doscientos caracteres, que el ojo pierde al
+    saltar de línea. Con column-width el bloque llena el espacio y cada renglón
+    se queda en una medida legible; en pantallas angostas cae solo a una columna.
+  */
   .notas__intro {
+    font-family: var(--font-lectura);
     color: var(--color-text-muted);
-    max-inline-size: var(--ancho-lectura);
+    font-size: 1rem;
     line-height: 1.7;
+    columns: 30rem auto;
+    column-gap: 3rem;
+    text-wrap: pretty;
   }
 
   .notas__noscript {
@@ -41,15 +177,8 @@
   /* Barra: migas + acciones                                           */
   /* ---------------------------------------------------------------- */
 
-  .notas__barra {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-block: 1rem;
-    margin-bottom: 1.5rem;
-    border-block-end: var(--border-subtle);
+  .notas__migas {
+    margin-top: 1rem;
   }
 
   .notas__migas-lista {
@@ -87,8 +216,9 @@
   .notas__acciones {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
 
   .notas__vistas {
@@ -124,27 +254,49 @@
   }
 
   .notas__buscar {
-    inline-size: 16rem;
-    padding-block: 0.6rem;
+    inline-size: 13rem;
+    padding-block: 0.5rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.85rem;
   }
 
   /* ---------------------------------------------------------------- */
   /* Estado de error                                                   */
   /* ---------------------------------------------------------------- */
 
+  /*
+    Una línea, no un panel. Antes era un cuadro con borde que ocupaba el ancho
+    completo para decir una frase y alojar un botón; ese botón se mudó a la barra
+    de acciones y lo que queda es el mensaje.
+  */
   .notas__estado {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-    border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
+    margin-bottom: 1.5rem;
+    padding-inline-start: 0.85rem;
+    border-inline-start: 2px solid var(--color-error);
+    color: var(--color-error-text);
+    font-size: 0.92rem;
   }
 
-  .notas__estado-mensaje {
+  /* Vive en la barra, junto a la búsqueda, y solo aparece cuando hay algo que
+     reintentar. */
+  .notas__recargar {
+    padding: 0.45rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+    border-radius: var(--radius-pill);
+    background: transparent;
     color: var(--color-error-text);
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+
+  .notas__recargar:hover {
+    border-color: var(--color-error);
+    background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  }
+
+  .notas__recargar:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
   }
 
   /* ---------------------------------------------------------------- */
@@ -213,8 +365,10 @@
   }
 
   .notas__tarjeta-titulo {
-    font-size: 1.05rem;
-    line-height: 1.35;
+    font-family: var(--font-lectura);
+    font-weight: 600;
+    font-size: 1.08rem;
+    line-height: 1.3;
   }
 
   .notas__tarjeta-conteo {
@@ -225,8 +379,9 @@
   }
 
   .notas__tarjeta-resumen {
+    font-family: var(--font-lectura);
     color: var(--color-text-muted);
-    font-size: 0.92rem;
+    font-size: 0.95rem;
     line-height: 1.6;
   }
 
@@ -262,13 +417,199 @@
   /* Grafo                                                             */
   /* ---------------------------------------------------------------- */
 
+  /*
+    Vive fuera de .notas__container para ocupar todo el ancho de la página. No se
+    usa 100vw ni márgenes negativos: ambos obligarían a un overflow-x oculto en
+    algún ancestro, y eso rompe el position:sticky de la columna de ruta.
+
+    Al ser hermana del encabezado y no hija, ruta y lienzo arrancan a la misma
+    altura: la ruta empieza exactamente donde empieza el lienzo.
+  */
+  .notas__disposicion {
+    display: grid;
+    /* minmax(0, 1fr) y no 1fr: sin eso, un bloque de código ancho dentro de una
+       nota estira la columna y empuja la ruta fuera de la pantalla. */
+    grid-template-columns: 190px minmax(0, 1fr);
+    /*
+      El encabezado ocupa la columna del lienzo y deja vacía la de la ruta. Así
+      la descripción arranca y termina justo donde lo hace el mapa, y la ruta
+      queda alineada con su borde superior en vez de flotar más arriba.
+    */
+    grid-template-areas:
+      ".    encabezado"
+      "ruta contenido";
+    column-gap: 2rem;
+    align-items: start;
+  }
+
+  .notas__header {
+    grid-area: encabezado;
+  }
+
+  .notas__ruta {
+    grid-area: ruta;
+  }
+
+  .notas__contenido {
+    grid-area: contenido;
+    min-inline-size: 0;
+  }
+
+  /*
+    En la portada la ruta se oculta —no hay de dónde venir— y un elemento con
+    display:none deja de ser ítem de la rejilla. Sin esta regla, el contenido
+    cae en la PRIMERA columna, la de 200px, y el mapa queda como una tira
+    angosta pegada a la izquierda con todo el ancho desperdiciado a su derecha.
+
+    :has() es lo que permite que el contenedor reaccione al estado de su propio
+    hijo sin que el JavaScript tenga que avisarle.
+  */
+  .notas__disposicion:has(> .notas__ruta[hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "encabezado"
+      "contenido";
+    column-gap: 0;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Ruta: el grafo dirigido de dónde estás                            */
+  /* ---------------------------------------------------------------- */
+
+  /*
+    Acompaña el scroll: su utilidad es saber dónde estás mientras lees, y para
+    eso tiene que seguir visible al bajar por una nota larga.
+  */
+  .notas__ruta {
+    position: sticky;
+    top: calc(var(--navbar-height) + 1rem);
+    max-block-size: calc(100vh - var(--navbar-height) - 3rem);
+    overflow-y: auto;
+    /* Sin relleno superior: su primer nodo tiene que quedar a la altura del
+       borde de arriba del lienzo, no un renglón más abajo. */
+    padding-block: 0 1rem;
+  }
+
+  .notas__ruta-titulo {
+    font-family: var(--font-display);
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+    margin-bottom: 1.1rem;
+  }
+
+  .notas__ruta-lista {
+    list-style: none;
+  }
+
+  .notas__ruta-paso {
+    position: relative;
+    padding-inline-start: 1.5rem;
+    padding-block-end: 1.05rem;
+  }
+
+  /* El último paso no lleva flecha: no hay a dónde seguir bajando. */
+  .notas__ruta-paso:last-child {
+    padding-block-end: 0;
+  }
+
+  .notas__ruta-nodo {
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0.3rem;
+    inline-size: 11px;
+    block-size: 11px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--marca-aqua) 60%, transparent);
+    background: var(--color-background);
+  }
+
+  /*
+    La arista hacia el paso siguiente. Sale del nodo y no del <li> porque de ella
+    cuelga también la punta de flecha, y un elemento solo tiene dos
+    pseudo-elementos disponibles.
+  */
+  .notas__ruta-paso:not(:last-child) .notas__ruta-nodo::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: 100%;
+    translate: -50% 0;
+    inline-size: 1px;
+    block-size: 1.55rem;
+    background: color-mix(in srgb, var(--marca-aqua) 40%, transparent);
+  }
+
+  /* La punta: es lo que vuelve dirigido al grafo y no una simple lista con
+     puntos. Dice que se baja, y por lo tanto que arriba se vuelve. */
+  .notas__ruta-paso:not(:last-child) .notas__ruta-nodo::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 50%;
+    inset-block-start: calc(100% + 1rem);
+    translate: -50% 0;
+    inline-size: 5px;
+    block-size: 5px;
+    border-inline-end: 1px solid color-mix(in srgb, var(--marca-aqua) 65%, transparent);
+    border-block-end: 1px solid color-mix(in srgb, var(--marca-aqua) 65%, transparent);
+    rotate: 45deg;
+  }
+
+  /* El nodo base: de dónde arrancó todo. */
+  .notas__ruta-paso--base .notas__ruta-nodo {
+    background: color-mix(in srgb, var(--marca-vivido) 70%, transparent);
+  }
+
+  /* Donde estás parado. */
+  .notas__ruta-paso--actual .notas__ruta-nodo {
+    background: var(--marca-aqua);
+    border-color: var(--marca-aqua);
+    box-shadow: var(--glow-accent);
+  }
+
+  .notas__ruta-paso--nota .notas__ruta-nodo {
+    border-radius: 2px;
+  }
+
+  .notas__ruta-enlace {
+    display: block;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--color-text-subtle);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+
+  .notas__ruta-enlace:hover {
+    color: var(--color-accent);
+  }
+
+  .notas__ruta-enlace:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  .notas__ruta-paso--actual .notas__ruta-enlace {
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  /* Con la ruta a la izquierda, las migas horizontales dirían lo mismo dos
+     veces. Se reservan para cuando no hay ancho para la columna. */
+  .notas__migas {
+    display: none;
+  }
+
   .notas__grafo-marco {
     /*
       Alto explícito: el canvas se dimensiona leyendo clientHeight del marco, y
       un contenedor que se ajusta a su contenido daría cero. min() evita que en
       una pantalla baja el mapa empuje todo lo demás fuera de la vista.
     */
-    block-size: min(68vh, 640px);
+    /* Alto fijo por diseño: el mapa se ensancha con la pantalla pero no se
+       estira hacia abajo, para que la página no cambie de largo al navegar. */
+    block-size: clamp(420px, 62vh, 620px);
     border: var(--border-subtle);
     border-radius: var(--radius-panel);
     background:
@@ -326,22 +667,30 @@
 
   .notas__lectura {
     max-inline-size: var(--ancho-lectura);
+    margin-inline: auto;
   }
 
   .notas__lectura-cabecera {
     margin-bottom: 2rem;
   }
 
+  /* El nombre de la nota, en la tipografía del texto: es el encabezado de un
+     documento, no el rótulo de una pantalla. */
   .notas__lectura-titulo {
-    font-size: clamp(1.5rem, 3vw, 2rem);
-    line-height: 1.25;
-    margin-bottom: 0.75rem;
+    font-family: var(--font-lectura);
+    font-weight: 700;
+    font-size: clamp(1.7rem, 3vw, 2.3rem);
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+    margin-bottom: 0.85rem;
   }
 
   .notas__lectura-resumen {
+    font-family: var(--font-lectura);
+    font-style: italic;
     color: var(--color-text-muted);
-    font-size: 1.02rem;
-    line-height: 1.65;
+    font-size: 1.08rem;
+    line-height: 1.6;
     margin-bottom: 0.9rem;
   }
 
@@ -357,7 +706,7 @@
     padding: 1rem 1.25rem;
     margin-bottom: 2rem;
     border-inline-start: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
-    background: rgba(255, 255, 255, 0.02);
+    background: color-mix(in srgb, var(--marca-vivido) 16%, transparent);
     border-radius: 0 var(--radius-field) var(--radius-field) 0;
   }
 
@@ -415,6 +764,8 @@
     .notas__prosa para que no se escapen al resto de la página.
   */
   .notas__prosa {
+    font-family: var(--font-lectura);
+    font-size: 1.06rem;
     line-height: 1.75;
     color: var(--color-text-muted);
   }
@@ -423,17 +774,24 @@
     margin-top: 1.15rem;
   }
 
-  .notas__prosa h2 {
-    font-size: 1.25rem;
+  .notas__prosa h2,
+  .notas__prosa h3 {
+    font-family: var(--font-lectura);
+    letter-spacing: 0;
     color: var(--color-text);
-    margin-top: 2.5rem;
+  }
+
+  .notas__prosa h2 {
+    font-weight: 700;
+    font-size: 1.42rem;
+    margin-top: 2.6rem;
     padding-top: 0.5rem;
   }
 
   .notas__prosa h3 {
-    font-size: 1.05rem;
-    color: var(--color-text);
-    margin-top: 1.9rem;
+    font-weight: 600;
+    font-size: 1.15rem;
+    margin-top: 2rem;
   }
 
   .notas__prosa strong {
@@ -474,12 +832,24 @@
     font-size: 0.88em;
   }
 
+  /* El código vuelve a la tipografía técnica y a un fondo más profundo: es lo
+     único de la nota que no se lee como prosa. */
   .notas__prosa pre {
     padding: 1.1rem 1.25rem;
     border: var(--border-subtle);
     border-radius: var(--radius-field);
     background: var(--color-background-deep);
     overflow-x: auto;
+  }
+
+  .notas__prosa code,
+  .notas__prosa pre {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+
+  .notas__prosa code {
+    background: color-mix(in srgb, var(--marca-vivido) 26%, var(--marca-negro));
+    color: color-mix(in srgb, var(--marca-aqua) 65%, var(--color-text));
   }
 
   /* Dentro de un bloque, el fondo y el relleno los pone el <pre>. */
@@ -522,7 +892,7 @@
   }
 
   .notas__prosa th {
-    background: rgba(255, 255, 255, 0.03);
+    background: color-mix(in srgb, var(--marca-vivido) 28%, transparent);
     color: var(--color-text);
     font-family: var(--font-display);
     font-size: 0.82rem;
@@ -548,17 +918,151 @@
   }
 
   /* ---------------------------------------------------------------- */
+  /* Modo lectura: papel claro                                         */
+  /* ---------------------------------------------------------------- */
+
+  /*
+    Explorar y leer son dos modos, no dos pantallas del mismo. Al abrir una nota
+    la sección entera cambia de piel: fondo claro, texto oscuro y el isotipo de
+    Taudux detrás, muy tenue.
+
+    Cambia la página completa y no solo el bloque de la nota porque una hoja
+    blanca rodeada de interfaz oscura se lee como un recorte pegado encima, no
+    como un documento.
+
+    El acento pasa del aqua al azul vívido: #0cc0df sobre blanco da un contraste
+    de 2.2:1 —ilegible—, mientras que #1149a5 llega a 8:1.
+  */
+  .notas-page--lectura {
+    --color-background: #f4f7fb;
+    --color-background-deep: #e9eff6;
+    --superficie: #ffffff;
+
+    --color-accent: var(--marca-vivido);
+    --color-accent-dark: color-mix(in srgb, var(--marca-vivido) 80%, var(--marca-negro));
+
+    --color-text: #0f1b2a;
+    --color-text-muted: #33475e;
+    --color-text-subtle: #61748c;
+
+    --color-border: color-mix(in srgb, var(--marca-vivido) 18%, transparent);
+    --border-subtle: 1px solid color-mix(in srgb, var(--marca-vivido) 16%, transparent);
+    --glow-accent: none;
+    --shadow-panel: 0 1px 3px color-mix(in srgb, var(--marca-vivido) 12%, transparent);
+    --gradient-heading: none;
+
+    background-color: var(--color-background);
+    color: var(--color-text);
+  }
+
+  .notas-page--lectura .notas {
+    position: relative;
+  }
+
+  /*
+    Leer no necesita el ancho completo de la pantalla. Sin este tope, la nota
+    queda centrada en una columna enorme y a los lados sobra papel en blanco;
+    acercar la ruta al texto hace que se lea como una página y no como un objeto
+    perdido en medio del lienzo.
+  */
+  .notas-page--lectura .notas__disposicion {
+    max-inline-size: 1120px;
+    margin-inline: auto;
+  }
+
+  /*
+    La marca de agua. Va en un pseudo-elemento fijo y no en una etiqueta <img>
+    porque es decoración pura: así no aparece en el árbol de accesibilidad, no se
+    puede seleccionar y no se imprime como una imagen suelta.
+  */
+  .notas-page--lectura .notas::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("/assets/images/isotipo.png");
+    background-repeat: no-repeat;
+    background-position: center 58%;
+    background-size: min(52vw, 540px);
+    opacity: 0.045;
+    pointer-events: none;
+    z-index: var(--z-behind);
+  }
+
+  /* El contenido tiene que quedar por encima de la marca de agua. */
+  .notas-page--lectura .notas__container,
+  .notas-page--lectura .notas__disposicion {
+    position: relative;
+    z-index: var(--z-content);
+  }
+
+  /* En papel, el bloque de código se distingue por su fondo, no por su brillo. */
+  .notas-page--lectura .notas__prosa pre {
+    background: #f0f4f9;
+    border-color: color-mix(in srgb, var(--marca-vivido) 14%, transparent);
+  }
+
+  .notas-page--lectura .notas__prosa code {
+    background: #eaf0f7;
+    color: color-mix(in srgb, var(--marca-vivido) 85%, var(--marca-negro));
+  }
+
+  .notas-page--lectura .notas__prosa blockquote {
+    background: color-mix(in srgb, var(--marca-vivido) 5%, transparent);
+    color: var(--color-text);
+  }
+
+  .notas-page--lectura .notas__prosa th {
+    background: color-mix(in srgb, var(--marca-vivido) 7%, transparent);
+  }
+
+  .notas-page--lectura .notas__prosa th,
+  .notas-page--lectura .notas__prosa td {
+    border-color: color-mix(in srgb, var(--marca-vivido) 18%, transparent);
+  }
+
+  .notas-page--lectura .notas__indice {
+    background: color-mix(in srgb, var(--marca-vivido) 5%, transparent);
+  }
+
+  /*
+    El resaltado de código viene de una hoja para fondo oscuro. En papel, su
+    color de texto base queda casi blanco sobre casi blanco.
+  */
+  .notas-page--lectura .notas__prosa pre code,
+  .notas-page--lectura .notas__prosa pre code span {
+    color: #0f1b2a;
+  }
+
+  .notas-page--lectura .notas__prosa pre code .hljs-comment {
+    color: #62748c;
+  }
+
+  .notas-page--lectura .notas__prosa pre code .hljs-keyword,
+  .notas-page--lectura .notas__prosa pre code .hljs-built_in {
+    color: #8250df;
+  }
+
+  .notas-page--lectura .notas__prosa pre code .hljs-string {
+    color: #0a6b3d;
+  }
+
+  .notas-page--lectura .notas__prosa pre code .hljs-number,
+  .notas-page--lectura .notas__prosa pre code .hljs-literal {
+    color: #b0430a;
+  }
+
+  .notas-page--lectura .notas__prosa pre code .hljs-title,
+  .notas-page--lectura .notas__prosa pre code .hljs-function {
+    color: var(--marca-vivido);
+  }
+
+  /* ---------------------------------------------------------------- */
   /* Pantallas angostas                                                */
   /* ---------------------------------------------------------------- */
 
   @media (max-width: 760px) {
     .notas {
       padding-inline: 1.25rem;
-    }
-
-    .notas__barra {
-      align-items: flex-start;
-      flex-direction: column;
     }
 
     .notas__acciones {
@@ -571,6 +1075,24 @@
 
     .notas__grafo-marco {
       block-size: min(60vh, 460px);
+    }
+
+    /*
+      Sin ancho para una columna lateral, el grafo de ruta cedería el espacio de
+      lectura, que es lo escaso acá. Vuelven las migas horizontales, que dicen lo
+      mismo en una línea y salen del mismo migasDeNotas.
+    */
+    .notas__disposicion {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+
+    .notas__ruta {
+      display: none;
+    }
+
+    .notas__migas {
+      display: block;
     }
   }
 }

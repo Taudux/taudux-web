@@ -68,3 +68,10 @@ modelo no tiene forma de saberlo. Ese balance se lee en la
 > separación perfecta —una variable que predice la clase sin error— los
 > coeficientes se van al infinito y el ajuste no converge; la regularización lo
 > evita y viene activada por omisión en scikit-learn.
+
+## Cuándo no alcanza
+
+Es lineal en el log-odds, así que una frontera de decisión curva se le escapa.
+Cuando la relación tiene interacciones o cortes por umbral —"esta variable
+importa solo si aquella supera cierto valor"— el modelo natural es otro:
+[[arboles-de-decision]].

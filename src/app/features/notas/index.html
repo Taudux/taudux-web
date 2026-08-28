@@ -8,7 +8,7 @@
     content="Notas de ciencia de datos y programación de Taudux. Explóralas por secciones o como un mapa de conocimiento navegable." />
   <link rel="icon" type="image/png" href="/assets/images/1.png">
   <title>Notas | Taudux</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
   <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
@@ -29,64 +29,90 @@
     </div>
   </nav>
 
+  <!--
+    Pizarra de fondo: diagramas de Feynman y ecuaciones de QED en mosaico, detrás
+    de toda la página. Queda por fuera del lienzo del mapa, que tiene su propio
+    cielo y fondo opaco.
+  -->
+  <canvas class="notas__pizarra" id="notasPizarra" aria-hidden="true"></canvas>
+
   <main class="notas">
-    <div class="notas__container u-contenedor u-contenedor--medio">
+    <!--
+      Encabezado y lienzo comparten la misma rejilla: el encabezado ocupa la
+      columna del lienzo, así que la descripción arranca y termina exactamente
+      donde lo hace el mapa. La columna de ruta queda debajo, alineada con el
+      borde superior del lienzo.
+    -->
+    <div class="notas__disposicion">
       <header class="notas__header">
-        <p class="notas__eyebrow">Taudux Academy / Notas</p>
-        <h1 class="notas__title heading--gradient" id="notasTitulo">Notas</h1>
-        <p class="notas__intro" id="notasIntro">
-          Apuntes de ciencia de datos y programación, organizados por áreas.
-          Recórrelos por secciones o míralos como un mapa: cada rama se abre en
-          sus temas y cada tema termina en las notas que lo explican.
-        </p>
-      </header>
-
-      <noscript>
-        <p class="notas__noscript panel">
-          Esta sección arma el índice y el mapa en el navegador, así que necesita
-          JavaScript habilitado. Puedes <a href="/">volver al inicio</a> mientras tanto.
-        </p>
-      </noscript>
-
-      <div class="notas__barra">
-        <nav class="notas__migas" id="notasMigas" aria-label="Ruta de navegación"></nav>
-
-        <div class="notas__acciones">
-          <div class="notas__vistas" role="tablist" aria-label="Forma de explorar">
-            <button type="button" class="notas__vista" id="notasVistaLista" data-vista="lista"
-              role="tab" aria-selected="true">Secciones</button>
-            <button type="button" class="notas__vista" id="notasVistaGrafo" data-vista="grafo"
-              role="tab" aria-selected="false">Mapa</button>
+        <div class="notas__encabezado-fila">
+          <div class="notas__identidad">
+            <p class="notas__eyebrow">Taudux Academy / Notas</p>
+            <h1 class="notas__title" id="notasTitulo">Notas</h1>
           </div>
 
-          <label class="u-visually-hidden" for="notasBuscar">Buscar en las notas</label>
-          <input type="search" class="field notas__buscar" id="notasBuscar" autocomplete="off"
-            placeholder="Buscar en las notas…">
+          <div class="notas__acciones">
+            <div class="notas__vistas" role="tablist" aria-label="Forma de explorar">
+              <button type="button" class="notas__vista" id="notasVistaGrafo" data-vista="grafo"
+                role="tab" aria-selected="true">Mapa</button>
+              <button type="button" class="notas__vista" id="notasVistaLista" data-vista="lista"
+                role="tab" aria-selected="false">Secciones</button>
+            </div>
+
+            <label class="u-visually-hidden" for="notasBuscar">Buscar en las notas</label>
+            <input type="search" class="field notas__buscar" id="notasBuscar" autocomplete="off"
+              placeholder="Buscar…">
+
+            <button type="button" class="notas__recargar" id="notasReintentar" hidden>
+              Reintentar carga
+            </button>
+          </div>
         </div>
-      </div>
 
-      <section class="notas__estado panel" id="notasEstado" role="alert" aria-live="assertive"
-        tabindex="-1" hidden>
-        <p class="notas__estado-mensaje" id="notasEstadoMensaje"></p>
-        <button type="button" class="button button--outline" id="notasReintentar">Reintentar carga</button>
-      </section>
-
-      <section class="notas__resultados" id="notasResultados" aria-label="Resultados de la búsqueda"
-        aria-live="polite" hidden></section>
-
-      <section class="notas__lista" id="notasLista" aria-live="polite" tabindex="-1"></section>
-
-      <section class="notas__grafo" id="notasGrafo" hidden>
-        <div class="notas__grafo-marco" id="notasGrafoLienzo"></div>
-        <p class="notas__grafo-ayuda">
-          Haz clic en una rama para entrar. El nodo del centro te devuelve un nivel.
-          Las líneas punteadas unen ramas que se citan entre sí.
+        <!--
+          En la portada describe la sección; dentro de un área, la historia de esa
+          disciplina, y ahí se queda mientras se navegan sus temas.
+        -->
+        <p class="notas__intro" id="notasIntro">
+          Este es el espacio de aprendizaje de Taudux: las notas que hacen falta
+          para aprender las áreas que desarrollamos. Explóralas como un mapa —cada
+          nodo se abre en sus temas, y cada tema termina en las notas que lo
+          explican— o recórrelas por secciones.
         </p>
-        <h2 class="u-visually-hidden">Ramas de este nivel</h2>
-        <ul class="notas__grafo-lista" id="notasGrafoLista"></ul>
-      </section>
 
-      <article class="notas__lectura" id="notasLectura" hidden></article>
+        <nav class="notas__migas" id="notasMigas" aria-label="Ruta de navegación"></nav>
+
+        <p class="notas__estado" id="notasEstado" role="alert" aria-live="assertive" tabindex="-1"
+          hidden><span id="notasEstadoMensaje"></span></p>
+
+        <noscript>
+          <p class="notas__noscript panel">
+            Esta sección arma el índice y el mapa en el navegador, así que necesita
+            JavaScript habilitado. Puedes <a href="/">volver al inicio</a> mientras tanto.
+          </p>
+        </noscript>
+      </header>
+
+      <nav class="notas__ruta" id="notasRuta" aria-labelledby="notasRutaTitulo" hidden>
+        <p class="notas__ruta-titulo" id="notasRutaTitulo">Dónde estás</p>
+        <ol class="notas__ruta-lista" id="notasRutaLista"></ol>
+      </nav>
+
+      <div class="notas__contenido">
+        <section class="notas__resultados" id="notasResultados" aria-label="Resultados de la búsqueda"
+          aria-live="polite" hidden></section>
+
+        <section class="notas__lista" id="notasLista" aria-live="polite" tabindex="-1"></section>
+
+        <section class="notas__grafo" id="notasGrafo" hidden>
+          <div class="notas__grafo-marco" id="notasGrafoLienzo"></div>
+          <p class="notas__grafo-ayuda" id="notasGrafoAyuda"></p>
+          <h2 class="u-visually-hidden">Ramas de este nivel</h2>
+          <ul class="notas__grafo-lista" id="notasGrafoLista"></ul>
+        </section>
+
+        <article class="notas__lectura" id="notasLectura" hidden></article>
+      </div>
     </div>
   </main>
 
@@ -101,7 +127,9 @@
   <script src="/app/features/notas/notas.markdown.js"></script>
   <script src="/app/features/notas/notas.lista.js"></script>
   <script src="/app/features/notas/notas.lectura.js"></script>
+  <script src="/app/features/notas/notas.pizarra.js"></script>
   <script src="/app/features/notas/notas.grafo.js"></script>
+  <script src="/app/features/notas/notas.ruta.js"></script>
   <script src="/app/features/notas/notas.js"></script>
 </body>
 

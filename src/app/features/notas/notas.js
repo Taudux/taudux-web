@@ -1,7 +1,7 @@
 /*
   Controlador del área de notas. Se carga al final: depende de notas.arbol.js,
-  notas.service.js, notas.lista.js, notas.lectura.js, notas.grafo.js y
-  notas.markdown.js.
+  notas.service.js, notas.lista.js, notas.lectura.js, notas.grafo.js,
+  notas.ruta.js y notas.markdown.js.
 
   Todo lo que se ve sale del hash. Ni la vista elegida ni el nivel en el que
   está parado el lector viven en una variable aparte, porque entonces habría dos
@@ -20,6 +20,7 @@ let grafoMontado = null;
    una descarga que llegó tarde. Ver renderizarLecturaDeNota. */
 let generacionDeNavegacion = 0;
 let temporizadorDeBusqueda = null;
+let pizarraMontada = null;
 let introPredeterminada = "";
 
 function cacharElementosDeNotas() {
@@ -36,9 +37,13 @@ function cacharElementosDeNotas() {
     "notasGrafo",
     "notasGrafoLienzo",
     "notasGrafoLista",
+    "notasGrafoAyuda",
     "notasLectura",
     "notasVistaLista",
     "notasVistaGrafo",
+    "notasRuta",
+    "notasRutaLista",
+    "notasPizarra",
   ].forEach((id) => {
     elementosNotas[id] = document.getElementById(id);
   });
@@ -48,11 +53,15 @@ function cacharElementosDeNotas() {
 function mostrarEstadoDeNotas(mensaje) {
   elementosNotas.notasEstadoMensaje.textContent = mensaje;
   elementosNotas.notasEstado.hidden = false;
+  /* El botón de reintentar vive en la barra de acciones, no dentro del aviso:
+     ahí es donde el lector ya está mirando y no obliga a un cuadro aparte. */
+  elementosNotas.notasReintentar.hidden = false;
   elementosNotas.notasEstado.focus();
 }
 
 function ocultarEstadoDeNotas() {
   elementosNotas.notasEstado.hidden = true;
+  elementosNotas.notasReintentar.hidden = true;
 }
 
 /* El grafo deja un bucle de animación y listeners de ventana: sin desmontarlo,
@@ -65,6 +74,15 @@ function desmontarGrafo() {
 
 function mostrarSecciones({ lista = false, grafo = false, lectura = false, resultados = false }) {
   if (!grafo) desmontarGrafo();
+  /*
+    Leer y explorar son dos modos distintos, no dos pantallas del mismo. La clase
+    cambia la paleta entera a papel claro —no solo la de la nota— porque una hoja
+    blanca rodeada de interfaz oscura se ve como un recorte, no como un documento.
+  */
+  document.body.classList.toggle("notas-page--lectura", lectura);
+  /* El fondo acompaña el cambio de modo: pizarra de QED al explorar, escalera de
+     estados al leer. */
+  if (pizarraMontada) pizarraMontada.usarModo(lectura ? "lectura" : "exploracion");
   elementosNotas.notasLista.hidden = !lista;
   elementosNotas.notasGrafo.hidden = !grafo;
   elementosNotas.notasLectura.hidden = !lectura;
@@ -80,12 +98,20 @@ function actualizarSelectorDeVista(vista, visible) {
   });
 }
 
+/*
+  El título dice dónde estás; la descripción, en qué disciplina. Por eso el
+  título sigue al nodo actual y el texto de abajo se queda en el del área
+  mientras se navegan sus temas: es el ancla de contexto que evita perderse tres
+  niveles adentro.
+*/
 function actualizarEncabezado(nodo) {
   const esRaiz = nodo.tipo === "raiz";
+  const area = areaDeNodo(arbolDeNotas, nodo);
+
   elementosNotas.notasTitulo.textContent = esRaiz ? "Notas" : nodo.titulo;
   elementosNotas.notasIntro.textContent = esRaiz
     ? introPredeterminada
-    : nodo.resumen || introPredeterminada;
+    : (area && (area.descripcion || area.resumen)) || nodo.resumen || introPredeterminada;
   document.title = esRaiz ? "Notas | Taudux" : `${nodo.titulo} | Notas | Taudux`;
 }
 
@@ -104,6 +130,16 @@ function irA(segmentos, vista, { reemplazar = false } = {}) {
   window.location.hash = destino;
 }
 
+function dibujarRuta(nodo, vista) {
+  montarRutaDeNotas({
+    panel: elementosNotas.notasRuta,
+    lista: elementosNotas.notasRutaLista,
+    arbol: arbolDeNotas,
+    nodo,
+    vista,
+  });
+}
+
 function renderizarVistaDeLista(nodo, vista) {
   mostrarSecciones({ lista: true });
   renderizarNivelDeNotas(elementosNotas.notasLista, nodo, vista);
@@ -115,6 +151,7 @@ function renderizarVistaDeGrafo(nodo, vista) {
   grafoMontado = montarGrafoDeNotas({
     contenedor: elementosNotas.notasGrafoLienzo,
     listaAccesible: elementosNotas.notasGrafoLista,
+    ayuda: elementosNotas.notasGrafoAyuda,
     arbol: arbolDeNotas,
     nodo,
     vista,
@@ -157,6 +194,10 @@ function renderizarDesdeElHash() {
   actualizarEncabezado(nodo);
   renderizarMigasDeNotas(elementosNotas.notasMigas, migasDeNotas(arbolDeNotas, nodo), vista);
   actualizarSelectorDeVista(vista, nodo.tipo !== "nota");
+
+  /* La columna vertebral se redibuja acá y no en cada vista: lo que muestra es
+     dónde está parado el lector, sin importar cómo llegó. */
+  dibujarRuta(nodo, vista);
 
   if (nodo.tipo === "nota") {
     renderizarVistaDeLectura(nodo, vista);
@@ -239,6 +280,9 @@ async function iniciarNotas() {
 
 document.addEventListener("DOMContentLoaded", () => {
   cacharElementosDeNotas();
+  /* Fondo de página: se pinta una vez y se queda. No depende de que el
+     manifiesto cargue, así que va antes de iniciarNotas. */
+  pizarraMontada = montarPizarraDeNotas(elementosNotas.notasPizarra);
   conectarEventosDeNotas();
   iniciarNotas();
 });

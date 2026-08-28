@@ -71,3 +71,7 @@ pueden interpretar en términos de las variables originales—.
 tienden a parecerse entre sí y los algoritmos basados en distancia pierden
 capacidad de discriminar. Reducir a unas pocas componentes antes de correr
 [[k-means]] suele mejorar los grupos, además de permitir graficarlos.
+
+> PCA maximiza varianza, y la varianza depende de las unidades: sin estandarizar,
+> la primera componente será simplemente la columna con los números más grandes.
+> El detalle está en [[escalado-de-variables]].

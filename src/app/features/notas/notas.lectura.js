@@ -152,7 +152,9 @@ async function renderizarLecturaDeNota({ contenedor, nota, arbol, vista, sigueVi
     console.error("[notas.lectura] no se pudo renderizar el markdown", error);
     const crudo = document.createElement("pre");
     crudo.className = "notas__prosa-crudo";
-    crudo.textContent = resultado.markdown;
+    /* Sin el bloque de metadatos: incluso el respaldo tiene que verse como la
+       nota, no como el archivo. */
+    crudo.textContent = separarFrontmatter(resultado.markdown).cuerpo;
     cuerpo.replaceChildren(crudo);
   }
 

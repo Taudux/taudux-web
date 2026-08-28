@@ -60,3 +60,8 @@ Todo lo anterior descansa en un supuesto costoso: que las etiquetas existen.
 Etiquetar suele ser lento, caro y a veces imposible. Cuando no hay $y$, el
 problema cambia de naturaleza —no solo de algoritmo— y entramos en
 [[que-es-el-aprendizaje-no-supervisado]].
+
+Y hay un tercer caso, distinto de los dos: cuando no existe una respuesta
+correcta que copiar sino solo una señal de qué tan bien va saliendo, y donde cada
+decisión cambia el problema siguiente. Eso es
+[[que-es-el-aprendizaje-por-refuerzo]].

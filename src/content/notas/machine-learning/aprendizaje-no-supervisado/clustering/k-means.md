@@ -69,3 +69,12 @@ Y si hay muchas columnas, conviene reducirlas antes: en dimensión alta las
 distancias euclidianas se vuelven casi iguales entre todos los pares y k-means
 pierde poder de discriminación. Ese pretratamiento es
 [[analisis-de-componentes-principales]].
+
+Si además los grupos no son redondos —lunas, espirales, densidades irregulares—
+el problema no es la $k$ sino el supuesto de forma esférica, y ahí la
+herramienta correcta es [[dbscan]], que agrupa por densidad y de paso marca los
+puntos que no pertenecen a nada.
+
+> Nada de lo anterior importa si las columnas están en unidades distintas: la
+> distancia euclidiana quedaría dominada por la de números más grandes. Ver
+> [[escalado-de-variables]].
