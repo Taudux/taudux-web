@@ -255,6 +255,35 @@
           <div class="admin__grafico" id="graficoSerie" aria-live="polite"></div>
         </section>
 
+        <!-- Cuánto dura cada visita. Nace oculta y se revela sólo cuando el
+             servidor manda `permanencia` — mismo criterio que las de arriba: un
+             histograma vacío se lee como "acá no se usa la herramienta".
+
+             ES LA ÚNICA SECCIÓN QUE EL INTERRUPTOR NO PUEDE GOBERNAR, y no es
+             un descuido: `extractor_visita` no guarda `user_id` ni
+             `sesion_anon`, así que no hay a quién excluir. Se declara abajo, en
+             la propia sección, porque nadie lo deduce mirando. -->
+        <section class="panel panel--spacious" id="seccionPermanencia" hidden>
+          <h2 class="courses__subtitle">
+            Permanencia y tiempo de uso
+            <span class="admin__mes" id="mesPermanencia"></span>
+            <span class="admin__insignia" id="promedioPermanencia" hidden></span>
+          </h2>
+          <p class="admin__ayuda">
+            Cuánto tiempo <strong>activo</strong> dura cada visita a la
+            herramienta. El contador se pausa cuando la pestaña deja de estar a
+            la vista: una pestaña abierta toda la noche no son ocho horas de uso.
+          </p>
+          <div class="admin__grafico" id="graficoPermanencia" aria-live="polite"></div>
+          <p class="admin__nota-sin-filtrar">
+            El interruptor de administradores <strong>no afecta a esta
+            sección</strong>: la visita no guarda quién fue, así que no hay a
+            quién excluir. Y los tiempos son un <strong>piso</strong> — el
+            registro se envía al salir, y cerrar la tapa o matar el navegador no
+            avisa a nadie.
+          </p>
+        </section>
+
         <!-- "Quién lo usa y cuánto" se retiró el 2026-08-28.
 
              Mostraba, por persona, nombre + correo + estado + una franja de 24

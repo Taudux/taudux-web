@@ -605,6 +605,11 @@
        El orden de los <script> es una dependencia real en este sitio — no hay
        sistema de módulos, todo vive en globales. -->
   <script src="/app/features/transactions/api-cliente.js"></script>
+  <!-- Mide cuánto tiempo ACTIVO pasa alguien acá, sin decir quién. Va DESPUÉS
+       de api-cliente.js porque usa su constante `API`, y ANTES de extractor.js
+       porque éste le avisa por evento cuando hay sesión y cuando una extracción
+       sale bien. -->
+  <script src="/app/core/telemetry/permanencia.js"></script>
   <script src="/app/features/transactions/extractor.js"></script>
 </body>
 

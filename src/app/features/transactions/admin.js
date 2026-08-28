@@ -440,6 +440,7 @@
   */
   const panelEnCache = {
     porDia: null,
+    permanencia: null,
     porDiaSinAdmins: null,
     periodo: "",
   };
@@ -485,6 +486,10 @@
       memoria del navegador un perfil por persona que ninguna pantalla usa.
     */
     panelEnCache.porDia = cuerpo.por_dia || null;
+
+    // La permanencia NO entra en `repintarTodo()`: el interruptor de
+    // administración no la gobierna, porque la visita no guarda quién fue.
+    panelEnCache.permanencia = cuerpo.permanencia || null;
 
     const filtrado = cuerpo.por_dia_sin_admins;
     panelEnCache.porDiaSinAdmins = filtrado === undefined || filtrado === null
@@ -1206,6 +1211,149 @@
     bloque.hidden = false;
   }
 
+  // --- Permanencia y tiempo de uso -----------------------------------------
+
+  /*
+    Cuánto dura cada visita, repartido en seis tramos.
+
+    LOS TRAMOS SON UNA CONSTANTE DE ACÁ, no las claves del payload. Recorrer lo
+    que el servidor mandó dejaría fuera cualquier tramo sin visitas, y en un
+    histograma la POSICIÓN es el dato: saltarse un hueco convierte una
+    distribución con dos picos en una campana. Es el mismo criterio que ya
+    obliga a la franja horaria a tener siempre 24 celdas y a la serie temporal
+    a rellenar los días muertos.
+
+    El orden importa y por eso es un array y no un objeto: en JavaScript el
+    orden de las claves de un objeto es una promesa frágil, y acá el eje se
+    lee de izquierda a derecha.
+
+    ESTA SECCIÓN NO OBEDECE AL INTERRUPTOR DE ADMINISTRACIÓN, y por eso no está
+    en `repintarTodo()`. `extractor_visita` no guarda `user_id` ni
+    `sesion_anon`: no hay a quién excluir. La sección lo declara en pantalla.
+  */
+  const TRAMOS_PERMANENCIA = [
+    "0-30s", "30s-1m", "1m-3m", "3m-5m", "5m-10m", ">10m",
+  ];
+
+  /* 258 no le dice nada a nadie; "4m 18s" sí. Los segundos van con dos dígitos
+     para que la columna no baile entre "4m 8s" y "4m 18s". */
+  const comoTiempo = (segundos) => {
+    const minutos = Math.floor(segundos / 60);
+    const resto = segundos % 60;
+    return minutos
+      ? `${minutos}m ${String(resto).padStart(2, "0")}s`
+      : `${resto}s`;
+  };
+
+  function pintarPermanencia() {
+    const caja = el("graficoPermanencia");
+    const bloque = el("seccionPermanencia");
+    const insignia = el("promedioPermanencia");
+    if (!caja || !bloque) return;
+
+    /*
+      TRES ESTADOS, y el del medio es el que hace falta declarar.
+
+        · `!datos`        el servidor no manda el campo — no mide. Oculta.
+        · `datos.total`   en cero: mide y todavía no entró nadie. VISIBLE, y lo
+                          dice. Sin este caso, "no desplegado" y "desplegado sin
+                          visitas" se ven idénticos, y no habría forma de saber
+                          si la sección está vacía porque algo falló.
+        · con datos       el histograma.
+    */
+    const datos = panelEnCache.permanencia;
+    if (!datos) {
+      bloque.hidden = true;
+      return;
+    }
+
+    const nodoMes = el("mesPermanencia");
+    if (nodoMes) {
+      nodoMes.textContent = panelEnCache.periodo
+        ? `· ${panelEnCache.periodo}` : "";
+    }
+    if (datos.total === 0) {
+      bloque.hidden = false;
+      if (insignia) insignia.hidden = true;
+      caja.innerHTML =
+        '<p class="admin__vacio">Todavía no se registró ninguna visita este '
+        + 'mes. La medición está activa: falta que alguien entre.</p>';
+      return;
+    }
+
+    if (insignia) {
+      insignia.hidden = false;
+      insignia.textContent = `Promedio: ${comoTiempo(datos.promedio_s || 0)}`;
+    }
+
+    const de = (tramo) => datos.tramos?.[tramo] || { anon: 0, cuenta: 0 };
+    const totalDe = (tramo) => {
+      const t = de(tramo);
+      return (t.anon || 0) + (t.cuenta || 0);
+    };
+
+    /*
+      La altura sale del MÁXIMO y no del total, igual que las barras del mapa y
+      por la misma razón medida: sobre el total, con seis tramos todas las
+      columnas quedan de dos píxeles y dejan de compararse entre sí. La
+      proporción DENTRO de la columna sí va sobre su propio total.
+    */
+    const maximo = Math.max(1, ...TRAMOS_PERMANENCIA.map(totalDe));
+
+    const columnas = TRAMOS_PERMANENCIA.map((tramo) => {
+      const { anon = 0, cuenta = 0 } = de(tramo);
+      const suma = anon + cuenta;
+      const alto = (suma / maximo) * 100;
+      const parte = (n) => (suma ? (n / suma) * 100 : 0);
+      const etiqueta =
+        `${tramo}: ${suma} — ${cuenta} con sesión, ${anon} sin sesión`;
+
+      return `
+        <li class="admin__columna">
+          <span class="admin__columna-total">${suma}</span>
+          <span class="admin__columna-pista" role="img"
+                aria-label="${escapar(etiqueta)}" title="${escapar(etiqueta)}">
+            <span class="admin__columna-pila" style="height: ${alto.toFixed(2)}%">
+              <span class="admin__columna-parte admin__columna-parte--cuenta"
+                    style="height: ${parte(cuenta).toFixed(2)}%"></span>
+              <span class="admin__columna-parte admin__columna-parte--anon"
+                    style="height: ${parte(anon).toFixed(2)}%"></span>
+            </span>
+          </span>
+          <span class="admin__columna-nombre">${escapar(tramo)}</span>
+        </li>`;
+    }).join("");
+
+    /* Los tres cortes gruesos, que es como se lee un histograma de un vistazo:
+       rápido, normal, largo. Salen de sumar tramos, no de un dato aparte —dos
+       números para lo mismo pueden discrepar. */
+    const rango = (desde, hasta) => TRAMOS_PERMANENCIA
+      .slice(desde, hasta).reduce((s, t) => s + totalDe(t), 0);
+    const porciento = (n) => Math.round((n / datos.total) * 100);
+
+    const tarjetas = [
+      ["Menos de 1 min", "Rápido", rango(0, 2)],
+      ["De 1 a 5 min", "Estándar", rango(2, 4)],
+      ["Más de 5 min", "Intensivo", rango(4, 6)],
+    ].map(([titulo, mote, n]) => `
+      <li class="admin__corte">
+        <span class="admin__corte-nombre">${titulo} · ${mote}</span>
+        <span class="admin__corte-cifra">${porciento(n)}%</span>
+      </li>`).join("");
+
+    const completitud = Math.round((datos.con_resultado / datos.total) * 1000) / 10;
+
+    bloque.hidden = false;
+    caja.innerHTML = leyendaDe()
+      + `<ul class="admin__columnas">${columnas}</ul>`
+      + `<ul class="admin__cortes">${tarjetas}</ul>`
+      + `<p class="admin__consumo">
+           ${completitud}% de las visitas terminó en un análisis ·
+           ${datos.total} ${datos.total === 1 ? "visita" : "visitas"}
+         </p>`
+      + avisoDeMuestra(datos.total, panelEnCache.periodo);
+  }
+
   // --- Usuarios del sitio --------------------------------------------------
 
   /*
@@ -1268,6 +1416,7 @@
         // estaba oculto.
         recordarRegiones(cuerpo);
         pintarSerie();
+        pintarPermanencia();
       } else {
         console.warn("[admin] /api/admin/perfiles respondió", r.status);
         fallarRegiones();

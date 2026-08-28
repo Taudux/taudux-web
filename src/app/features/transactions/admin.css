@@ -59,6 +59,31 @@
     --serie-sin-sesion: var(--color-warning);
   }
 
+  /* EL ATRIBUTO `hidden` GANA. Y hay que decirlo acá porque esta hoja se lo
+   * quitó tres veces sin querer.
+   *
+   * El `display: none` del atributo lo pone la hoja del NAVEGADOR, con la
+   * especificidad más baja que existe. Cualquier `display` de autor le gana —
+   * y esta hoja declara varios porque los necesita para maquetar. Resultado:
+   * un elemento con `hidden` puesto que se sigue viendo, y un `.hidden = true`
+   * en el JavaScript que no hace nada.
+   *
+   * Las tres veces, todas encontradas MIRANDO la pantalla y ninguna por un
+   * test:
+   *
+   *   · `.admin__municipios` (`display: grid`) — la lista nacía ABIERTA, con
+   *     el chevron diciendo que estaba cerrada.
+   *   · `.admin__insignia` (`display: inline-block`) — con `hidden` se veía
+   *     igual: una pastilla cian vacía de 13px al lado del mes.
+   *   · y esa misma insignia en Distribución Geográfica, que hereda la regla.
+   *
+   * `!important` no es pereza acá: es la forma estándar de devolverle al
+   * atributo la prioridad que su propia hoja no puede defender. Y cierra la
+   * clase entera de bug en vez de taparla una regla por vez. */
+  [hidden] {
+    display: none !important;
+  }
+
   /* Va debajo del título de la lista y dice de dónde salen esos datos. No es
      decoración: sin ella nadie sabe si el padrón sale de la base o de lo que
      el servicio recuerde — la confusión que costó las secciones borradas. */
@@ -747,13 +772,6 @@
     list-style: none;
   }
 
-  /* Sin esto la lista nace ABIERTA, y el chevron miente diciendo que está
-     cerrada. El `display: none` del atributo `hidden` lo pone la hoja del
-     navegador, y CUALQUIER `display` de autor le gana por especificidad —
-     incluida la regla de acá arriba. */
-  .admin__municipios[hidden] {
-    display: none;
-  }
 
   /* El nombre del municipio salta a la segunda columna: la primera es la del
      chevron, y dejarla vacía es lo que alinea su barra con la del estado que
@@ -816,4 +834,118 @@
     font-size: 0.7rem;
   }
 
+
+  /* --- Permanencia y tiempo de uso (2026-08-28) -------------------------- */
+
+  /* Columnas verticales, que volvieron acá después de irse con la fusión
+     geográfica del 2026-08-28. Allá sobraban —una lista de estados se lee
+     mejor en horizontal—; acá las pide el dato: un histograma tiene un eje
+     ordenado y la altura es la comparación. */
+  .admin__columnas {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    block-size: 11rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .admin__columna {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    block-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .admin__columna-total {
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* La pista da la referencia. Sin un fondo visible, una columna corta no se
+     lee como "poco" sino como "casi nada", porque no hay contra qué medirla. */
+  .admin__columna-pista {
+    inline-size: 100%;
+    block-size: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    background: rgb(255 255 255 / 6%);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  /* Las dos series apiladas. Vertical, así que la suma de las dos alturas es el
+     100% de su propia columna — no del total del histograma. */
+  .admin__columna-pila {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin__columna-parte {
+    display: block;
+  }
+
+  .admin__columna-parte--cuenta { background: var(--serie-con-sesion); }
+  .admin__columna-parte--anon { background: var(--serie-sin-sesion); }
+
+  /* Corte por palabra y no por letra: `overflow-wrap: anywhere` es lo que esta
+     hoja usa para los correos, y heredado acá partía "30s-1m" en cualquier
+     lado. Medido el 2026-08-25 con los nombres de municipio, mismo defecto. */
+  .admin__columna-nombre {
+    color: var(--color-text-subtle);
+    font-size: 0.68rem;
+    text-align: center;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+
+  /* Los tres cortes gruesos. Separados del histograma por una línea porque son
+     otra lectura del mismo dato: el gráfico muestra la forma, esto el resumen
+     que se cita en una conversación. */
+  .admin__cortes {
+    display: flex;
+    gap: 0.75rem;
+    margin: 1.25rem 0 0;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid rgb(255 255 255 / 10%);
+    list-style: none;
+  }
+
+  .admin__corte {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.75rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-field);
+  }
+
+  .admin__corte-nombre {
+    color: var(--color-text-subtle);
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  .admin__corte-cifra {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* En pantalla angosta los tres cortes se apilan: a un tercio de 320px, el
+     rótulo "De 1 a 5 min · Estándar" se parte en cuatro renglones. */
+  @media (max-width: 34rem) {
+    .admin__cortes {
+      flex-direction: column;
+    }
+  }
 }

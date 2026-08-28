@@ -1226,22 +1226,33 @@ test("the two counts sit in their own column, each in its series' colour", () =>
   );
 });
 
-test("a collapsed state really hides its municipalities", () => {
+test("the hidden attribute wins over any display this sheet declares", () => {
   /*
-    Encontrado MIRANDO la pantalla, no corriendo la suite: la lista nacía
-    abierta con el chevron diciendo que estaba cerrada.
+    LA MISMA TRAMPA, TRES VECES. Por eso se arregla de raíz y no caso por caso.
 
-    El `display: none` del atributo `hidden` lo pone la hoja del navegador, y
-    cualquier `display` de autor le gana. `.admin__municipios` necesita
-    `display: grid` para alinear sus barras, así que tiene que devolver
-    explícitamente el `none` que le pisó.
+    El `display: none` del atributo `hidden` lo pone la hoja del navegador, con
+    la especificidad más baja que existe. CUALQUIER `display` de autor le gana,
+    y esta hoja declara varios porque los necesita para maquetar.
+
+    Las tres apariciones, todas encontradas MIRANDO la pantalla y ninguna por
+    un test:
+
+      · `.admin__municipios` (`display: grid`) — la lista de municipios nacía
+        ABIERTA con el chevron diciendo que estaba cerrada.
+      · `.admin__insignia` (`display: inline-block`) — con `hidden` puesto se
+        veía igual, como una pastilla cian vacía de 13px al lado del mes.
+      · y la misma insignia en Distribución Geográfica, que hereda la regla.
+
+    Una regla global cierra la clase entera de bug. `!important` acá no es
+    pereza: es la forma estándar de devolverle al atributo la prioridad que la
+    hoja del navegador no puede defender.
   */
   const css = sinComentariosCss(read(HOJA));
 
   assert.match(
     css,
-    /\.admin__municipios\[hidden\]\s*\{[^}]*display:\s*none/,
-    "un `display` de autor pisa al del atributo hidden: hay que reponerlo"
+    /\[hidden\]\s*\{[^}]*display:\s*none\s*!important/,
+    "el atributo `hidden` tiene que ganarle a los `display` de esta hoja"
   );
 });
 
@@ -1589,4 +1600,131 @@ test("the control states what it governs and what it leaves alone", () => {
 
   assert.match(html, /La tabla de cuentas no cambia/i,
     "el control dice a qué NO afecta, que es lo que nadie deduce");
+});
+
+/* ---------------------------------------------------------------------------
+ * "Permanencia y tiempo de uso" (2026-08-28): el histograma de cuánto dura
+ * cada visita.
+ *
+ * Es la única sección que NO puede honrar el interruptor de administración, y
+ * por una razón de diseño y no por un descuido: `extractor_visita` no guarda
+ * `user_id` ni `sesion_anon`, así que no hay a quién excluir. Lo dice en
+ * pantalla, igual que la serie temporal declara lo suyo.
+ * ------------------------------------------------------------------------ */
+
+test("the permanence section has three states, not two", () => {
+  /*
+    **Cero visitas no es lo mismo que no poder medirlas**, y sin esa distinción
+    los dos se ven idénticos: una sección que no está.
+
+      · el campo no viene   -> oculta   (este servidor no mide)
+      · el campo en cero    -> VISIBLE y vacía, diciéndolo
+      · el campo con datos  -> el histograma
+
+    Importa después del deploy: sin el estado del medio no habría forma de
+    saber si la sección está vacía porque algo falló o porque nadie ha entrado
+    todavía — y con 8 extracciones al mes, eso puede ser un buen rato.
+
+    Es el mismo criterio con el que `por_region_sin_admins` trata `{}` como un
+    dato y la ausencia como otra cosa.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="seccionPermanencia"[^>]*\shidden/,
+    "nace oculta: sin el campo, el servidor no mide");
+  assert.match(html, /id="graficoPermanencia"/, "y tiene su contenedor");
+
+  const js = seccion(read(SCRIPT), "Permanencia y tiempo de uso");
+
+  assert.match(js, /!datos/,
+    "sin el campo se oculta");
+  assert.match(
+    js,
+    /datos\.total\s*===\s*0|!datos\.total/,
+    "pero con el campo en cero NO se oculta: se distingue el caso"
+  );
+  assert.match(
+    js,
+    /todavía no|aún no/i,
+    "y se dice en pantalla que todavía no hubo visitas"
+  );
+
+  assert.match(read(SCRIPT), /cuerpo\.permanencia/,
+    "lee el agregado de la respuesta");
+});
+
+test("the buckets are fixed and ordered, and an empty one keeps its slot", () => {
+  /*
+    En un histograma la POSICIÓN es el dato. Saltarse un tramo sin visitas
+    convierte una distribución con dos picos en una campana — la misma razón
+    por la que la franja horaria siempre tiene 24 celdas y la serie temporal
+    rellena los días muertos.
+  */
+  const js = seccion(read(SCRIPT), "Permanencia y tiempo de uso");
+
+  assert.match(js, /TRAMOS_PERMANENCIA/,
+    "los tramos son una constante con nombre, no un objeto que llega y se pinta");
+  assert.match(
+    js,
+    /TRAMOS_PERMANENCIA\.map/,
+    "y se recorre la constante, no las claves del payload: así un tramo que el " +
+      "servidor no mandó igual ocupa su lugar"
+  );
+});
+
+test("the average is read as time, not as a raw second count", () => {
+  /*
+    `258` no le dice nada a nadie; `4m 18s` sí. Es la misma diferencia que
+    justifica que la ubicación se muestre como "Querétaro" y no como un par de
+    coordenadas.
+  */
+  const js = seccion(read(SCRIPT), "Permanencia y tiempo de uso");
+
+  assert.match(js, /promedio_s/, "lee el promedio en segundos");
+  assert.match(
+    js,
+    /Math\.floor\([^)]*\/ 60\)/,
+    "y lo parte en minutos"
+  );
+  assert.match(js, /%\s*60/, "y segundos");
+});
+
+test("column heights come from the MAXIMUM, never from the total", () => {
+  /*
+    Heredado de las dos formas que ya lo hacían, y por la misma razón medida:
+    sobre el total, con seis tramos todas las columnas quedan de dos píxeles y
+    dejan de compararse entre sí.
+  */
+  const js = seccion(read(SCRIPT), "Permanencia y tiempo de uso");
+
+  assert.match(js, /Math\.max\(/, "la escala sale del máximo de los tramos");
+  assert.match(js, /\/ maximo\) \* 100/, "y la altura se calcula contra él");
+});
+
+test("the section declares the two things it cannot promise", () => {
+  /*
+    Las dos son limitaciones reales y ninguna se adivina mirando el gráfico.
+    Un número presentado como exacto cuando no lo es es la clase de mentira que
+    este panel ya pagó una vez.
+  */
+  /*
+    Los espacios se normalizan y las etiquetas se quitan ANTES de buscar. El
+    ajuste de línea del HTML parte las frases —"no afecta a esta ⏎ sección"— y
+    un `<strong>` en el medio las parte otra vez. Sin esto, el aserto falla
+    contra una página que sí dice lo que se le pide.
+  */
+  const prosa = sinComentariosHtml(read(PAGINA))
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ");
+
+  assert.match(
+    prosa,
+    /interruptor de administradores no afecta a esta sección/i,
+    "que el filtro de administración no la toca, y por qué"
+  );
+  assert.match(
+    prosa,
+    /los tiempos son un piso/i,
+    "y que los tiempos son un piso, no una medida exacta"
+  );
 });

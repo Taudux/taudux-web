@@ -205,6 +205,10 @@ btnProcesar.addEventListener("click", async () => {
                    json.puede_donar === true);
       return;
     }
+    // La visita llegó a producir una tabla. Es lo único que separa "entró y se
+    // fue" de "entró y resolvió", y de ahí sale la tasa de completitud del
+    // panel — sin tocar `exito`, que hoy siempre vale true (F41).
+    window.dispatchEvent(new CustomEvent("taudux:permanencia-extraccion"));
     pintarResultado(json);
   } catch (error) {
     mostrarError("No pudimos procesarlo", "Ocurrió un problema de conexión. Inténtalo de nuevo.");
@@ -1955,6 +1959,22 @@ function actualizarCuota(cuota) {
   recordarSesionAnon(cuota.sesion_anon);
 
   planActual = cuota.plan;
+
+  /*
+    La medición de permanencia necesita saber si hubo sesión, y NO se lo
+    preguntamos a Supabase: se le avisa por evento con un booleano.
+
+    Va acá porque éste es el único punto por el que pasa toda respuesta con
+    `cuota`, igual que `recordarSesionAnon()` arriba — y porque el servidor ya
+    resolvió la pregunta. Deducirlo en el front sería una segunda fuente para
+    lo mismo.
+
+    "Con sesión" y no "con cuenta": alguien registrado que no inició sesión
+    llega como anónimo, y así lo cuenta el resto del panel (F47).
+  */
+  window.dispatchEvent(new CustomEvent("taudux:permanencia-sesion", {
+    detail: { conSesion: cuota.plan !== "anonimo" },
+  }));
   // Las capacidades vienen resueltas del servidor; el front no las deduce.
   permisos = cuota.puede || { paneles: [], descargas: false };
   avisoPlan = cuota.aviso || "";
