@@ -27,15 +27,38 @@
  *
  * QUÉ VIAJA, Y ES UNA LISTA CERRADA
  *
- * Tres claves: los segundos, si había sesión iniciada (un booleano, no un
- * nombre) y si la visita llegó a producir una tabla. Nada más. No viaja
- * `user_id`, ni el correo, ni el id anónimo — y `tests/permanencia.test.js` lo
- * blinda clave por clave: agregar una pone la suite en rojo.
+ * Cuatro claves: los segundos, si había sesión iniciada, si la visita llegó a
+ * producir una tabla, y si quien visitaba es administrador. Los tres últimos
+ * son BOOLEANOS, no nombres. No viaja `user_id`, ni el correo, ni el id
+ * anónimo — y `tests/permanencia.test.js` lo blinda clave por clave: agregar
+ * una pone la suite en rojo.
  *
  * El motivo no es estético. El 2026-08-28 se retiró del panel la sección
  * "Quién lo usa y cuánto" justamente porque cruzaba identidad con horario, y
  * eso es un perfil de uso. Medir la permanencia POR PERSONA sería lo mismo con
  * otro eje. El histograma no lo necesita: cuenta visitas, no gente.
+ *
+ * LA CUARTA CLAVE ENTRÓ DESPUÉS, Y HAY QUE MIRARLA DE FRENTE
+ *
+ * `es_admin` se agregó el 2026-08-29 para que el interruptor "excluir a los
+ * administradores" gobierne también esta sección. Hasta entonces no podía, y la
+ * sección lo declaraba en pantalla.
+ *
+ * El costo: con uno o dos administradores, una fila marcada `es_admin: true`
+ * señala en la práctica a una persona. Lo que lo hace aceptable es QUIÉN queda
+ * señalado —el dueño del sitio, no quien lo usa— y que se declara en el aviso
+ * de privacidad. Las filas de los demás siguen sin nada que las distinga: la
+ * inmensa mayoría lleva `false`, que no señala a nadie.
+ *
+ * Y sólo alcanza a los admins CON SESIÓN. Uno que navegue sin iniciarla llega
+ * como anónimo y se cuenta como tal — igual que en las otras tres secciones,
+ * que excluyen por `user_id` y tampoco pueden verlo.
+ *
+ * El valor lo resuelve el SERVIDOR (`cuota.es_admin`, que sale de leer
+ * `perfiles.rol`) y el navegador sólo lo devuelve. Que un cliente pueda
+ * falsearlo no agrega una suposición nueva: `con_sesion` ya viaja igual, por el
+ * mismo endpoint sin autenticación. Lo que protege el dato de verdad es la RLS
+ * de lectura, no la confianza en el emisor.
  *
  * POR QUÉ TIEMPO ACTIVO Y NO TIEMPO DE RELOJ
  *
@@ -88,6 +111,12 @@
   let desde = null;       // cuándo volvió a estar visible; null = pausado
   let conSesion = false;
   let extrajo = false;
+  /* Arranca en `false` y la dirección no es simétrica. Sin aviso del servidor,
+     la visita de un admin se cuela entre las normales: ensucia un poco. Al
+     revés —`true` por defecto— toda visita cuyo aviso se perdiera desaparecería
+     de la vista filtrada, que es justo la que el interruptor enciende para leer
+     el uso real. Contar de más es el error barato. */
+  let esAdmin = false;
   let entregado = false;
 
   /* `performance.now()` y no `Date.now()`: es monótono, así que un ajuste del
@@ -130,6 +159,7 @@
       segundos,
       con_sesion: conSesion,
       extrajo,
+      es_admin: esAdmin,
     });
 
     entregado = navigator.sendBeacon(`${API}${RUTA}`, cuerpo);
@@ -157,6 +187,11 @@
      cargarse en pantallas que no tengan ninguno de los dos. */
   window.addEventListener("taudux:permanencia-sesion", (evento) => {
     conSesion = Boolean(evento.detail && evento.detail.conSesion);
+    /* El rol llega por el MISMO evento, y no por uno propio: los dos datos se
+       conocen en el mismo instante y terminan en la misma fila. Dos eventos
+       podrían llegar desapareados y escribir una visita con la sesión de una y
+       el rol de otra. */
+    esAdmin = Boolean(evento.detail && evento.detail.esAdmin);
   });
 
   window.addEventListener("taudux:permanencia-extraccion", () => {

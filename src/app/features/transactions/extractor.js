@@ -1971,9 +1971,22 @@ function actualizarCuota(cuota) {
 
     "Con sesión" y no "con cuenta": alguien registrado que no inició sesión
     llega como anónimo, y así lo cuenta el resto del panel (F47).
+
+    `esAdmin` viaja en el MISMO evento desde el 2026-08-29, para que el
+    interruptor "excluir a los administradores" del panel gobierne también la
+    sección de permanencia. Sale de `cuota.es_admin`, que el servidor resuelve
+    leyendo `perfiles.rol`: el front no deduce el rol por su cuenta, porque no
+    hay una segunda fuente para él.
+
+    Un admin SIN sesión llega con las dos banderas en `false` y se cuenta como
+    anónimo. Es lo correcto y es lo mismo que hacen las otras secciones, que
+    excluyen por `user_id` y tampoco pueden verlo.
   */
   window.dispatchEvent(new CustomEvent("taudux:permanencia-sesion", {
-    detail: { conSesion: cuota.plan !== "anonimo" },
+    detail: {
+      conSesion: cuota.plan !== "anonimo",
+      esAdmin: !!cuota.es_admin,
+    },
   }));
   // Las capacidades vienen resueltas del servidor; el front no las deduce.
   permisos = cuota.puede || { paneles: [], descargas: false };

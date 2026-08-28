@@ -135,7 +135,7 @@
             Excluir a los administradores
           </button>
           <p class="admin__filtro-alcance" id="filtroAdminsAlcance">
-            Afecta a los dos gráficos. La tabla de cuentas no cambia.
+            Afecta a los tres gráficos. La tabla de cuentas no cambia.
           </p>
         </div>
 
@@ -259,10 +259,11 @@
              servidor manda `permanencia` — mismo criterio que las de arriba: un
              histograma vacío se lee como "acá no se usa la herramienta".
 
-             ES LA ÚNICA SECCIÓN QUE EL INTERRUPTOR NO PUEDE GOBERNAR, y no es
-             un descuido: `extractor_visita` no guarda `user_id` ni
-             `sesion_anon`, así que no hay a quién excluir. Se declara abajo, en
-             la propia sección, porque nadie lo deduce mirando. -->
+             FUE LA ÚNICA SECCIÓN QUE EL INTERRUPTOR NO PODÍA GOBERNAR, hasta
+             que la 0035 le dio a `extractor_visita` la columna `es_admin`.
+             Ahora la gobierna, y lo que se declara abajo es el LÍMITE de esa
+             exclusión: sólo alcanza a los admins con sesión iniciada. Nadie lo
+             deduce mirando. -->
         <section class="panel panel--spacious" id="seccionPermanencia" hidden>
           <h2 class="courses__subtitle">
             Permanencia y tiempo de uso
@@ -276,11 +277,12 @@
           </p>
           <div class="admin__grafico" id="graficoPermanencia" aria-live="polite"></div>
           <p class="admin__nota-sin-filtrar">
-            El interruptor de administradores <strong>no afecta a esta
-            sección</strong>: la visita no guarda quién fue, así que no hay a
-            quién excluir. Y los tiempos son un <strong>piso</strong> — el
-            registro se envía al salir, y cerrar la tapa o matar el navegador no
-            avisa a nadie.
+            El interruptor de administradores <strong>sólo alcanza a quien
+            entró con sesión iniciada</strong>: sin ella la visita llega como
+            anónima y no hay forma de reconocerla, igual que en las secciones de
+            arriba. Y los tiempos son un <strong>piso</strong> — el registro se
+            envía al salir, y cerrar la tapa o matar el navegador no avisa a
+            nadie.
           </p>
         </section>
 

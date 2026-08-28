@@ -1528,24 +1528,30 @@ test("one single place decides whether admins are being excluded", () => {
   );
 });
 
-test("flipping it repaints both charts, not one", () => {
+test("flipping it repaints the three charts, not one", () => {
   /*
-    Eran tres hasta que "Quién lo usa y cuánto" se retiró el 2026-08-28. El
-    aserto se ajusta al alcance real: si mañana vuelve a haber una sección que
-    el interruptor deba gobernar y no se agrega acá, este test no la reclamará
-    — por eso también se revisa la línea de alcance que el control declara.
+    El número se movió dos veces y por motivos opuestos: bajó a dos el
+    2026-08-28, cuando "Quién lo usa y cuánto" se retiró, y volvió a tres el
+    2026-08-29, cuando la `0035` le dio a la permanencia la columna que le
+    faltaba para poder filtrarse.
+
+    El aserto se ajusta al alcance real: si mañana hay una sección que el
+    interruptor deba gobernar y no se agrega acá, este test no la reclamará —
+    por eso también se revisa la línea de alcance que el control declara. Las
+    dos tienen que moverse juntas, y ésta es la única prueba que las ata.
   */
   const js = read(SCRIPT);
   const cuerpo = js.match(/function repintarTodo\(\)[\s\S]*?\n  \}/)?.[0] ?? "";
 
   assert.notEqual(cuerpo, "", "falta el repintado global");
   assert.match(cuerpo, /pintarRegiones\(/, "la geográfica");
-  assert.match(cuerpo, /pintarSerie\(/, "y la serie temporal");
+  assert.match(cuerpo, /pintarSerie\(/, "la serie temporal");
+  assert.match(cuerpo, /pintarPermanencia\(/, "y la permanencia");
   assert.doesNotMatch(cuerpo, /pintarActividad\(/,
     "la sección de actividad ya no existe");
 
   const html = sinComentariosHtml(read(PAGINA));
-  assert.match(html, /Afecta a los dos gráficos/i,
+  assert.match(html, /Afecta a los tres gráficos/i,
     "y el control declara el alcance que de verdad tiene");
 });
 
@@ -1606,10 +1612,15 @@ test("the control states what it governs and what it leaves alone", () => {
  * "Permanencia y tiempo de uso" (2026-08-28): el histograma de cuánto dura
  * cada visita.
  *
- * Es la única sección que NO puede honrar el interruptor de administración, y
- * por una razón de diseño y no por un descuido: `extractor_visita` no guarda
- * `user_id` ni `sesion_anon`, así que no hay a quién excluir. Lo dice en
- * pantalla, igual que la serie temporal declara lo suyo.
+ * Nació SIN poder honrar el interruptor de administración —`extractor_visita`
+ * no guardaba nada sobre quién visitó— y lo declaraba en pantalla. Desde el
+ * 2026-08-29 sí lo honra: la `0035` agregó `es_admin`, un booleano que señala
+ * al dueño del sitio y no a quien lo usa.
+ *
+ * Lo que la sección sigue teniendo que declarar es el LÍMITE de esa exclusión:
+ * sólo alcanza a los administradores CON sesión. Uno que navegue sin iniciarla
+ * llega como anónimo y se cuenta como tal — igual que en las otras tres
+ * secciones, que excluyen por `user_id` y tampoco pueden verlo.
  * ------------------------------------------------------------------------ */
 
 test("the permanence section has three states, not two", () => {
@@ -1640,7 +1651,7 @@ test("the permanence section has three states, not two", () => {
     "sin el campo se oculta");
   assert.match(
     js,
-    /datos\.total\s*===\s*0|!datos\.total/,
+    /\.total\s*===\s*0|!\w+\.total/,
     "pero con el campo en cero NO se oculta: se distingue el caso"
   );
   assert.match(
@@ -1717,14 +1728,85 @@ test("the section declares the two things it cannot promise", () => {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ");
 
+  assert.doesNotMatch(
+    prosa,
+    /no afecta a esta sección/i,
+    "ya no puede decir que el interruptor no la toca: desde la 0035 sí la toca"
+  );
   assert.match(
     prosa,
-    /interruptor de administradores no afecta a esta sección/i,
-    "que el filtro de administración no la toca, y por qué"
+    /sin (haber )?iniciar sesión|sin sesión/i,
+    "declara el límite real: excluir sólo alcanza a los admins CON sesión"
   );
   assert.match(
     prosa,
     /los tiempos son un piso/i,
     "y que los tiempos son un piso, no una medida exacta"
+  );
+});
+
+test("the permanence section obeys the admin switch like the other three", () => {
+  /*
+    El interruptor es GLOBAL desde el 2026-08-27: prometer que excluye a los
+    administradores y dejar una sección contándolos es la clase de control que
+    miente sin fallar. Hasta la 0035 esta sección no podía; ahora sí, así que
+    tiene que repintarse con las demás.
+  */
+  /*
+    Los comentarios se quitan ANTES de mirar el cuerpo de `repintarTodo()`.
+    Explicar ahí por qué la sección entró —que es justo lo que este repo
+    hace— empuja la llamada fuera de cualquier ventana de caracteres, y el
+    aserto fallaría contra código correcto por documentarlo bien.
+  */
+  const js = read(SCRIPT)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+
+  assert.match(
+    js,
+    /function repintarTodo\(\)\s*\{[\s\S]{0,200}?pintarPermanencia\(\)/,
+    "entra en el repintado que el interruptor dispara"
+  );
+
+  const seccionJs = seccion(read(SCRIPT), "Permanencia y tiempo de uso");
+  assert.match(seccionJs, /excluyendoAdmins\(\)/,
+    "y consulta el estado del interruptor al pintar");
+  assert.match(seccionJs, /sin_admins/,
+    "usando el agregado filtrado que manda el servidor");
+});
+
+test("an older server that cannot filter says so instead of lying", () => {
+  /*
+    Cloud Run puede estar sirviendo una versión anterior a este front — pasó
+    con `por_dia_sin_admins` y por eso la serie temporal ya lo distingue.
+
+    Sin esto, el interruptor se encendería y los números no cambiarían: el
+    administrador leería el uso "sin admins" mirando el total de todos. Un
+    control inerte que parece funcionar es peor que uno ausente.
+  */
+  /*
+    El aserto mira la CONDUCTA y no el nombre de la variable que la implementa:
+    que el código se ramifique según venga o no `sin_admins`, y que en el caso
+    de que no venga lo DIGA en pantalla. Atarlo a un identificador concreto
+    convierte cualquier renombre en un rojo que no significa nada.
+  */
+  const seccionJs = seccion(read(SCRIPT), "Permanencia y tiempo de uso");
+
+  assert.match(seccionJs, /Boolean\(datos\.sin_admins\)|datos\.sin_admins/,
+    "se ramifica según el servidor mande o no el agregado filtrado");
+
+  /*
+    Se busca el fragmento CONTIGUO más corto y distintivo, no la frase entera.
+    El mensaje se arma concatenando dos literales, así que en el fuente dice
+    literalmente `todavía no ' + 'calcula la vista` — y un regex por la frase
+    completa falla contra código que sí la dice. Es la misma trampa que las
+    cadenas partidas por el salto de línea, con otra costura.
+  */
+  const prosa = seccionJs.replace(/\s+/g, " ");
+  assert.match(
+    prosa,
+    /calcula la vista sin administradores/i,
+    "y cuando no puede filtrar lo dice, en vez de mostrar el total como si " +
+      "estuviera filtrado"
   );
 });

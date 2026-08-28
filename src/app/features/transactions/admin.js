@@ -468,6 +468,10 @@
   function repintarTodo() {
     pintarRegiones();
     pintarSerie();
+    // Entró el 2026-08-29, cuando la `0035` le dio a `extractor_visita` la
+    // columna `es_admin`. Hasta entonces esta sección no podía filtrarse y lo
+    // declaraba en pantalla.
+    pintarPermanencia();
   }
 
   /*
@@ -487,8 +491,10 @@
     */
     panelEnCache.porDia = cuerpo.por_dia || null;
 
-    // La permanencia NO entra en `repintarTodo()`: el interruptor de
-    // administración no la gobierna, porque la visita no guarda quién fue.
+    // El agregado trae su gemelo filtrado ANIDADO (`permanencia.sin_admins`),
+    // así que no necesita una entrada aparte en esta caché como sí la necesitan
+    // las otras dos secciones: guardarlo entero conserva los dos juntos y evita
+    // que puedan quedar desapareados.
     panelEnCache.permanencia = cuerpo.permanencia || null;
 
     const filtrado = cuerpo.por_dia_sin_admins;
@@ -1035,13 +1041,18 @@
     regionesEnCache.periodo = cuerpo.periodo || "";
 
     /*
-      El interruptor se ofrece si AL MENOS UNO de los dos gráficos que gobierna
+      El interruptor se ofrece si AL MENOS UNO de los TRES gráficos que gobierna
       puede honrarlo, y el que no pueda lo dice en su propio cuerpo. Es lo que
       permite un control global sin que ninguna sección mienta por omisión.
+
+      La permanencia entró acá el 2026-08-29 junto con la `0035`. Dejarla fuera
+      escondería el interruptor en el caso —raro pero real durante un deploy a
+      medias— en que fuera la única capaz de filtrar.
     */
     ofrecerFiltroAdmins(
       regionesEnCache.sinAdmins !== null
-      || panelEnCache.porDiaSinAdmins !== null);
+      || panelEnCache.porDiaSinAdmins !== null
+      || Boolean(panelEnCache.permanencia?.sin_admins));
     repintarRegiones();
   }
 
@@ -1227,9 +1238,13 @@
     orden de las claves de un objeto es una promesa frágil, y acá el eje se
     lee de izquierda a derecha.
 
-    ESTA SECCIÓN NO OBEDECE AL INTERRUPTOR DE ADMINISTRACIÓN, y por eso no está
-    en `repintarTodo()`. `extractor_visita` no guarda `user_id` ni
-    `sesion_anon`: no hay a quién excluir. La sección lo declara en pantalla.
+    OBEDECE AL INTERRUPTOR DESDE EL 2026-08-29. No podía hasta entonces —la
+    visita no guardaba nada sobre quién la hizo— y la `0035` le dio `es_admin`,
+    un booleano que señala al dueño del sitio y no a quien lo usa.
+
+    Lo que la sección sigue declarando en pantalla es el LÍMITE: excluir sólo
+    alcanza a los administradores CON sesión. Uno que navegue sin iniciarla
+    llega como anónimo, igual que en las otras tres secciones.
   */
   const TRAMOS_PERMANENCIA = [
     "0-30s", "30s-1m", "1m-3m", "3m-5m", "5m-10m", ">10m",
@@ -1255,11 +1270,16 @@
       TRES ESTADOS, y el del medio es el que hace falta declarar.
 
         · `!datos`        el servidor no manda el campo — no mide. Oculta.
-        · `datos.total`   en cero: mide y todavía no entró nadie. VISIBLE, y lo
+        · `vista.total`   en cero: mide y todavía no entró nadie. VISIBLE, y lo
                           dice. Sin este caso, "no desplegado" y "desplegado sin
                           visitas" se ven idénticos, y no habría forma de saber
                           si la sección está vacía porque algo falló.
         · con datos       el histograma.
+
+      Con el interruptor encendido el cero tiene un CUARTO significado —"todas
+      las visitas fueron de administración"— y se dice con otras palabras: es
+      un dato del filtro, no del mes, y confundirlos manda a revisar el deploy
+      por nada.
     */
     const datos = panelEnCache.permanencia;
     if (!datos) {
@@ -1267,26 +1287,49 @@
       return;
     }
 
+    /*
+      `sin_admins` ausente significa "este servidor no lo calcula" —Cloud Run
+      puede estar sirviendo una versión anterior a este front—, que es DISTINTO
+      de "filtrado y no quedó nada". Mismo criterio que `por_dia_sin_admins`.
+
+      Sin esta distinción el interruptor se encendería y los números no
+      cambiarían: se leería el uso "sin administradores" mirando el total de
+      todos. Un control inerte que aparenta funcionar es peor que uno ausente,
+      así que cuando no se puede filtrar se dice.
+    */
+    const puedeFiltrar = Boolean(datos.sin_admins);
+    const filtrando = excluyendoAdmins() && puedeFiltrar;
+    const vista = filtrando ? datos.sin_admins : datos;
+    const avisoInerte = excluyendoAdmins() && !puedeFiltrar
+      ? '<p class="admin__vacio admin__vacio--aviso">Este servidor todavía no '
+        + 'calcula la vista sin administradores: lo de abajo los incluye.</p>'
+      : "";
+
     const nodoMes = el("mesPermanencia");
     if (nodoMes) {
       nodoMes.textContent = panelEnCache.periodo
         ? `· ${panelEnCache.periodo}` : "";
     }
-    if (datos.total === 0) {
+    if (vista.total === 0) {
       bloque.hidden = false;
       if (insignia) insignia.hidden = true;
-      caja.innerHTML =
-        '<p class="admin__vacio">Todavía no se registró ninguna visita este '
-        + 'mes. La medición está activa: falta que alguien entre.</p>';
+      /* Dos vacíos distintos, y confundirlos manda a revisar el deploy por
+         nada: "nadie entró" es un dato del mes; "sólo entraron admins" es un
+         dato del filtro. */
+      caja.innerHTML = avisoInerte + (filtrando
+        ? '<p class="admin__vacio">Todas las visitas de este mes fueron de '
+          + 'administración. Apaga el interruptor para verlas.</p>'
+        : '<p class="admin__vacio">Todavía no se registró ninguna visita este '
+          + 'mes. La medición está activa: falta que alguien entre.</p>');
       return;
     }
 
     if (insignia) {
       insignia.hidden = false;
-      insignia.textContent = `Promedio: ${comoTiempo(datos.promedio_s || 0)}`;
+      insignia.textContent = `Promedio: ${comoTiempo(vista.promedio_s || 0)}`;
     }
 
-    const de = (tramo) => datos.tramos?.[tramo] || { anon: 0, cuenta: 0 };
+    const de = (tramo) => vista.tramos?.[tramo] || { anon: 0, cuenta: 0 };
     const totalDe = (tramo) => {
       const t = de(tramo);
       return (t.anon || 0) + (t.cuenta || 0);
@@ -1329,7 +1372,7 @@
        números para lo mismo pueden discrepar. */
     const rango = (desde, hasta) => TRAMOS_PERMANENCIA
       .slice(desde, hasta).reduce((s, t) => s + totalDe(t), 0);
-    const porciento = (n) => Math.round((n / datos.total) * 100);
+    const porciento = (n) => Math.round((n / vista.total) * 100);
 
     const tarjetas = [
       ["Menos de 1 min", "Rápido", rango(0, 2)],
@@ -1341,17 +1384,17 @@
         <span class="admin__corte-cifra">${porciento(n)}%</span>
       </li>`).join("");
 
-    const completitud = Math.round((datos.con_resultado / datos.total) * 1000) / 10;
+    const completitud = Math.round((vista.con_resultado / vista.total) * 1000) / 10;
 
     bloque.hidden = false;
-    caja.innerHTML = leyendaDe()
+    caja.innerHTML = avisoInerte + leyendaDe()
       + `<ul class="admin__columnas">${columnas}</ul>`
       + `<ul class="admin__cortes">${tarjetas}</ul>`
       + `<p class="admin__consumo">
            ${completitud}% de las visitas terminó en un análisis ·
-           ${datos.total} ${datos.total === 1 ? "visita" : "visitas"}
+           ${vista.total} ${vista.total === 1 ? "visita" : "visitas"}
          </p>`
-      + avisoDeMuestra(datos.total, panelEnCache.periodo);
+      + avisoDeMuestra(vista.total, panelEnCache.periodo);
   }
 
   // --- Usuarios del sitio --------------------------------------------------

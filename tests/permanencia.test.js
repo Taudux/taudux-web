@@ -5,11 +5,25 @@
  * panel. Lo que este archivo blinda no es que la medición exista: es que NO
  * CREZCA hacia la identidad.
  *
- * El cuerpo que viaja es una lista CERRADA de tres claves. `user_id`, el
+ * El cuerpo que viaja es una lista CERRADA de cuatro claves. `user_id`, el
  * correo, el id anónimo (`X-Sesion-Anon`) o cualquier cosa que permita señalar
  * a una persona son datos personales (LFPDPPP), y agregarlos convertiría una
  * métrica agregada en un rastro por individuo — exactamente lo que se retiró
  * del panel el 2026-08-28 al quitar "Quién lo usa y cuánto".
+ *
+ * LA CUARTA CLAVE ENTRÓ EL 2026-08-29 Y NO ES GRATIS. `es_admin` existe para
+ * que el interruptor "excluir a los administradores" gobierne también esta
+ * sección; hasta entonces la sección declaraba en pantalla que no podía.
+ *
+ * El costo, dicho acá porque es donde se nota: con uno o dos administradores,
+ * una fila marcada `es_admin: true` señala en la práctica a una persona
+ * concreta. La diferencia que lo hace aceptable es QUIÉN queda señalado — el
+ * dueño del sitio, no quien lo usa—, y que se declara en el aviso de
+ * privacidad. Las filas de los demás siguen sin nada que las distinga.
+ *
+ * Y sólo alcanza a los admins CON SESIÓN: uno que navegue sin iniciarla llega
+ * como anónimo y se cuenta como tal, igual que en las otras tres secciones,
+ * que excluyen por `user_id` y tampoco pueden verlo.
  *
  * Mismo criterio y misma forma que `extractor-analitica.test.js` usa para el
  * evento de GA4: los comentarios se quitan antes de mirar el código, para que
@@ -32,7 +46,7 @@ const sinComentariosJs = (js) => js
 const codigo = () =>
   sinComentariosJs(fs.readFileSync(path.join(ROOT, MODULO), "utf8"));
 
-test("the visit body is a closed list: seconds, session flag, outcome", () => {
+test("the visit body is a closed list: seconds, session, outcome, admin flag", () => {
   /*
     El aserto captura el objeto que se serializa y valida clave por clave
     contra una lista blanca. Agregar `user_id` —el error más fácil de cometer,
@@ -53,7 +67,9 @@ test("the visit body is a closed list: seconds, session flag, outcome", () => {
     .filter(Boolean)
     .map((trozo) => trozo.split(":")[0].trim());
 
-  const permitidas = new Set(["segundos", "con_sesion", "extrajo"]);
+  const permitidas = new Set([
+    "segundos", "con_sesion", "extrajo", "es_admin",
+  ]);
   for (const clave of claves) {
     assert.ok(
       permitidas.has(clave),
@@ -61,7 +77,7 @@ test("the visit body is a closed list: seconds, session flag, outcome", () => {
         "no identifica a quien la hizo"
     );
   }
-  assert.equal(claves.length, 3, "las tres, ni una más ni una menos");
+  assert.equal(claves.length, 4, "las cuatro, ni una más ni una menos");
 });
 
 test("no identity of any kind reaches the endpoint", () => {
@@ -80,6 +96,32 @@ test("no identity of any kind reaches the endpoint", () => {
       `"${prohibido}" no puede aparecer: una visita se cuenta, no se atribuye`
     );
   });
+});
+
+test("the admin flag defaults to false, which is the safe direction", () => {
+  /*
+    Si el aviso del servidor no llega —una pantalla que cargue el módulo sin
+    pedir `cuota`, o una respuesta que falle— la visita tiene que contarse como
+    de alguien común.
+
+    La dirección importa y no es simétrica. Con `false` por defecto, la visita
+    de un admin perdido se cuela entre las normales: ensucia un poco. Con `true`
+    por defecto, TODA visita cuyo aviso se pierda desaparecería de la vista
+    filtrada — que es la que el interruptor enciende para leer el uso real. El
+    error barato es contar de más, no borrar.
+  */
+  const js = codigo();
+
+  assert.match(
+    js,
+    /let esAdmin\s*=\s*false/,
+    "arranca en false: sin aviso, la visita no es de un administrador"
+  );
+  assert.match(
+    js,
+    /esAdmin\s*=\s*Boolean\(/,
+    "y sólo cambia por el evento, normalizado a booleano"
+  );
 });
 
 test("time is ACTIVE time: it pauses when the tab stops being visible", () => {
@@ -189,6 +231,20 @@ test("the extractor tells it about the session and the outcome, by event", () =>
     extractor,
     /taudux:permanencia-sesion[\s\S]{0,160}?conSesion:\s*cuota\.plan !== "anonimo"/,
     "avisa si hubo sesión, como booleano y resuelto por el servidor"
+  );
+  /*
+    El mismo evento carga si quien visita es administrador, y viene del
+    SERVIDOR: `cuota.es_admin` lo resuelve `_es_admin()` leyendo `perfiles.rol`.
+    El front no lo deduce — no hay una segunda fuente para el rol.
+
+    Va en ESTE evento y no en uno propio a propósito: los dos datos se conocen
+    en el mismo instante y viajan a la misma fila. Dos eventos podrían llegar
+    desapareados y escribir una visita con la sesión de una y el rol de otra.
+  */
+  assert.match(
+    extractor,
+    /taudux:permanencia-sesion[\s\S]{0,220}?esAdmin:\s*!!cuota\.es_admin/,
+    "avisa si quien visita es admin, como booleano y resuelto por el servidor"
   );
   assert.match(
     extractor,
