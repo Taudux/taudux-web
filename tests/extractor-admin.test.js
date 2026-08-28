@@ -522,6 +522,41 @@ test("its stylesheet pays for the top offset that cursos.css never delivered", (
   );
 });
 
+test("the scroll box can actually clip what it scrolls", () => {
+  /*
+    `.admin__lista` promete recortar la tabla con `overflow-x: auto`, y no podía
+    cumplirlo: **`overflow` sólo recorta lo que cae dentro de su cadena de
+    bloques contenedores.**
+
+    Dentro del `<th>` del botón vive un `<span class="u-visually-hidden">Guardar
+    cambios</span>`, que es `position: absolute` (`src/styles.css:201`). Sin un
+    ancestro posicionado, su bloque contenedor terminaba siendo la `<section>`,
+    fuera del contenedor con scroll — así que no se recortaba: se plantaba en el
+    extremo derecho de una tabla de 832px y estiraba el DOCUMENTO entero.
+
+    Medido en una ventana de 485px: 276px de scroll horizontal en toda la
+    página, arrastrados por un elemento de 1px que nadie ve. Con
+    `position: relative` acá, el desborde cae a cero y la tabla sigue
+    scrolleando por dentro.
+
+    Este test existe porque un `position: relative` sin `top`/`left` se lee como
+    sobrante, y el próximo que limpie la hoja lo borra con toda la razón
+    aparente.
+  */
+  const css = sinComentariosCss(read(HOJA));
+
+  assert.match(
+    css,
+    /\.admin__lista\s*\{[^}]*overflow-x:\s*auto/,
+    "el contenedor recorta la tabla ancha"
+  );
+  assert.match(
+    css,
+    /\.admin__lista\s*\{[^}]*position:\s*relative/,
+    "y es bloque contenedor, o no puede recortar lo que está posicionado"
+  );
+});
+
 test("its stylesheet keeps only the rules the profile list still uses", () => {
   const css = sinComentariosCss(read(HOJA));
 

@@ -75,10 +75,28 @@
   }
 
   /* Contenedor de scroll: una tabla de seis columnas no debe apretar sus
-     celdas en mobile ni ocultar ninguna. Con overflow-x acá alcanza, sin
-     envoltura HTML aparte — la tabla fija su propio min-width. */
+   * celdas en mobile ni ocultar ninguna. Con overflow-x acá alcanza, sin
+   * envoltura HTML aparte — la tabla fija su propio min-width.
+   *
+   * EL `position: relative` NO ES DECORATIVO Y NO SE BORRA.
+   *
+   * `overflow` sólo recorta lo que cae dentro de su cadena de bloques
+   * contenedores. Dentro del `<th>` del botón vive un
+   * `<span class="u-visually-hidden">Guardar cambios</span>`, que es
+   * `position: absolute` (styles.css). Sin un ancestro posicionado acá, su
+   * bloque contenedor era la `<section>` —fuera de esta caja—, así que este
+   * `overflow-x` nunca lo recortaba: se plantaba en el extremo derecho de una
+   * tabla de 832px y estiraba el DOCUMENTO entero.
+   *
+   * Medido el 2026-08-28 en una ventana de 485px: 276px de scroll horizontal
+   * en toda la página, arrastrados por un elemento de 1px que nadie ve. Con
+   * esta línea el desborde cae a cero y la tabla sigue scrolleando por dentro.
+   *
+   * No mueve nada: no hay `top` ni `left`. Sólo le da a esta caja el rol que
+   * le faltaba para poder recortar lo que promete recortar. */
   .admin__lista {
     overflow-x: auto;
+    position: relative;
   }
 
   /* El mínimo es el umbral donde empieza el scroll horizontal: por debajo, las
