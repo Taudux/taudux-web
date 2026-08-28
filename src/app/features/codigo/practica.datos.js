@@ -400,6 +400,149 @@ function generarDatosSinteticos({ columnas, filas, semilla = 1 }) {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* Esquema: construir y modificar la base desde la vista de diseño       */
+/* ------------------------------------------------------------------ */
+
+/*
+  Los tipos que ofrece el diseñador. Es un subconjunto corto de Postgres a
+  propósito: son los que cubren el 95% de lo que un alumno modela, y una lista de
+  cuarenta tipos convierte una decisión trivial en un obstáculo.
+*/
+const TIPOS_COLUMNA_SQL = [
+  { id: "text", etiqueta: "Texto" },
+  { id: "integer", etiqueta: "Número entero" },
+  { id: "numeric", etiqueta: "Número decimal" },
+  { id: "boolean", etiqueta: "Sí / No" },
+  { id: "date", etiqueta: "Fecha" },
+  { id: "timestamp", etiqueta: "Fecha y hora" },
+];
+
+function tipoSqlValido(tipo) {
+  return TIPOS_COLUMNA_SQL.some((candidato) => candidato.id === tipo);
+}
+
+/*
+  Un tipo inventado llegando al SQL sería inyección de DDL. Como el valor sale de
+  un <select>, no debería pasar nunca — y justamente por eso conviene la guarda:
+  lo que "no puede pasar" es lo que nadie revisa.
+*/
+function tipoSeguro(tipo) {
+  return tipoSqlValido(tipo) ? tipo : "text";
+}
+
+function sentenciaCrearTablaVacia({ nombre, columnas }) {
+  const tabla = normalizarNombreIdentificador(nombre, "tabla");
+  if (!Array.isArray(columnas) || columnas.length === 0) return "";
+
+  const nombres = desduplicarNombres(
+    columnas.map((columna, indice) =>
+      normalizarNombreIdentificador(columna.nombre, `columna_${indice + 1}`),
+    ),
+  );
+
+  const definiciones = nombres.map(
+    (nombreColumna, indice) => `  "${nombreColumna}" ${tipoSeguro(columnas[indice].tipo)}`,
+  );
+
+  return `create table "${tabla}" (\n${definiciones.join(",\n")}\n);`;
+}
+
+function sentenciaAgregarColumna(tabla, columna) {
+  const nombreTabla = normalizarNombreIdentificador(tabla, "tabla");
+  const nombreColumna = normalizarNombreIdentificador(columna?.nombre, "columna");
+  return `alter table "${nombreTabla}" add column "${nombreColumna}" ${tipoSeguro(columna?.tipo)};`;
+}
+
+function sentenciaEliminarColumna(tabla, columna) {
+  const nombreTabla = normalizarNombreIdentificador(tabla, "tabla");
+  const nombreColumna = normalizarNombreIdentificador(columna, "columna");
+  return `alter table "${nombreTabla}" drop column "${nombreColumna}";`;
+}
+
+function sentenciaEliminarTabla(tabla) {
+  return `drop table if exists "${normalizarNombreIdentificador(tabla, "tabla")}" cascade;`;
+}
+
+/*
+  Fila nueva con todas las columnas. Un valor vacío entra como NULL, que es lo
+  correcto para "todavía no lo sé" y permite practicar `is null` después.
+*/
+function sentenciaInsertarFila(tabla, columnas, valores) {
+  const nombreTabla = normalizarNombreIdentificador(tabla, "tabla");
+  if (!Array.isArray(columnas) || columnas.length === 0) return "";
+
+  const lista = columnas.map((columna) => `"${columna.nombre}"`).join(", ");
+  const datos = columnas
+    .map((columna, indice) => escaparLiteralSql(valores?.[indice], columna.tipo))
+    .join(", ");
+
+  return `insert into "${nombreTabla}" (${lista}) values (${datos});`;
+}
+
+/*
+  IDENTIFICAR UNA FILA SIN CLAVE PRIMARIA. Las tablas del diseñador no llevan id
+  —el alumno no debería estar obligado a modelar uno para poder practicar— así que
+  para editar o borrar una fila concreta se usa ctid, el identificador físico que
+  Postgres le da a cada tupla.
+
+  Es válido solo dentro de la misma sesión y cambia si la fila se reescribe, que
+  es exactamente el alcance que hace falta acá: leer la grilla, tocar una celda y
+  volver a leer.
+*/
+const FORMA_CTID = /^\(\d+,\d+\)$/;
+
+function ctidSeguro(ctid) {
+  return typeof ctid === "string" && FORMA_CTID.test(ctid) ? ctid : null;
+}
+
+function sentenciaActualizarCelda(tabla, ctid, columna, valor, tipo) {
+  const identificador = ctidSeguro(ctid);
+  // Sin un ctid con forma válida no se emite nada: un update sin where borraría
+  // el sentido de toda la tabla de un solo golpe.
+  if (!identificador) return "";
+
+  const nombreTabla = normalizarNombreIdentificador(tabla, "tabla");
+  const nombreColumna = normalizarNombreIdentificador(columna, "columna");
+
+  return (
+    `update "${nombreTabla}" set "${nombreColumna}" = ${escaparLiteralSql(valor, tipo)} ` +
+    `where ctid = '${identificador}';`
+  );
+}
+
+function sentenciaEliminarFila(tabla, ctid) {
+  const identificador = ctidSeguro(ctid);
+  if (!identificador) return "";
+
+  const nombreTabla = normalizarNombreIdentificador(tabla, "tabla");
+  return `delete from "${nombreTabla}" where ctid = '${identificador}';`;
+}
+
+/*
+  Decodifica el contenido crudo de un archivo importado.
+
+  POR QUÉ NO ALCANZA CON UTF-8. Excel en Windows sigue exportando CSV en la
+  codificación regional (windows-1252 en español), no en UTF-8. Leído como UTF-8,
+  cada acento se convierte en el carácter de reemplazo U+FFFD y la tabla entra con
+  "Regi<?>n" en vez de "Región". Como U+FFFD solo aparece cuando la decodificación
+  falló, sirve de señal para reintentar con la codificación de Excel.
+
+  También se quita el BOM: Excel lo antepone, y sin quitarlo el primer encabezado
+  queda con un carácter invisible pegado que rompe el nombre de la columna.
+*/
+function decodificarTextoImportado(bytes) {
+  const utf8 = new TextDecoder("utf-8").decode(bytes);
+  if (!utf8.includes("�")) return utf8.replace(/^﻿/, "");
+
+  try {
+    return new TextDecoder("windows-1252").decode(bytes).replace(/^﻿/, "");
+  } catch {
+    // Navegador sin esa codificación: mejor el texto con reemplazos que nada.
+    return utf8.replace(/^﻿/, "");
+  }
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     FILAS_POR_INSERT,
@@ -411,5 +554,16 @@ if (typeof module === "object" && module.exports) {
     generarDatosSinteticos,
     inferirTipoColumna,
     normalizarNombreIdentificador,
+    TIPOS_COLUMNA_SQL,
+    ctidSeguro,
+    sentenciaActualizarCelda,
+    sentenciaAgregarColumna,
+    sentenciaCrearTablaVacia,
+    sentenciaEliminarColumna,
+    sentenciaEliminarFila,
+    sentenciaEliminarTabla,
+    sentenciaInsertarFila,
+    tipoSqlValido,
+    decodificarTextoImportado,
   });
 }
