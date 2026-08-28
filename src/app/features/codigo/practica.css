@@ -1,18 +1,35 @@
-/* Playground de práctica: selector de lenguaje, editor y consola. */
+/*
+  Entorno de programación: el hub que lista los lenguajes y el espacio de trabajo
+  de cada uno.
+
+  El espacio de trabajo se apila como un notebook —editor arriba a todo el ancho,
+  salida abajo— en vez de partirse en dos columnas. Escribir código necesita
+  líneas largas, y dos columnas le quitaban al editor la mitad del ancho justo
+  donde más falta hace.
+
+  El resto del cromo se reduce al mínimo: los controles son iconos en la esquina
+  superior derecha y su significado se consulta bajo demanda desde la esquina
+  opuesta, para que la pantalla la ocupen el código y su resultado.
+*/
 
 @layer features {
-  .practica {
+
+  /* ---------------------------------------------------------------- */
+  /* Hub: elegir lenguaje                                               */
+  /* ---------------------------------------------------------------- */
+
+  .entorno {
     min-height: 100vh;
     padding-block: calc(var(--navbar-height) + 2rem) 4rem;
     padding-inline: 2rem;
     background-color: var(--color-background);
   }
 
-  .practica__header {
-    margin-bottom: 2rem;
+  .entorno__header {
+    margin-bottom: 2.5rem;
   }
 
-  .practica__eyebrow {
+  .entorno__eyebrow {
     color: var(--color-accent);
     font-family: var(--font-display);
     font-size: 0.8rem;
@@ -21,137 +38,288 @@
     margin-bottom: 0.75rem;
   }
 
-  .practica__title {
+  .entorno__title {
     font-size: clamp(1.8rem, 4vw, 2.6rem);
     margin-bottom: 0.75rem;
   }
 
-  .practica__intro {
+  .entorno__intro {
     color: var(--color-text-muted);
     line-height: 1.7;
-    max-inline-size: 60ch;
+    max-inline-size: 62ch;
   }
 
-  .practica__noscript {
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-    color: var(--color-text-muted);
+  .entorno__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: 1.25rem;
   }
 
-  /* Selector de lenguaje ------------------------------------------- */
-
-  .practica__lenguajes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .practica__lenguaje {
+  .entorno__card {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.15rem;
-    padding: 0.7rem 1.2rem;
-    border: var(--border-subtle);
-    border-radius: var(--radius-button);
-    background-color: var(--color-field);
-    color: var(--color-text-muted);
-    font-family: inherit;
-    cursor: pointer;
-    transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s ease, transform 0.2s ease;
   }
 
-  .practica__lenguaje:hover {
-    color: var(--color-text);
-    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  .entorno__card:hover {
+    border-color: var(--color-accent);
+    transform: translateY(-2px);
   }
 
-  .practica__lenguaje:focus-visible {
+  .entorno__card:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
   }
 
-  .practica__lenguaje--activo {
-    color: var(--color-text);
-    border-color: var(--color-accent);
-    box-shadow: var(--glow-accent);
-  }
-
-  .practica__lenguaje-nombre {
-    font-weight: 700;
-    font-size: 1rem;
-  }
-
-  .practica__lenguaje-version {
-    font-size: 0.75rem;
+  .entorno__card-version {
     color: var(--color-text-subtle);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
-  /* Taller: editor + resultados ------------------------------------ */
+  .entorno__card-title {
+    font-size: 1.5rem;
+    margin: 0;
+  }
+
+  .entorno__card-description {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    /* Empuja el CTA al pie aunque las tarjetas tengan textos de distinto largo. */
+    flex-grow: 1;
+  }
+
+  .entorno__card-cta {
+    color: var(--color-accent);
+    font-size: 0.85rem;
+  }
+
+  .entorno__notas {
+    margin-top: 2.5rem;
+    color: var(--color-text-subtle);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    max-inline-size: 62ch;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Espacio de trabajo                                                 */
+  /* ---------------------------------------------------------------- */
 
   /*
-    Dos columnas en escritorio, apiladas en móvil. minmax(0, 1fr) y no 1fr: sin
-    el mínimo en 0, una tabla ancha de SQL estira su columna y desborda la
-    página entera en vez de hacer scroll dentro de su caja.
+    Padding superior mínimo sobre el navbar: cada rem acá es un rem que pierde el
+    editor, y el objetivo de esta pantalla es que quepa código.
   */
-  .practica__taller {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 1.5rem;
-    align-items: start;
+  .practica {
+    min-height: 100vh;
+    padding-block: calc(var(--navbar-height) + 0.5rem) 2rem;
+    padding-inline: 1.5rem;
+    background-color: var(--color-background);
   }
 
-  .practica__columna {
-    padding: 1rem;
+  .practica__cabecera {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .practica__identidad {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
     min-inline-size: 0;
   }
 
-  .practica__barra {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-
-  .practica__atajo {
-    margin-inline-start: auto;
+  .practica__volver {
     color: var(--color-text-subtle);
-    font-size: 0.8rem;
+    font-size: 0.85rem;
+    text-decoration: none;
+    white-space: nowrap;
   }
 
-  /*
-    Sin sesión el botón sigue visible y clickeable: esconderlo no convertiría a
-    nadie, porque nadie extraña lo que no vio. Se atenúa para que se lea como una
-    función bloqueada, no como una deshabilitada por un error.
-  */
-  .practica__descargar--bloqueado {
-    opacity: 0.65;
-  }
-
-  .practica__nota-descarga {
-    margin-bottom: 1rem;
-    color: var(--color-text-subtle);
-    font-size: 0.8rem;
-  }
-
-  .practica__nota-descarga a {
+  .practica__volver:hover {
     color: var(--color-accent);
   }
 
-  .practica__editor {
-    inline-size: 100%;
-    block-size: 26rem;
-    border-radius: var(--radius-field);
-    overflow: hidden;
+  .practica__titulo {
+    margin: 0;
+    font-size: 1.15rem;
+    white-space: nowrap;
   }
 
-  /* Consola y resultados ------------------------------------------- */
+  .practica__version {
+    color: var(--color-text-subtle);
+    font-size: 0.78rem;
+    font-weight: 400;
+  }
+
+  .practica__acciones {
+    margin-inline-start: auto;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .practica__noscript {
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Botones de icono ------------------------------------------------ */
+
+  .practica__icono {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    padding: 0;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    background-color: transparent;
+    color: var(--color-text-muted);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .practica__icono svg {
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+  }
+
+  .practica__icono:hover:not(:disabled) {
+    color: var(--color-text);
+    border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  }
+
+  .practica__icono:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /*
+    Deshabilitado sin cursor de "prohibido": Detener pasa la mayor parte del
+    tiempo apagado y no es un error querer tocarlo.
+  */
+  .practica__icono:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .practica__icono--principal {
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+
+  .practica__icono--principal:hover:not(:disabled) {
+    box-shadow: var(--glow-accent);
+  }
+
+  /* Editor ----------------------------------------------------------- */
+
+  /* Fondo ambiental ------------------------------------------------- */
+
+  /*
+    Fijo y detrás de todo. `pointer-events: none` es obligatorio: sin eso el
+    canvas se traga los clics del editor, que es exactamente lo que no puede
+    pasar en esta pantalla.
+  */
+  .practica__fondo {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    pointer-events: none;
+  }
+
+  /*
+    El mismo fondo lo usan las dos pantallas de la feature —el hub y cada
+    entorno—, por eso .entorno__container también tiene que subir sobre el canvas.
+    Sin esto el contenido del hub queda por debajo y no se ve.
+  */
+  .practica__container,
+  .practica__ayuda,
+  .entorno__container {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Editor ----------------------------------------------------------- */
+
+  /*
+    Altura elástica: en una laptop chica el editor no se come toda la pantalla y
+    en un monitor grande aprovecha el alto, sin dejar nunca la salida fuera de
+    vista.
+
+    El vidrio es lo que apaga el mosaico bajo el código. El fondo se dibuja
+    fuerte, como parte del diseño de la pantalla; acá dentro tiene que quedar en
+    un 10-15%, insinuado y desenfocado, porque con el mosaico nítido bajo el
+    texto el código deja de leerse y el entorno pierde su única razón de ser.
+
+    90% de opacidad deja pasar ese 10%. El desenfoque es BAJO a propósito: con un
+    blur alto las aristas se disuelven en un degradado uniforme y el resultado se
+    percibe como "no hay nada", no como un fondo tenue. Con 5px las celdas se
+    siguen adivinando —que es lo que se buscaba— sin que un borde nítido compita
+    con una línea de código.
+  */
+  .practica__editor {
+    inline-size: 100%;
+    block-size: clamp(19rem, 47vh, 36rem);
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    overflow: hidden;
+    background-color: color-mix(in srgb, var(--color-background-deep) 84%, transparent);
+    backdrop-filter: blur(5px);
+  }
+
+  .practica__editor-lienzo {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+
+
+  /*
+    Sin backdrop-filter (Firefox con la opción apagada, navegadores viejos) el
+    fondo se vería nítido bajo el texto. Ahí se sacrifica el vidrio antes que la
+    legibilidad.
+  */
+  @supports not (backdrop-filter: blur(1px)) {
+    .practica__editor,
+    .practica__consola {
+      background-color: var(--color-background-deep);
+    }
+  }
+
+  /* Barra entre el editor y la salida --------------------------------- */
+
+  /*
+    Esta franja hace dos trabajos en el espacio de una: reporta el estado de la
+    ejecución (izquierda) y ofrece la descarga (derecha). Separar "ejecutar" de
+    "llevarme el archivo" también separa dos intenciones distintas: los controles
+    de corrida viven arriba, el resultado que te llevas vive junto a la salida.
+  */
+  .practica__barra {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-block-size: 3rem;
+  }
 
   .practica__estado {
-    margin-bottom: 0.75rem;
-    font-size: 0.9rem;
+    margin: 0;
+    font-size: 0.85rem;
     color: var(--color-text-muted);
   }
 
@@ -167,21 +335,52 @@
     color: var(--color-error-text);
   }
 
-  .practica__consola {
-    block-size: 26rem;
+  .practica__barra-derecha {
+    margin-inline-start: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .practica__nota-descarga {
     margin: 0;
-    padding: 1rem;
+    color: var(--color-text-subtle);
+    font-size: 0.78rem;
+    text-align: end;
+  }
+
+  .practica__nota-descarga a {
+    color: var(--color-accent);
+  }
+
+  /*
+    Sin sesión el botón sigue visible y clickeable: esconderlo no convertiría a
+    nadie, porque nadie extraña lo que no vio. Se atenúa para que se lea como una
+    función bloqueada, no como una deshabilitada por un error.
+  */
+  .practica__descargar--bloqueado {
+    opacity: 0.55;
+  }
+
+  /* Salida ------------------------------------------------------------ */
+
+  .practica__consola {
+    block-size: clamp(9rem, 26vh, 22rem);
+    margin: 0;
+    padding: 0.85rem 1rem;
     border-radius: var(--radius-field);
-    background-color: var(--color-background-deep);
+    /* Mismo vidrio que el editor, para que el taller se lea como una sola pieza. */
+    background-color: color-mix(in srgb, var(--color-background-deep) 84%, transparent);
+    backdrop-filter: blur(5px);
     border: var(--border-subtle);
     color: var(--color-text-muted);
-    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 0.85rem;
     line-height: 1.6;
     /*
-      La salida de un programa no se reformatea: pre-wrap conserva la
-      indentación y el alineado de columnas de un print, pero corta las líneas
-      largas para que la consola nunca empuje la página a lo ancho.
+      La salida de un programa no se reformatea: pre-wrap conserva la indentación
+      y el alineado de columnas de un print, pero corta las líneas largas para que
+      la consola nunca empuje la página a lo ancho.
     */
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -206,11 +405,20 @@
   }
 
   .practica__resultados {
-    margin-top: 1rem;
+    margin-top: 0.85rem;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
+
+  .practica__grafico {
+    inline-size: 100%;
+    block-size: auto;
+    border-radius: var(--radius-field);
+    background-color: #fff;
+  }
+
+  /* Tablas de resultados ---------------------------------------------- */
 
   /* Una tabla ancha hace scroll dentro de su caja, nunca en el body. */
   .practica__tabla-scroll {
@@ -244,7 +452,7 @@
 
   .practica__tabla td {
     color: var(--color-text-muted);
-    font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-family: var(--font-mono);
   }
 
   .practica__tabla tbody tr:last-child td {
@@ -256,30 +464,109 @@
     font-size: 0.8rem;
   }
 
-  .practica__grafico {
-    inline-size: 100%;
-    block-size: auto;
-    border-radius: var(--radius-field);
-    background-color: #fff;
+  /* Nomenclatura ------------------------------------------------------ */
+
+  /*
+    Vive fija en la esquina opuesta a los controles: explica los iconos sin
+    ocupar ni una línea del entorno mientras nadie la consulte.
+  */
+  .practica__ayuda {
+    position: fixed;
+    inset-block-end: 1.25rem;
+    inset-inline-end: 1.25rem;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.6rem;
   }
 
-  .practica__notas {
-    margin-top: 2rem;
+  .practica__ayuda-boton {
+    border-radius: var(--radius-pill);
+    background-color: var(--color-field);
+  }
+
+  .practica__nomenclatura {
+    inline-size: min(23rem, calc(100vw - 2.5rem));
+    padding: 1.1rem 1.25rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-panel);
+    background-color: var(--color-background-deep);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+
+  .practica__nomenclatura-titulo {
+    font-size: 0.95rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .practica__nomenclatura-lista {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0.5rem 0.75rem;
+    margin: 0;
+  }
+
+  .practica__nomenclatura-lista dt {
+    color: var(--color-accent);
+    text-align: center;
+  }
+
+  .practica__nomenclatura-lista dd {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+
+  .practica__nomenclatura-lista kbd {
+    padding: 0.05rem 0.3rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background-color: var(--color-field);
+    font-size: 0.75rem;
+  }
+
+  .practica__nomenclatura-nota {
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--color-border);
     color: var(--color-text-subtle);
-    font-size: 0.85rem;
-    line-height: 1.6;
+    font-size: 0.78rem;
+    line-height: 1.5;
   }
 
-  /* Panel de datos (solo SQL) -------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* Capturador de datos (solo SQL)                                     */
+  /* ---------------------------------------------------------------- */
 
+  /*
+    Colapsado por defecto: en esta pantalla manda el entorno, y el capturador
+    solo hace falta cuando el alumno trae datos propios. Como <details>, abrirlo
+    no cuesta una línea de JavaScript.
+  */
   .practica__datos {
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+    padding: 0.9rem 1.25rem;
+    margin-bottom: 0.85rem;
   }
 
-  .practica__datos-titulo {
-    font-size: 1.2rem;
-    margin-bottom: 0.35rem;
+  .practica__datos-resumen {
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--color-text);
+  }
+
+  .practica__datos-resumen::marker {
+    color: var(--color-accent);
+  }
+
+  .practica__datos-resumen:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .practica__datos[open] .practica__datos-resumen {
+    margin-bottom: 1.25rem;
   }
 
   .practica__datos-intro {
@@ -427,32 +714,421 @@
     font-size: 0.8rem;
   }
 
+  /* ---------------------------------------------------------------- */
+
+
+  /* ---------------------------------------------------------------- */
+  /* Vistas: SQL y base de datos                                        */
+  /* ---------------------------------------------------------------- */
+
+  /*
+    Los dos botones van juntos y pegados, como un interruptor de dos posiciones:
+    separados se leerian como dos acciones sueltas en vez de como dos caras de la
+    misma pantalla.
+  */
+  .practica__vistas {
+    display: inline-flex;
+    margin-inline-start: 1.25rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+  }
+
+  .practica__vista {
+    padding: 0.35rem 0.9rem;
+    border: none;
+    background-color: transparent;
+    color: var(--color-text-subtle);
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .practica__vista:hover {
+    color: var(--color-text);
+  }
+
+  .practica__vista:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: -2px;
+  }
+
+  .practica__vista--activa {
+    background-color: color-mix(in srgb, var(--color-accent) 16%, transparent);
+    color: var(--color-text);
+  }
+
+  /* Vista de base de datos ------------------------------------------ */
+
+  .practica__base {
+    padding: 1.25rem;
+  }
+
+  .practica__base-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .practica__base-tablas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    flex-grow: 1;
+  }
+
+  .practica__base-tabla {
+    padding: 0.3rem 0.8rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    background-color: var(--color-field);
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .practica__base-tabla:hover {
+    color: var(--color-text);
+  }
+
+  .practica__base-tabla:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .practica__base-tabla--activa {
+    border-color: var(--color-accent);
+    color: var(--color-text);
+  }
+
+  .practica__base-vacio {
+    color: var(--color-text-subtle);
+    font-size: 0.9rem;
+  }
+
+  .practica__base-seccion {
+    padding-top: 1.25rem;
+    margin-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .practica__base-subtitulo {
+    font-size: 1rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .practica__base-nota {
+    color: var(--color-text-subtle);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin-bottom: 0.85rem;
+  }
+
+  .practica__base-estado {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .practica__base-estado--exito {
+    color: var(--color-success);
+  }
+
+  .practica__base-estado--aviso {
+    color: var(--color-warning);
+  }
+
+  .practica__base-estado--error {
+    color: var(--color-error-text);
+  }
+
+  .practica__base-columnas {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+  }
+
+  /*
+    El boton de quitar tiene ancho fijo para que los campos de todas las filas
+    queden alineados aunque los nombres cambien de largo.
+  */
+  .practica__base-columna {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 14rem) 2.25rem;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  /*
+    Las columnas ya existentes son solo lectura (nombre, tipo y borrar), así que
+    se empaquetan a la izquierda. Con el mismo reparto elastico de las filas
+    editables, el tipo salia disparado al otro extremo de la pantalla y costaba
+    relacionarlo con su columna.
+  */
+  .practica__base-columna--fija {
+    grid-template-columns: minmax(6rem, 14rem) auto 2.25rem;
+    justify-content: start;
+    gap: 1rem;
+  }
+
+  .practica__base-columna code {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--color-text);
+  }
+
+  .practica__base-alta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 14rem) auto;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .practica__base-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.85rem;
+  }
+
+
+  /* Campos del disenador --------------------------------------------- */
+
+  /*
+    Estilo propio y NO la clase .field compartida: esa hoja esta calibrada para
+    formularios de auth, con 1rem de padding. Aca los campos viven en grillas
+    densas —una fila por columna, una celda por dato— y con ese alto la pantalla
+    se convierte en un muro de cajas.
+
+    El fondo sale de --color-field como el resto del sitio; sin esto el navegador
+    pinta su blanco por defecto y rompe la estetica de la pagina entera.
+  */
+  .practica__entrada {
+    inline-size: 100%;
+    min-inline-size: 0;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-field);
+    background-color: var(--color-field);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    transition: border-color 0.15s ease;
+  }
+
+  .practica__entrada::placeholder {
+    color: var(--color-text-subtle);
+    font-size: 0.85rem;
+  }
+
+  .practica__entrada:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+  }
+
+  .practica__entrada:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+
+  .practica__entrada:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /*
+    appearance: none para poder pintar el fondo oscuro; a cambio hay que dibujar
+    la flecha, que va como SVG embebido para no pedir un archivo mas.
+  */
+  .practica__entrada--selector {
+    appearance: none;
+    padding-inline-end: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23aaaaaa' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    background-size: 0.7rem;
+    cursor: pointer;
+  }
+
+  .practica__entrada--area {
+    min-block-size: 8rem;
+    resize: vertical;
+    font-family: var(--font-mono);
+    line-height: 1.6;
+  }
+
+  /* Mientras se arrastra un archivo encima, el area se declara como destino. */
+  .practica__entrada--soltar {
+    border-color: var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 8%, var(--color-field));
+  }
+
+  /*
+    Los formularios del disenador se topean: estirados a lo ancho del panel, el
+    nombre de una columna ocupaba media pantalla y la relacion entre el campo y su
+    tipo se perdia de vista.
+  */
+  .practica__base-columnas,
+  .practica__base-alta,
+  .practica__base-seccion textarea,
+  .practica__base-seccion > .practica__base-acciones {
+    max-inline-size: 46rem;
+  }
+
+  .practica__campo--corto {
+    max-inline-size: 16rem;
+  }
+
+  /* Grilla editable de filas ------------------------------------------ */
+
+  .practica__tabla--editable td {
+    padding: 0.25rem;
+  }
+
+  /*
+    La celda editable no se pinta como campo de formulario: dentro de una grilla,
+    un borde por celda convierte la tabla en un tablero de ajedrez. El borde
+    aparece al enfocar, que es cuando importa saber donde se esta escribiendo.
+  */
+  .practica__celda {
+    inline-size: 100%;
+    min-inline-size: 7rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-field);
+    background-color: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+
+  .practica__celda:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .practica__celda:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    background-color: var(--color-field);
+    color: var(--color-text);
+  }
+
+  @media (max-width: 760px) {
+    .practica__vistas {
+      margin-inline-start: 0;
+      order: 3;
+      inline-size: 100%;
+    }
+
+    .practica__vista {
+      flex-grow: 1;
+    }
+
+    .practica__base-columna,
+    .practica__base-alta {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   @media (max-width: 900px) {
-    .practica {
+    .entorno {
       padding-inline: 1.25rem;
     }
 
-    .practica__columna-sintetica {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.5rem;
+    .practica {
+      padding-inline: 1rem;
     }
 
-    .practica__taller {
-      grid-template-columns: minmax(0, 1fr);
+    /*
+      En móvil el nombre del lenguaje y los controles no caben en una línea sin
+      apretarse: los controles bajan a su propio renglón, alineados a la derecha.
+    */
+    .practica__cabecera {
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
 
-    .practica__editor,
-    .practica__consola {
-      block-size: 20rem;
+    .practica__editor {
+      block-size: clamp(15rem, 40vh, 24rem);
     }
 
-    .practica__atajo {
+    .practica__nota-descarga {
       display: none;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .practica__lenguaje {
+    .entorno__card,
+    .practica__icono {
       transition: none;
     }
+
+    .entorno__card:hover {
+      transform: none;
+    }
   }
+}
+
+/*
+  ATENCIÓN: este bloque va FUERA de @layer features a propósito, y es la única
+  parte de esta hoja que lo está.
+
+  Ace inyecta el CSS de su tema en <head> en tiempo de ejecución, sin capa. En la
+  cascada, el CSS sin capa le gana a CUALQUIER capa sin importar la especificidad,
+  así que las mismas reglas escritas dentro de `@layer features` no tenían ningún
+  efecto: el editor seguía pintando su fondo opaco (#1D1F21) sobre el vidrio y el
+  mosaico quedaba tapado por completo.
+
+  Al estar sin capa compiten de igual a igual, y el id gana por especificidad
+  (1,2,0 contra el 0,2,0 del tema) sin recurrir a !important.
+*/
+#practicaEditor,
+#practicaEditor .ace_gutter,
+#practicaEditor .ace_scroller {
+  background-color: transparent;
+}
+
+/* La línea activa también es opaca en el tema; translúcida deja pasar el fondo. */
+#practicaEditor .ace_marker-layer .ace_active-line,
+#practicaEditor .ace_gutter-active-line {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/*
+  El margen de números queda separado del código por una línea, no por un bloque
+  de color: sin fondo propio, el corte tiene que darlo el borde.
+*/
+#practicaEditor .ace_gutter {
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/*
+  El navbar se aligera SOLO en esta feature, para que el mosaico se lea también
+  en la franja superior en vez de cortarse en seco contra una barra opaca.
+
+  Se limita con :has() en lugar de tocar .navbar directamente: ese componente lo
+  comparten el home, cursos, notas y el portal, y ninguno de ellos tiene un fondo
+  detrás que justifique el cambio.
+*/
+body:has(.practica) .navbar::before,
+body:has(.entorno) .navbar::before {
+  background-color: color-mix(in srgb, var(--color-background) 15%, transparent);
+}
+
+/*
+  Fila del error. Va fuera de la capa por lo mismo que el resto de las reglas de
+  Ace, y `position: absolute` no es decorativo: Ace posiciona los marcadores en
+  una capa propia y sin eso el fondo se pintaría en la esquina del editor.
+*/
+#practicaEditor .practica__linea-error {
+  position: absolute;
+  z-index: 5;
+  background-color: color-mix(in srgb, var(--color-error) 16%, transparent);
+  border-inline-start: 2px solid var(--color-error);
 }

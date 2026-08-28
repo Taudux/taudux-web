@@ -17,6 +17,9 @@
   :root {
     --font-body: "Space Grotesk", sans-serif;
     --font-display: "Orbitron", sans-serif;
+    /* Mono de marca para código y salida. Las de sistema (Consolas en
+       Windows) desentonan con Space Grotesk y abaratan el entorno. */
+    --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
 
     --color-background: #0d0f11;
     --color-background-deep: #0b0d0f;

@@ -80,11 +80,48 @@ test("ninguna dependencia externa del playground queda en una versión flotante"
     assert.doesNotMatch(url, /@latest|\/latest\//, `URL sin pinear: ${url}`);
   }
 
-  const html = read("src/app/features/codigo/index.html");
-  const externos = html.match(/https:\/\/cdn\.jsdelivr\.net\/[^"']+/g) || [];
-  assert.ok(externos.length > 0, "la página debe cargar el editor desde el CDN");
-  for (const url of externos) {
-    assert.doesNotMatch(url, /@latest|\/latest\//, `URL sin pinear en el HTML: ${url}`);
+  // El editor se carga en cada página de lenguaje, no en el hub.
+  for (const lenguaje of LENGUAJES_PRACTICA) {
+    const html = read(`src/app/features/codigo/${lenguaje.id}/index.html`);
+    const externos = html.match(/https:\/\/cdn\.jsdelivr\.net\/[^"']+/g) || [];
+    assert.ok(externos.length > 0, `${lenguaje.id} debe cargar el editor desde el CDN`);
+    for (const url of externos) {
+      assert.doesNotMatch(url, /@latest|\/latest\//, `URL sin pinear en ${lenguaje.id}: ${url}`);
+    }
+  }
+});
+
+/*
+  Cada lenguaje vive en su propia página. Lo que se blinda acá es lo que rompe en
+  silencio al agregar un lenguaje o mover una carpeta: que la ruta del catálogo, la
+  carpeta real y el data-atributo que lee la página dejen de coincidir.
+*/
+test("cada lenguaje tiene su página y la página se declara a sí misma", () => {
+  for (const lenguaje of LENGUAJES_PRACTICA) {
+    assert.equal(lenguaje.ruta, `/app/features/codigo/${lenguaje.id}/`);
+
+    const html = read(`src/app/features/codigo/${lenguaje.id}/index.html`);
+    assert.match(
+      html,
+      new RegExp(`<body data-lenguaje="${lenguaje.id}"`),
+      `${lenguaje.id} debe declarar su lenguaje en el body`,
+    );
+  }
+});
+
+/*
+  El hub es HTML estático para que funcione sin JavaScript y lo indexe un buscador,
+  así que sus enlaces pueden desincronizarse del catálogo sin que nada avise. Este
+  test es el que avisa.
+*/
+test("el hub enlaza a todos los entornos del catálogo", () => {
+  const hub = read("src/app/features/codigo/index.html");
+
+  for (const lenguaje of LENGUAJES_PRACTICA) {
+    assert.ok(
+      hub.includes(`href="${lenguaje.ruta}"`),
+      `el hub debe enlazar a ${lenguaje.etiqueta} en ${lenguaje.ruta}`,
+    );
   }
 });
 

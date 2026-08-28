@@ -145,6 +145,89 @@ function formatearTablaSql(resultado, limiteFilas = LIMITE_FILAS_TABLA) {
   };
 }
 
+/*
+  Traduce los dos tropiezos con paquetes que todo alumno de Python tiene acá, y
+  que sin ayuda no llevan a ninguna parte.
+
+  1. Escribe `pip install pandas`. No hay shell ni pip en el navegador, así que el
+     intérprete responde con un SyntaxError que no menciona la palabra pip por
+     ningún lado. Sin esta pista el alumno concluye que el entorno está roto.
+  2. Importa algo que no está. El ModuleNotFoundError es claro sobre QUÉ falta y
+     mudo sobre qué hacer al respecto, que es lo único que el alumno necesita.
+
+  Devuelve null cuando no reconoce el caso: una pista inventada es peor que
+  ninguna.
+*/
+function sugerenciaDePaquetePython(textoError, codigo) {
+  const fuente = typeof codigo === "string" ? codigo : "";
+  const error = typeof textoError === "string" ? textoError : "";
+
+  // Cubre `pip install x`, `!pip install x` y `%pip install x` (el de Jupyter).
+  const invocacionPip = fuente.match(/^\s*[!%]?\s*pip\s+install\s+([\w.\-[\]]+)/m);
+  if (invocacionPip) {
+    const paquete = invocacionPip[1];
+    return (
+      `Acá no existe pip: no hay terminal, el intérprete vive dentro de tu navegador.\n` +
+      `Para instalar desde PyPI usa micropip, que sí funciona:\n\n` +
+      `    import micropip\n` +
+      `    await micropip.install("${paquete}")\n\n` +
+      `Y ojo: numpy, pandas, matplotlib y scikit-learn ya vienen incluidos, no hace falta instalarlos.`
+    );
+  }
+
+  const moduloAusente = error.match(/ModuleNotFoundError: No module named ['"]([\w.]+)['"]/);
+  if (moduloAusente) {
+    // El submódulo no se instala solo: de `sklearn.linear_model` se pide `sklearn`.
+    const paquete = moduloAusente[1].split(".")[0];
+    return (
+      `El paquete "${paquete}" no está cargado. Si existe en PyPI como wheel de Python puro:\n\n` +
+      `    import micropip\n` +
+      `    await micropip.install("${paquete}")\n\n` +
+      `Los paquetes con extensiones en C que no estén compilados a WebAssembly no se pueden instalar acá.`
+    );
+  }
+
+  return null;
+}
+
+/*
+  Encuentra en qué línea del código del alumno reventó Python, para poder marcarla
+  en el editor en vez de obligarlo a contar renglones a mano.
+
+  El traceback de Pyodide arranca con varios marcos internos del propio intérprete
+  (_pyodide/_base.py y compañía). El único que le importa al alumno es el de
+  "<exec>", que es como Pyodide nombra al código que se le pasó. Se toma la ÚLTIMA
+  aparición: con funciones anidadas hay varias, y la última es donde realmente
+  falló.
+*/
+function lineaDelErrorPython(textoError) {
+  if (typeof textoError !== "string") return null;
+
+  const marcos = [...textoError.matchAll(/File "<exec>", line (\d+)/g)];
+  if (marcos.length === 0) return null;
+
+  const linea = Number(marcos[marcos.length - 1][1]);
+  return Number.isInteger(linea) && linea > 0 ? linea : null;
+}
+
+/*
+  Postgres no reporta línea sino "position": el desplazamiento en caracteres desde
+  el inicio de la consulta. Contar los saltos de línea que hay antes de esa
+  posición lo traduce a un número de línea, que es lo que entiende el editor.
+*/
+function lineaDelErrorSql(textoError, codigo) {
+  if (typeof textoError !== "string" || typeof codigo !== "string") return null;
+
+  const encontrada = textoError.match(/Posición: (\d+)/);
+  if (!encontrada) return null;
+
+  // La posición de Postgres es 1-based; el slice necesita el índice 0-based.
+  const desplazamiento = Math.min(Number(encontrada[1]) - 1, codigo.length);
+  if (!(desplazamiento >= 0)) return null;
+
+  return codigo.slice(0, desplazamiento).split("\n").length;
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     LIMITE_LINEAS_SALIDA,
@@ -154,5 +237,8 @@ if (typeof module === "object" && module.exports) {
     crearAcumuladorSalida,
     formatearCeldaSql,
     formatearTablaSql,
+    sugerenciaDePaquetePython,
+    lineaDelErrorPython,
+    lineaDelErrorSql,
   });
 }

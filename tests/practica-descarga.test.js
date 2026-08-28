@@ -14,7 +14,7 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "u
 */
 
 const JS = read("src/app/features/codigo/practica.js");
-const HTML = read("src/app/features/codigo/index.html");
+const HTML = read("src/app/features/codigo/python/index.html");
 
 function cuerpoDeFuncion(fuente, nombre) {
   const inicio = fuente.indexOf(`function ${nombre}(`);
@@ -73,10 +73,16 @@ test("un fallo al resolver la sesión deja el botón bloqueado, no abierto", () 
   código sobrevive porque vive en localStorage. Sin `next`, entrar a la cuenta lo
   dejaría en el portal preguntándose dónde quedó su script.
 */
-test("el login devuelve al playground, en el lenguaje que estaba", () => {
+test("el login devuelve a la página del lenguaje que estaba usando", () => {
   const cuerpo = cuerpoDeFuncion(JS, "descargarCodigo");
-  assert.match(cuerpo, /urlLoginConDestino\(/);
-  assert.match(cuerpo, /\/app\/features\/codigo\/#\$\{lenguajeActivo\.id\}/);
+
+  assert.match(cuerpo, /urlLoginConDestino\(lenguajeActivo\.ruta\)/);
+  /*
+    La ruta sale del catálogo, no de un hash armado a mano: cada entorno tiene su
+    propia URL desde que se separaron las páginas, y un `#python` sobre el hub
+    dejaría al alumno en el índice en vez de en su editor.
+  */
+  assert.doesNotMatch(cuerpo, /codigo\/#/, "un hash sobre el hub no abre ningún entorno");
 });
 
 /*

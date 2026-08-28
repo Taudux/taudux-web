@@ -9,6 +9,9 @@ const {
   crearAcumuladorSalida,
   formatearCeldaSql,
   formatearTablaSql,
+  sugerenciaDePaquetePython,
+  lineaDelErrorPython,
+  lineaDelErrorSql,
 } = require(path.join(ROOT, "src/app/features/codigo/practica.salida.js"));
 
 /*
@@ -157,4 +160,155 @@ test("un select enorme se topea y lo declara", () => {
   assert.equal(tabla.filas.length, 5);
   assert.equal(tabla.totalFilas, 20);
   assert.equal(tabla.truncada, true);
+});
+
+/*
+  Pistas de paquetes. El entorno corre Python real pero sin terminal, así que los
+  dos reflejos que trae el alumno —`pip install` y confiar en que su import
+  existe— fallan de formas que no explican nada. Estas pruebas fijan que la ayuda
+  aparezca en esos dos casos y SOLO en ellos: una pista inventada desorienta más
+  que el error crudo.
+*/
+
+test("pip install se traduce al micropip que sí funciona acá", () => {
+  const pista = sugerenciaDePaquetePython("SyntaxError: invalid syntax", "pip install seaborn");
+
+  assert.match(pista, /Acá no existe pip/);
+  assert.match(pista, /await micropip\.install\("seaborn"\)/);
+});
+
+test("reconoce las formas de pip que se copian de un notebook", () => {
+  for (const linea of ["!pip install rich", "%pip install rich", "  pip install rich"]) {
+    const pista = sugerenciaDePaquetePython("", linea);
+    assert.match(pista, /await micropip\.install\("rich"\)/, `no reconoció: ${linea}`);
+  }
+});
+
+/*
+  Decirle que instale pandas cuando ya viene incluido lo manda a resolver un
+  problema que no tiene.
+*/
+test("la pista de pip aclara que el stack de datos ya viene incluido", () => {
+  assert.match(sugerenciaDePaquetePython("", "pip install pandas"), /ya vienen incluidos/);
+});
+
+test("un módulo ausente sugiere instalarlo con micropip", () => {
+  const pista = sugerenciaDePaquetePython(
+    "ModuleNotFoundError: No module named 'humanize'",
+    "import humanize",
+  );
+
+  assert.match(pista, /"humanize" no está cargado/);
+  assert.match(pista, /await micropip\.install\("humanize"\)/);
+});
+
+/*
+  micropip instala paquetes, no submódulos: de `sklearn.linear_model` hay que
+  pedir `sklearn`, o la instalación falla con un error todavía más confuso.
+*/
+test("de un submódulo se sugiere el paquete raíz, no la ruta completa", () => {
+  const pista = sugerenciaDePaquetePython(
+    "ModuleNotFoundError: No module named 'sklearn.linear_model'",
+    "from sklearn.linear_model import LinearRegression",
+  );
+
+  assert.match(pista, /await micropip\.install\("sklearn"\)/);
+  assert.doesNotMatch(pista, /linear_model/);
+});
+
+test("advierte que un paquete con extensiones en C puede no existir acá", () => {
+  const pista = sugerenciaDePaquetePython("ModuleNotFoundError: No module named 'psycopg2'", "");
+  assert.match(pista, /extensiones en C/);
+});
+
+test("un error cualquiera no inventa pistas", () => {
+  assert.equal(sugerenciaDePaquetePython("ZeroDivisionError: division by zero", "1/0"), null);
+  assert.equal(sugerenciaDePaquetePython("", ""), null);
+  assert.equal(sugerenciaDePaquetePython(null, null), null);
+});
+
+/*
+  "pip" dentro de un comentario o de un nombre de variable no es una invocación:
+  el patrón exige que la línea empiece por pip para no disparar de más.
+*/
+test("mencionar pip de pasada no dispara la pista", () => {
+  assert.equal(sugerenciaDePaquetePython("", "# antes hacías pip install algo"), null);
+  assert.equal(sugerenciaDePaquetePython("", "equipo = 'pip install'"), null);
+});
+
+/*
+  Línea del error. Sirve para marcarla en el editor, así que equivocarse es peor
+  que no marcar nada: señalaría una línea inocente y mandaría al alumno a buscar
+  el problema donde no está.
+*/
+
+test("del traceback de Python sale la línea del código del alumno", () => {
+  const traceback = [
+    "Traceback (most recent call last):",
+    '  File "/lib/python314.zip/_pyodide/_base.py", line 411, in run_async',
+    '  File "<exec>", line 8, in <module>',
+    "NameError: name 'no_existe' is not defined",
+  ].join("\n");
+
+  assert.equal(lineaDelErrorPython(traceback), 8);
+});
+
+/*
+  Los marcos de _pyodide son ruido del andamiaje: si se tomara el primero que
+  aparece, se marcaría una línea de la librería en el código del alumno.
+*/
+test("los marcos internos de Pyodide no se confunden con el código del alumno", () => {
+  const traceback = [
+    '  File "/lib/python314.zip/_pyodide/_base.py", line 597, in eval_code_async',
+    '  File "<exec>", line 3, in <module>',
+  ].join("\n");
+
+  assert.equal(lineaDelErrorPython(traceback), 3);
+});
+
+/*
+  Con funciones anidadas el traceback trae varios marcos de <exec>: el último es
+  donde realmente reventó, los anteriores son quién lo llamó.
+*/
+test("con varios marcos propios se toma el último, que es donde falló", () => {
+  const traceback = [
+    '  File "<exec>", line 10, in <module>',
+    '  File "<exec>", line 4, in calcular',
+    "ZeroDivisionError: division by zero",
+  ].join("\n");
+
+  assert.equal(lineaDelErrorPython(traceback), 4);
+});
+
+test("un error sin traceback no señala ninguna línea", () => {
+  assert.equal(lineaDelErrorPython("ZeroDivisionError: division by zero"), null);
+  assert.equal(lineaDelErrorPython(""), null);
+  assert.equal(lineaDelErrorPython(null), null);
+});
+
+/*
+  Postgres reporta un desplazamiento en caracteres, no una línea. Sin traducirlo,
+  el número no significa nada para el editor.
+*/
+test("la posición de Postgres se traduce a número de línea", () => {
+  const consulta = "select 1\nfrom no_existe\nwhere x = 1";
+
+  // La posición 25 cae dentro de la tercera línea.
+  assert.equal(lineaDelErrorSql("Posición: 25", consulta), 3);
+  // Y una posición del primer renglón sigue siendo la línea 1.
+  assert.equal(lineaDelErrorSql("Posición: 3", consulta), 1);
+});
+
+test("un error de SQL sin posición no señala línea", () => {
+  assert.equal(lineaDelErrorSql("syntax error", "select 1"), null);
+  assert.equal(lineaDelErrorSql(null, "select 1"), null);
+  assert.equal(lineaDelErrorSql("Posición: 5", null), null);
+});
+
+/*
+  Una posición más allá del final del texto (consulta reescrita entre el envío y
+  el error) no puede devolver una línea que no existe.
+*/
+test("una posición fuera de rango se acota al final del código", () => {
+  assert.equal(lineaDelErrorSql("Posición: 9999", "select 1\nfrom t"), 2);
 });

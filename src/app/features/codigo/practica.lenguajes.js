@@ -29,6 +29,13 @@ const LENGUAJES_PRACTICA = [
     id: "python",
     etiqueta: "Python",
     version: "3.14",
+    /*
+      Cada lenguaje tiene su propia página, no una pestaña dentro de una pantalla
+      compartida: así cada entorno puede crecer con las herramientas que solo le
+      sirven a él (el capturador de datos de SQL no le hace nada a Python) y hasta
+      con un diseño distinto, sin llenar de condicionales una vista única.
+    */
+    ruta: "/app/features/codigo/python/",
     descripcion: "CPython compilado a WebAssembly, con numpy, pandas y matplotlib.",
     modoEditor: "ace/mode/python",
     /*
@@ -58,6 +65,7 @@ print(f"\\nTotal: {total:,}")
     id: "sql",
     etiqueta: "SQL",
     version: "PostgreSQL",
+    ruta: "/app/features/codigo/sql/",
     descripcion: "Postgres real en WebAssembly: el mismo dialecto que usamos en producción.",
     modoEditor: "ace/mode/pgsql",
     archivo: "consulta.sql",
@@ -97,6 +105,7 @@ order by ingresos desc;
     id: "r",
     etiqueta: "R",
     version: "4.6.0",
+    ruta: "/app/features/codigo/r/",
     descripcion: "R compilado a WebAssembly por el proyecto webR.",
     modoEditor: "ace/mode/r",
     // .R con mayúscula: es la convención de R para scripts.

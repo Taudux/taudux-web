@@ -19,6 +19,8 @@ let panelDatos = null;
 // Arranca bloqueado a propósito: la sesión se resuelve en una llamada asíncrona y
 // hasta que conteste no hay que dar por buena una descarga.
 let sesionActiva = false;
+let fondoAmbiental = null;
+let marcadorDeError = null;
 
 /* ------------------------------------------------------------------ */
 /* Persistencia local                                                   */
@@ -64,7 +66,11 @@ function obtenerElementos() {
     restaurar: document.getElementById("practicaRestaurar"),
     descargar: document.getElementById("practicaDescargar"),
     notaDescarga: document.getElementById("practicaNotaDescarga"),
-    lenguajes: document.getElementById("practicaLenguajes"),
+    fondo: document.getElementById("practicaFondo"),
+    nomenclatura: document.getElementById("practicaNomenclatura"),
+    nomenclaturaPanel: document.getElementById("practicaNomenclaturaPanel"),
+    // Solo existe en la página de SQL; en las demás vale null a propósito.
+    datos: document.getElementById("practicaBase"),
   };
 }
 
@@ -170,6 +176,61 @@ function alternarControles(corriendo) {
   ejecutando = corriendo;
 }
 
+/*
+  Marca en el editor la línea que reventó. Sin esto, un traceback obliga al alumno
+  a contar renglones a mano para encontrar dónde mirar — que es justo la parte del
+  error que un principiante no sabe leer todavía.
+
+  Se pinta de dos formas porque cumplen funciones distintas: la anotación pone el
+  ícono y el mensaje al pasar el mouse por el margen, y el marcador tiñe la fila
+  entera para que se encuentre de un vistazo sin leer nada.
+*/
+function limpiarMarcaDeError() {
+  if (!editor) return;
+
+  editor.session.clearAnnotations();
+  if (marcadorDeError !== null) {
+    editor.session.removeMarker(marcadorDeError);
+    marcadorDeError = null;
+  }
+}
+
+function marcarLineaDeError(linea, mensaje) {
+  if (!editor || !linea) return;
+
+  // Ace cuenta filas desde 0; los intérpretes reportan líneas desde 1.
+  const fila = linea - 1;
+  const totalFilas = editor.session.getLength();
+  // Un error en la última línea puede reportar una fila que ya no existe.
+  if (fila < 0 || fila >= totalFilas) return;
+
+  editor.session.setAnnotations([{ row: fila, column: 0, text: mensaje, type: "error" }]);
+
+  const Rango = ace.require("ace/range").Range;
+  marcadorDeError = editor.session.addMarker(
+    new Rango(fila, 0, fila, 1),
+    "practica__linea-error",
+    "fullLine",
+  );
+}
+
+/*
+  Deduce la línea del error según el lenguaje. R queda fuera a propósito: sus
+  mensajes no traen número de línea de forma fiable, y marcar la línea equivocada
+  es peor que no marcar ninguna.
+*/
+function lineaDelError(resultado, codigo) {
+  if (lenguajeActivo.id === "python") return lineaDelErrorPython(resultado.error || "");
+  if (lenguajeActivo.id === "sql") return lineaDelErrorSql(resultado.error || "", codigo);
+  return null;
+}
+
+/* Un tiempo con más de un decimal en milisegundos es ruido, no información. */
+function formatearDuracion(milisegundos) {
+  if (milisegundos < 1000) return `${Math.round(milisegundos)} ms`;
+  return `${(milisegundos / 1000).toFixed(2)} s`;
+}
+
 async function ejecutarCodigo() {
   if (ejecutando) return;
 
@@ -178,6 +239,9 @@ async function ejecutarCodigo() {
 
   alternarControles(true);
   limpiarSalida();
+  limpiarMarcaDeError();
+  // El fondo late mientras corre: es la única señal ambiental de que algo pasa.
+  if (fondoAmbiental) fondoAmbiental.ejecutando();
 
   /*
     Un acumulador nuevo por corrida: el tope de salida es por ejecución, no por
@@ -195,16 +259,44 @@ async function ejecutarCodigo() {
     }
 
     anunciarEstado("Ejecutando…");
+    /*
+      Se cronometra solo la ejecución, no la descarga del intérprete: mezclarlas
+      daría "12 s" en la primera corrida y engañaría sobre lo que tarda el código.
+    */
+    const inicio = performance.now();
     const resultado = await runtime.ejecutar(codigo, recibirSalida);
+    const duracion = formatearDuracion(performance.now() - inicio);
 
     pintarResultado(resultado);
 
+    /*
+      El intérprete es real pero no hay terminal, así que `pip install` y los
+      imports ausentes fallan de formas que no le dicen al alumno qué hacer. La
+      pista aparece pegada al error, que es donde va a estar mirando.
+    */
+    if (!resultado.ok && lenguajeActivo.id === "python") {
+      const pista = sugerenciaDePaquetePython(resultado.error || "", codigo);
+      if (pista) pintarFragmento({ texto: `\n${pista}\n`, flujo: "aviso" });
+    }
+
+    /*
+      Detenida no es un fracaso del código: el alumno cortó a propósito. Se tiñe
+      como error igual porque el pulso solo distingue "salió bien" de "no salió".
+    */
+    if (fondoAmbiental) fondoAmbiental.terminado(resultado.ok);
+
     if (resultado.detenida) {
+      // Cortada a mano: el tiempo transcurrido no mide nada que valga reportar.
       anunciarEstado("Ejecución detenida.", "aviso");
     } else if (resultado.ok) {
-      anunciarEstado("Listo.", "exito");
+      anunciarEstado(`Listo en ${duracion}.`, "exito");
     } else {
-      anunciarEstado("La ejecución terminó con errores.", "error");
+      const linea = lineaDelError(resultado, codigo);
+      marcarLineaDeError(linea, resultado.error || "Error");
+      anunciarEstado(
+        linea ? `Error en la línea ${linea}.` : "La ejecución terminó con errores.",
+        "error",
+      );
     }
   } catch (error) {
     /*
@@ -212,6 +304,7 @@ async function ejecutarCodigo() {
       no los errores del código del alumno: esos vuelven dentro del resultado.
     */
     console.error("[practica]", { lenguaje: lenguajeActivo.id, error: { type: error?.name || null } });
+    if (fondoAmbiental) fondoAmbiental.terminado(false);
     pintarFragmento({ texto: `No se pudo ejecutar: ${error?.message || error}\n`, flujo: "stderr" });
     anunciarEstado("No se pudo preparar el intérprete. Revisa tu conexión e intenta de nuevo.", "error");
   } finally {
@@ -265,9 +358,19 @@ function actualizarAccesoDescarga() {
   const { descargar, notaDescarga } = obtenerElementos();
 
   descargar.classList.toggle("practica__descargar--bloqueado", !sesionActiva);
-  descargar.title = sesionActiva
-    ? "Descarga tu código como archivo"
-    : "Crea tu cuenta gratis para descargar tu código";
+
+  /*
+    El botón es un icono sin texto, así que su etiqueta accesible es lo único que
+    nombra el archivo. Tiene que decir QUÉ baja y, cuando está bloqueado, POR QUÉ
+    no baja — si no, el clic que lleva al login parece un fallo.
+  */
+  const archivo = lenguajeActivo?.archivo || "tu código";
+  const etiqueta = sesionActiva
+    ? `Descargar ${archivo}`
+    : `Descargar ${archivo} — necesitas una cuenta`;
+
+  descargar.title = etiqueta;
+  descargar.setAttribute("aria-label", etiqueta);
   notaDescarga.hidden = sesionActiva;
 }
 
@@ -284,10 +387,12 @@ async function resolverSesion() {
 
 function descargarCodigo() {
   if (!sesionActiva) {
-    // Vuelve al lenguaje en el que estaba, no al playground genérico.
-    window.location.href = urlLoginConDestino(
-      `/app/features/codigo/#${lenguajeActivo.id}`,
-    );
+    /*
+      Vuelve a la página del lenguaje, no al hub: ahora cada entorno tiene su
+      propia URL, y un hash sobre el hub no lo abriría. El código sobrevive el
+      viaje porque vive en localStorage.
+    */
+    window.location.href = urlLoginConDestino(lenguajeActivo.ruta);
     return;
   }
 
@@ -309,15 +414,18 @@ function descargarCodigo() {
 /* Editor y cambio de lenguaje                                          */
 /* ------------------------------------------------------------------ */
 
-function marcarLenguajeActivo(idLenguaje) {
-  const { lenguajes } = obtenerElementos();
+/*
+  El lenguaje ya no se elige dentro de la pantalla: lo declara la propia página en
+  <body data-lenguaje="python">. Cada entorno vive en su URL, así que compartir el
+  enlace lleva directo al lenguaje correcto, "atrás" del navegador significa lo que
+  el alumno espera, y cada página puede crecer con las herramientas —o el diseño—
+  que solo le sirven a ella.
 
-  for (const boton of lenguajes.querySelectorAll("[data-lenguaje]")) {
-    const activo = boton.dataset.lenguaje === idLenguaje;
-    boton.classList.toggle("practica__lenguaje--activo", activo);
-    boton.setAttribute("aria-selected", activo ? "true" : "false");
-    boton.tabIndex = activo ? 0 : -1;
-  }
+  Sigue pasando por resolverLenguajeActivo para heredar su garantía: un data-atributo
+  mal escrito cae al primer lenguaje en vez de dejar la página sin editor.
+*/
+function resolverLenguajeDeLaPagina() {
+  return resolverLenguajeActivo(document.body.dataset.lenguaje || "");
 }
 
 function aplicarLenguaje(lenguaje) {
@@ -326,53 +434,89 @@ function aplicarLenguaje(lenguaje) {
   editor.session.setMode(lenguaje.modoEditor);
   editor.setValue(leerCodigoGuardado(lenguaje.id) ?? lenguaje.ejemplo, -1);
 
-  marcarLenguajeActivo(lenguaje.id);
   limpiarSalida();
   anunciarEstado("");
 
-  const { restaurar, descargar } = obtenerElementos();
-  restaurar.textContent = `Restaurar ejemplo de ${lenguaje.etiqueta}`;
-  descargar.textContent = `Descargar ${lenguaje.archivo}`;
-  // El botón se reetiqueta en cada cambio de lenguaje; el candado tiene que
-  // volver a aplicarse sobre la etiqueta nueva.
+  // Los controles son iconos sin texto: el nombre del archivo solo puede vivir en
+  // la etiqueta accesible, que es también el tooltip.
   actualizarAccesoDescarga();
-
-  // El panel de captura de datos solo tiene sentido con una base detrás.
-  if (panelDatos) panelDatos.mostrar(lenguaje.id === "sql");
 }
 
-function cambiarLenguaje(idLenguaje) {
-  if (ejecutando || idLenguaje === lenguajeActivo.id) return;
+/* ------------------------------------------------------------------ */
+/* Vistas: SQL y base de datos                                          */
+/* ------------------------------------------------------------------ */
 
-  const lenguaje = resolverLenguajeActivo(idLenguaje);
-  // Deja el lenguaje en la URL para poder compartir el enlace ya posicionado.
-  window.history.replaceState(null, "", `#${lenguaje.id}`);
-  aplicarLenguaje(lenguaje);
-}
+/*
+  Solo la página de SQL tiene dos vistas. Consultar y modelar son modos de trabajo
+  distintos: juntos en una pantalla, ninguno de los dos entra cómodo.
+*/
+function cambiarVista(vista) {
+  const panelSql = document.getElementById("practicaPanelSql");
+  const panelBase = document.getElementById("practicaPanelBase");
+  if (!panelSql || !panelBase) return;
 
-function construirSelectorDeLenguajes() {
-  const { lenguajes } = obtenerElementos();
+  const enSql = vista !== "base";
+  panelSql.hidden = !enSql;
+  panelBase.hidden = enSql;
 
-  for (const lenguaje of LENGUAJES_PRACTICA) {
-    const boton = document.createElement("button");
-    boton.type = "button";
-    boton.className = "practica__lenguaje";
-    boton.dataset.lenguaje = lenguaje.id;
-    boton.setAttribute("role", "tab");
-    boton.title = lenguaje.descripcion;
-
-    const nombre = document.createElement("span");
-    nombre.className = "practica__lenguaje-nombre";
-    nombre.textContent = lenguaje.etiqueta;
-
-    const version = document.createElement("span");
-    version.className = "practica__lenguaje-version";
-    version.textContent = lenguaje.version;
-
-    boton.append(nombre, version);
-    boton.addEventListener("click", () => cambiarLenguaje(lenguaje.id));
-    lenguajes.appendChild(boton);
+  for (const boton of document.querySelectorAll("[data-vista]")) {
+    const activa = boton.dataset.vista === (enSql ? "sql" : "base");
+    boton.classList.toggle("practica__vista--activa", activa);
+    boton.setAttribute("aria-selected", activa ? "true" : "false");
   }
+
+  /*
+    Ace calcula su tamaño al montarse y no se entera de los cambios mientras
+    estuvo oculto: sin este resize vuelve con el alto viejo y el cursor cae
+    desalineado del texto.
+  */
+  if (enSql && editor) editor.resize();
+
+  /*
+    Al entrar a la vista de base se relee el esquema real: el alumno pudo crear o
+    borrar tablas desde el editor, y la pantalla no puede mostrar lo que había
+    cuando se abrió.
+  */
+  if (!enSql && panelDatos) panelDatos.refrescar();
+}
+
+function configurarVistas() {
+  for (const boton of document.querySelectorAll("[data-vista]")) {
+    boton.addEventListener("click", () => cambiarVista(boton.dataset.vista));
+  }
+}
+
+/*
+  La nomenclatura reemplaza a los botones con texto: los iconos quedan limpios
+  arriba y el significado de cada uno se consulta bajo demanda, en la esquina
+  opuesta, sin ocupar espacio permanente del entorno.
+*/
+function configurarNomenclatura() {
+  const { nomenclatura, nomenclaturaPanel } = obtenerElementos();
+  if (!nomenclatura || !nomenclaturaPanel) return;
+
+  function cerrar() {
+    nomenclatura.setAttribute("aria-expanded", "false");
+    nomenclaturaPanel.hidden = true;
+  }
+
+  nomenclatura.addEventListener("click", () => {
+    const abierto = nomenclatura.getAttribute("aria-expanded") === "true";
+    if (abierto) {
+      cerrar();
+      return;
+    }
+    nomenclatura.setAttribute("aria-expanded", "true");
+    nomenclaturaPanel.hidden = false;
+  });
+
+  // El panel flota sobre la salida: Escape tiene que devolver la vista sin que el
+  // alumno tenga que apuntarle otra vez al botón.
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Escape" || nomenclaturaPanel.hidden) return;
+    cerrar();
+    nomenclatura.focus();
+  });
 }
 
 function montarEditor() {
@@ -381,6 +525,7 @@ function montarEditor() {
   editor = ace.edit("practicaEditor");
   editor.setTheme(TEMA_EDITOR_PRACTICA);
   editor.setOptions({
+    fontFamily: "var(--font-mono)",
     fontSize: "14px",
     showPrintMargin: false,
     // El editor ocupa una caja fija; sin esto Ace no reflowea al cambiar de tamaño.
@@ -397,29 +542,46 @@ function montarEditor() {
 
   editor.session.on("change", () => {
     if (lenguajeActivo) guardarCodigo(lenguajeActivo.id, editor.getValue());
+    /*
+      Al primer tecleo la marca deja de ser cierta: las líneas se corrieron y
+      seguiría señalando una fila que ya no es la que falló.
+    */
+    limpiarMarcaDeError();
   });
 }
 
 function iniciarPlayground() {
-  const { ejecutar, detener, restaurar, descargar } = obtenerElementos();
+  const { ejecutar, detener, restaurar, descargar, datos, fondo } = obtenerElementos();
 
-  construirSelectorDeLenguajes();
   montarEditor();
 
   /*
-    El panel se configura ANTES del primer aplicarLenguaje: ese ya decide si
-    mostrarlo, y con panelDatos todavía en null la pantalla arrancaría con el
-    panel visible en Python.
+    El fondo es decoración: si por lo que sea no se pudiera montar, el entorno
+    tiene que seguir funcionando igual. De ahí la guarda en vez de asumirlo.
   */
-  panelDatos = configurarPanelDeDatos({
-    ejecutarSql: ejecutarSqlDeDatos,
-    escribirEnEditor: (sql) => {
-      editor.setValue(sql, -1);
-      editor.focus();
-    },
-  });
+  if (fondo && typeof montarFondoDeCodigo === "function") {
+    fondoAmbiental = montarFondoDeCodigo(fondo);
+  }
 
-  aplicarLenguaje(resolverLenguajeActivo(window.location.hash));
+  /*
+    La vista de base de datos solo existe en la página de SQL. Montarla a ciegas
+    reventaría en Python y R, donde ninguno de sus elementos está en el DOM.
+  */
+  if (datos) {
+    panelDatos = montarVistaBaseDeDatos({
+      ejecutarSql: ejecutarSqlDeDatos,
+      escribirEnEditor: (sql) => {
+        editor.setValue(sql, -1);
+        // Escribir en el editor solo sirve si el editor está a la vista.
+        cambiarVista("sql");
+        editor.focus();
+      },
+    });
+    configurarVistas();
+  }
+
+  aplicarLenguaje(resolverLenguajeDeLaPagina());
+  configurarNomenclatura();
 
   ejecutar.addEventListener("click", ejecutarCodigo);
   detener.addEventListener("click", detenerEjecucion);
@@ -430,10 +592,8 @@ function iniciarPlayground() {
     editor.focus();
   });
 
-  window.addEventListener("hashchange", () => cambiarLenguaje(window.location.hash));
-
-  // No se espera: el playground es usable sin sesión y solo la descarga depende
-  // de ella, así que resolverla no debe retrasar el montaje del editor.
+  // No se espera: el entorno es usable sin sesión y solo la descarga depende de
+  // ella, así que resolverla no debe retrasar el montaje del editor.
   return resolverSesion();
 }
 
