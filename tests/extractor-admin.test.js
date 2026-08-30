@@ -33,6 +33,24 @@ const HOJA = "src/app/features/transactions/admin.css";
 const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
 const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 
+/* El fuente de `admin.js` sin comentarios, para los asertos que cortan por
+   `indexOf`.
+
+   Hace falta porque el racional de una función repite EN PROSA las mismas
+   frases que el aserto busca en el código: la ventana arranca en el comentario
+   y termina midiendo otra cosa. Pasó al escribir el aserto del desglose —
+   "no se pudo saber" matcheó el comentario y el corte se llevó el cubo de al
+   lado, dando rojo contra código correcto.
+
+   Se aplica DESPUÉS de `seccion()`, nunca antes: los rótulos `// --- ` que esa
+   función usa para cortar son comentarios y desaparecerían.
+
+   Las líneas `//` se quitan sólo cuando abren el renglón, para no partir el
+   `//` de una URL. */
+const sinComentariosJs = (js) => js
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+
 test("the extractor admin page stays out of search engines", () => {
   // Mismo criterio que las dos páginas de Tools y las de auth: no listarla no
   // le pide a nadie que la ignore; el noindex sí.
@@ -1755,6 +1773,76 @@ test("the section declares the two things it does not count", () => {
     "y que el interruptor no la gobierna — acá por decisión, no por " +
       "imposibilidad: un fallo cuenta lo haya encontrado quien sea"
   );
+});
+
+test("the unidentified pile is opened in three, not left as one number", () => {
+  /*
+    **"No reconocido" mezcla dos cosas con acciones OPUESTAS.** Un estado de
+    cuenta real de un banco que todavía no cubrimos es la señal que decide qué
+    construir después; un PDF que nunca fue un estado de cuenta es ruido.
+    Sumados, inflan la tasa de fallo y apuntan el trabajo a una demanda que no
+    existe.
+
+    La `0036` creó `parece_estado` para separarlos, y durante un tiempo la
+    columna juntó el dato sin que nadie lo leyera: el agregado ni siquiera la
+    pedía en el `select`.
+  */
+  /* Sin comentarios, y ese detalle NO es cosmético: el racional de esta
+     función repite en prosa las mismas frases que estos asertos buscan, así
+     que sobre el fuente crudo la ventana arranca en el comentario y mide el
+     cubo de al lado. */
+  const js = sinComentariosJs(seccion(read(SCRIPT), "Fallos por banco"));
+
+  assert.match(js, /sin_identificar/, "lee el desglose del agregado");
+  assert.match(js, /parecian/, "el cubo que es señal de roadmap");
+  assert.match(js, /no_eran/, "el que es ruido");
+  assert.match(js, /no_se_sabe/, "y el que no se puede saber");
+
+  /* El tercero tiene que decirse DISTINTO del segundo en pantalla. Si los dos
+     se leen igual, el desglose no separa nada y volvimos al número único. */
+  const prosa = js.replace(/\s+/g, " ");
+  assert.match(prosa, /no se pudo saber|no se sabe/i,
+    "el escaneado se nombra como incertidumbre, no como descarte");
+  assert.match(prosa, /no eran estados de cuenta/i,
+    "y el descarte se nombra como tal");
+
+  /* CADA CIFRA CON SU ETIQUETA, y este es el aserto que de verdad importa.
+
+     Comprobar que las tres claves y las tres frases existen "en algún lado"
+     del archivo deja pasar el defecto más caro de este cambio: escribir
+     `sin.no_eran` donde va `sin.parecian`. Los dos cubos significan cosas
+     OPUESTAS —uno es la señal que decide el roadmap, el otro es ruido—, así
+     que un swap invierte la pantalla entera sin romper una sola prueba.
+
+     Por eso se acota a cada `<span>` y se exige el par dentro del mismo. */
+  const pares = [
+    ["Parecían estados de cuenta", "sin.parecian"],
+    ["No eran estados de cuenta", "sin.no_eran"],
+    ["no se pudo saber", "sin.no_se_sabe"],
+  ];
+  for (const [etiqueta, campo] of pares) {
+    const desde = prosa.indexOf(etiqueta);
+    assert.notEqual(desde, -1, `falta la etiqueta "${etiqueta}"`);
+    const fin = prosa.indexOf("</span>", desde);
+    assert.notEqual(fin, -1, `la etiqueta "${etiqueta}" no cierra su span`);
+    assert.match(prosa.slice(desde, fin), new RegExp(campo.replace(".", "\\.")),
+      `"${etiqueta}" tiene que mostrar ${campo}, no otro cubo`);
+  }
+});
+
+test("the breakdown starts hidden: a missing field is not a zero", () => {
+  /*
+    Mismo criterio que el resto del panel: "este servidor no lo mide" y "no
+    hubo ninguno" no pueden verse idénticos. Un servidor viejo no manda
+    `sin_identificar`, y pintar ceros ahí afirmaría algo que nadie midió.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="sinIdentificarMetricaBanco"[^>]*\shidden/,
+    "nace oculto: sin el campo, no se inventa un cero");
+
+  const js = seccion(read(SCRIPT), "Fallos por banco");
+  assert.match(js, /sinIdentificarMetricaBanco/, "y el JS lo gobierna");
 });
 
 test("the accounts table is NOT filtered — it is a registry, not a measurement", () => {

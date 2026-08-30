@@ -314,6 +314,12 @@
             quien la descargó se llevó los datos sin enterarse.
           </p>
           <div class="admin__grafico" id="tablaMetricaBanco" aria-live="polite"></div>
+          <!-- Los archivos en los que no se pudo identificar el banco, abiertos
+               en tres. Nace oculto: un servidor que no manda el desglose no es
+               lo mismo que un mes sin archivos sueltos, y pintar ceros ahí
+               afirmaría algo que nadie midió. -->
+          <p class="admin__sin-identificar" id="sinIdentificarMetricaBanco"
+             aria-live="polite" hidden></p>
           <p class="admin__nota-sin-filtrar">
             No se cuentan acá los archivos en los que <strong>no se pudo
             identificar el banco</strong> —formato desconocido, escaneos sin

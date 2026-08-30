@@ -1459,6 +1459,43 @@
 
     bloque.hidden = false;
 
+    /* Los archivos sin banco identificado, ABIERTOS EN TRES.
+
+       Un número solo volvería a juntar lo que la `0036` separó, y son dos
+       cosas con acciones opuestas: un estado de cuenta real de un banco que
+       todavía no cubrimos —la señal que decide qué construir después— y un PDF
+       que nunca fue un estado de cuenta, que es ruido.
+
+       El tercero no es relleno: un escaneado no tiene texto donde buscar, así
+       que no es "no era un estado de cuenta", es "no se pudo saber".
+
+       Va ACÁ ARRIBA, antes del retorno por tabla vacía: puede haber archivos
+       sueltos en un mes en el que ningún banco falló, y ese caso es
+       precisamente el que más interesa leer. */
+    const nodoSin = el("sinIdentificarMetricaBanco");
+    if (nodoSin) {
+      const sin = datos.sin_identificar;
+      if (!sin || typeof sin !== "object") {
+        // Un servidor viejo manda un número, o no manda nada. Ausencia no es
+        // cero: pintar ceros afirmaría algo que nadie midió.
+        nodoSin.hidden = true;
+      } else {
+        const num = (v) => Number(v) || 0;
+        const total = num(sin.total);
+        nodoSin.hidden = false;
+        /* El conteo va DESPUÉS de la etiqueta, y no antes, para que el
+           singular no rompa la frase: "1 parecían estados de cuenta" no se
+           puede escribir. */
+        nodoSin.innerHTML = `
+          <strong>${total} archivo${total === 1 ? "" : "s"} sin banco
+            identificado.</strong>
+          <span>Parecían estados de cuenta: ${num(sin.parecian)} — bancos que
+            aún no cubrimos.</span>
+          <span>No eran estados de cuenta: ${num(sin.no_eran)}.</span>
+          <span>Escaneados, no se pudo saber: ${num(sin.no_se_sabe)}.</span>`;
+      }
+    }
+
     if (!filas.length) {
       caja.innerHTML =
         '<p class="admin__vacio">Ningún banco falló este mes.</p>';

@@ -601,6 +601,29 @@
     font-size: 0.78rem;
   }
 
+  /* El desglose de los archivos sin banco identificado.
+   *
+   * Un renglón por cubo: los tres compiten entre sí y en línea corrida se
+   * leerían como una frase, que es justo lo que este desglose vino a deshacer.
+   *
+   * NO lleva la barra de `.admin__nota-sin-filtrar` ni su color: eso es una
+   * nota sobre lo que la sección no cuenta, y esto SÍ son datos medidos. El
+   * total va con el peso del cuerpo y los tres cubos apagados debajo, misma
+   * jerarquía que "N en pruebas" — contexto, no una segunda cifra. */
+  .admin__sin-identificar {
+    margin-block-start: 0.75rem;
+    color: var(--color-text);
+    font-size: 0.8rem;
+  }
+
+  .admin__sin-identificar span {
+    display: block;
+    margin-block-start: 0.15rem;
+    padding-inline-start: 0.75rem;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+  }
+
   /* --- Columnas apiladas y serie temporal (2026-08-25) ------------------- */
 
   /* La leyenda es obligatoria, no decorativa: sin ella los dos colores de una
