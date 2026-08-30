@@ -441,6 +441,7 @@
   const panelEnCache = {
     porDia: null,
     permanencia: null,
+    metricaBanco: null,
     porDiaSinAdmins: null,
     periodo: "",
   };
@@ -496,6 +497,11 @@
     // las otras dos secciones: guardarlo entero conserva los dos juntos y evita
     // que puedan quedar desapareados.
     panelEnCache.permanencia = cuerpo.permanencia || null;
+
+    // Ésta NO tiene gemelo filtrado, y es la excepción a propósito: mide si el
+    // software funciona, no cuánto se usa, así que el interruptor no la
+    // gobierna. Se guarda entera porque no hay un segundo agregado que aparear.
+    panelEnCache.metricaBanco = cuerpo.metrica_banco || null;
 
     const filtrado = cuerpo.por_dia_sin_admins;
     panelEnCache.porDiaSinAdmins = filtrado === undefined || filtrado === null
@@ -1397,6 +1403,90 @@
       + avisoDeMuestra(vista.total, panelEnCache.periodo);
   }
 
+  // --- Fallos por banco ----------------------------------------------------
+
+  /*
+    De los bancos que SÍ soportamos, cuáles están fallando.
+
+    NO OBEDECE AL INTERRUPTOR, y acá es una DECISIÓN, no una imposibilidad
+    —la `0037` le dio a la tabla la columna `es_admin`, así que podría—.
+
+    Las otras tres secciones miden USO: cuánta gente, desde dónde, cuánto se
+    queda. Ahí las pruebas de la casa son ruido. Ésta mide si el SOFTWARE
+    FUNCIONA, y si un banco revienta, revienta para todos: que lo haya
+    encontrado un administrador no lo vuelve menos real. Restarlo escondería
+    defectos genuinos justo en la tabla que existe para hallarlos.
+
+    Los intentos de administración se ANOTAN bajo el nombre del banco, porque
+    el número solo tampoco alcanza: tres fallos de tres personas y tres de una
+    tarde de depuración piden acciones distintas.
+
+    Va UNA anotación por fila y no una por celda: cubre los fallos y los
+    descuadres, que es donde el servidor la cuenta.
+  */
+  function pintarMetricaBanco() {
+    const caja = el("tablaMetricaBanco");
+    const bloque = el("seccionMetricaBanco");
+    if (!caja || !bloque) return;
+
+    /* Los mismos tres estados del resto del panel, y acá el del medio es una
+       BUENA noticia: sin él, "este servidor no lo mide" y "no falló nada este
+       mes" se ven idénticos — una sección que no está. */
+    const datos = panelEnCache.metricaBanco;
+    if (!datos) {
+      bloque.hidden = true;
+      return;
+    }
+
+    const nodoMes = el("mesMetricaBanco");
+    if (nodoMes) {
+      nodoMes.textContent = panelEnCache.periodo
+        ? `· ${panelEnCache.periodo}` : "";
+    }
+
+    /* Sólo los bancos con algo que reportar, y ordenados por fallos. Seis filas
+       de ceros son ruido: la sección existe para decir a cuál mirar primero. */
+    const filas = Object.entries(datos.bancos || {})
+      .map(([banco, d]) => ({
+        banco,
+        fallaron: d.fallaron || 0,
+        noCuadraron: d.no_cuadraron || 0,
+        enPruebas: d.en_pruebas || 0,
+      }))
+      .filter((f) => f.fallaron || f.noCuadraron)
+      .sort((a, b) => (b.fallaron - a.fallaron)
+        || (b.noCuadraron - a.noCuadraron));
+
+    bloque.hidden = false;
+
+    if (!filas.length) {
+      caja.innerHTML =
+        '<p class="admin__vacio">Ningún banco falló este mes.</p>';
+      return;
+    }
+
+    caja.innerHTML = `
+      <table class="admin__tabla">
+        <thead>
+          <tr>
+            <th scope="col">Banco</th>
+            <th scope="col">Fallaron</th>
+            <th scope="col">No cuadraron</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filas.map((f) => `
+            <tr>
+              <th scope="row">${escapar(f.banco)}${f.enPruebas
+                ? `<span class="admin__en-pruebas">${f.enPruebas} en pruebas</span>`
+                : ""}</th>
+              <td class="${f.fallaron ? "admin__fallo" : ""}">${f.fallaron}</td>
+              <td class="${f.noCuadraron ? "admin__descuadre" : ""}">${f.noCuadraron}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  }
+
   // --- Usuarios del sitio --------------------------------------------------
 
   /*
@@ -1460,6 +1550,7 @@
         recordarRegiones(cuerpo);
         pintarSerie();
         pintarPermanencia();
+        pintarMetricaBanco();
       } else {
         console.warn("[admin] /api/admin/perfiles respondió", r.status);
         fallarRegiones();

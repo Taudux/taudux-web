@@ -739,6 +739,20 @@ test("the unlocated row stays apart and has no breakdown", () => {
   match lo aporta la tabla de límites, que también lo lee. Buscando en el
   archivo entero, un test verde no probaría lo que dice probar.
 */
+/* El cuerpo de UNA sección del HTML, por su id, ya sin etiquetas y con los
+   espacios colapsados. Los asertos de ausencia lo necesitan: sobre la página
+   entera, cualquier sección que hable de lo mismo los vuelve rojos sin que
+   haya nada roto. */
+const seccionHtml = (html, id) => {
+  const inicio = html.indexOf(`id="${id}"`);
+  assert.notEqual(inicio, -1, `falta la sección "${id}" en admin.html`);
+  const resto = html.slice(inicio);
+  const fin = resto.indexOf("</section>");
+  return (fin === -1 ? resto : resto.slice(0, fin))
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ");
+};
+
 const seccion = (js, titulo) => {
   const inicio = js.indexOf(`// --- ${titulo}`);
   assert.notEqual(inicio, -1, `falta la sección "${titulo}" en admin.js`);
@@ -1550,9 +1564,197 @@ test("flipping it repaints the three charts, not one", () => {
   assert.doesNotMatch(cuerpo, /pintarActividad\(/,
     "la sección de actividad ya no existe");
 
+  assert.doesNotMatch(cuerpo, /pintarMetricaBanco\(/,
+    "los fallos por banco NO, y es una decisión: esa tabla mide si el software " +
+      "funciona, no cuánto se usa. Un fallo es un fallo lo haya encontrado " +
+      "quien lo haya encontrado, y filtrarlo escondería defectos reales");
+
   const html = sinComentariosHtml(read(PAGINA));
   assert.match(html, /Afecta a los tres gráficos/i,
     "y el control declara el alcance que de verdad tiene");
+});
+
+/* ---------------------------------------------------------------------------
+ * "Fallos por banco" (2026-08-29): de los bancos que SÍ soportamos, cuáles
+ * están fallando.
+ *
+ * Nace de una pregunta de negocio —*"¿un estado de cuenta que soportamos falla
+ * al leerse?"*— que hasta hoy no se podía contestar: `extractor_metrica_banco`
+ * llevaba vacía desde la `0030` porque `_registrar_banco()` sólo escribía en
+ * una lista en memoria.
+ * ------------------------------------------------------------------------ */
+
+test("the bank failures section has three states, not two", () => {
+  /*
+    Cero fallos es una BUENA NOTICIA y merece decirse. Sin el estado del medio,
+    "este servidor no lo mide" y "no falló nada este mes" se ven idénticos: una
+    sección que no está.
+  */
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="seccionMetricaBanco"[^>]*\shidden/,
+    "nace oculta: sin el campo, el servidor no lo mide");
+  assert.match(html, /id="tablaMetricaBanco"/, "y tiene su contenedor");
+
+  const js = seccion(read(SCRIPT), "Fallos por banco");
+
+  assert.match(js, /!datos/, "sin el campo se oculta");
+  assert.match(js, /no falló|sin fallos|ningún fallo/i,
+    "con el campo y sin fallos se dice en pantalla, que es la buena noticia");
+
+  assert.match(read(SCRIPT), /cuerpo\.metrica_banco/,
+    "lee el agregado de la respuesta");
+});
+
+test("a broken parse and a table that does not reconcile are separate columns", () => {
+  /*
+    **El fallo silencioso.** `fallaron` es "no salió nada". `no_cuadraron` es
+    "salió una tabla y NO coincide con los totales del banco" — alguien se
+    llevó datos posiblemente mal sin enterarse.
+
+    Sumarlos escondería el segundo detrás de un número que se lee como el
+    primero, y son problemas distintos con arreglos distintos.
+  */
+  const js = seccion(read(SCRIPT), "Fallos por banco");
+
+  assert.match(js, /fallaron/i, "una columna para lo que no salió");
+  assert.match(js, /no_cuadraron/i, "y otra para lo que salió mal");
+});
+
+test("failure counts are colored by severity, and never with a series color", () => {
+  /*
+    **El naranja de este panel YA SIGNIFICA "sin sesión"** — literalmente:
+    `--serie-sin-sesion: var(--color-warning)`. Usarlo para los fallos haría que
+    el mismo color diga dos cosas distintas en la misma pantalla, y las tres
+    secciones de arriba lo llevan usando con el otro sentido.
+
+    Y SÓLO SE COLOREA EL FALLO DURO, que se decidió midiendo:
+
+      · `--color-error-text` (#ffb4b4) para el caso leve da **11.38** de
+        contraste contra los **4.91** del rojo pleno — en oscuro, más claro es
+        MÁS fuerte, así que el leve gritaba más que el grave.
+      · El mismo rojo atenuado hacia el fondo (#a9383c) ordena bien la
+        jerarquía pero cae a **3.03**, por debajo del 4.5 de WCAG AA.
+
+    `--color-error` ya está en 4.91, al borde del mínimo: no hay espacio para
+    un segundo rojo legible por debajo. El descuadre se distingue por peso y
+    por su columna.
+
+    Acotado por la LLAVE de la regla y no por el paréntesis: `[^)]*` se corta
+    en el `)` de `var(--color-error)` y el aserto fallaría contra un CSS
+    correcto. Los paréntesis anidados son la tercera forma en que un regex
+    miente, junto con el salto de línea y la concatenación de literales.
+  */
+  const css = sinComentariosCss(read(HOJA));
+
+  assert.match(css, /admin__fallo[^{]*\{[^}]*var\(--color-error\)/,
+    "lo que no salió va en rojo pleno");
+  assert.doesNotMatch(
+    css,
+    /admin__descuadre[^{]*\{[^}]*color:/,
+    "y el descuadre NO lleva color: no queda rojo legible por debajo del pleno"
+  );
+
+  const bloqueNuevo = css.slice(css.indexOf(".admin__fallo"));
+  assert.doesNotMatch(
+    bloqueNuevo.slice(0, 400),
+    /--serie-(con|sin)-sesion|--color-warning/,
+    "y NUNCA con un color de serie: en este panel ya quieren decir otra cosa"
+  );
+});
+
+test("a zero is not painted: a table of red zeros cries wolf", () => {
+  /*
+    Colorear un cero es ruido. Si todas las celdas gritan, ninguna avisa — y la
+    sección existe justamente para decir a cuál banco mirar primero.
+  */
+  const js = seccion(read(SCRIPT), "Fallos por banco");
+
+  assert.match(
+    js,
+    /\?\s*"admin__(fallo|descuadre)"\s*:\s*""|f\.(fallaron|noCuadraron)\s*\?/,
+    "la clase se pone sólo cuando el número no es cero"
+  );
+});
+
+test("admin runs are annotated, never subtracted", () => {
+  /*
+    **Un fallo es un fallo lo haya encontrado quien lo haya encontrado.** Si un
+    banco revienta, revienta para todos: restar los intentos de administración
+    escondería defectos genuinos justo en la tabla que existe para hallarlos.
+
+    Pero el número solo tampoco alcanza — tres fallos de tres personas y tres
+    de una tarde de depuración piden acciones distintas. Por eso se anota bajo
+    el nombre del banco, y nunca se descuenta.
+  */
+  const seccionJs = seccion(read(SCRIPT), "Fallos por banco");
+
+  assert.match(seccionJs, /en_pruebas|enPruebas/,
+    "la anotación se pinta");
+
+  /* Y va en la FILA, no colgando del número de "Fallaron".
+
+     Que estuviera en esa celda no fue una decisión: salió implícito de que el
+     contador vivía anidado en la rama de los fallos duros. Con eso, un
+     DESCUADRE hecho probando quedaba sin contexto — y es el fallo silencioso,
+     justo el que más lo necesita. Una sola anotación bajo el nombre del banco
+     cubre las dos columnas.
+
+     Se corta por rebanadas y no con un regex de un tirón a propósito: un
+     `[\s\S]*?` entre el `<th>` y el span cruza el `</th>` sin quejarse, así
+     que daría verde con la anotación de vuelta en el `<td>`. */
+  /* Los guards van sobre el ÍNDICE y no sobre la rebanada: con `indexOf` en
+     -1, `slice(-1)` devuelve el último carácter y no `""`, así que un aserto
+     contra la cadena vacía no podría fallar nunca. */
+  const inicio = seccionJs.indexOf('<th scope="row">');
+  assert.notEqual(inicio, -1, 'falta el <th scope="row"> del banco');
+  const plantillaDeFila = seccionJs.slice(inicio);
+
+  const corte = plantillaDeFila.indexOf("</th>");
+  assert.notEqual(corte, -1, "el encabezado de fila no cierra");
+  assert.match(plantillaDeFila.slice(0, corte), /admin__en-pruebas/,
+    "la anotación va dentro del encabezado de fila, bajo el nombre del banco");
+
+  const celdas = plantillaDeFila.slice(corte);
+  assert.doesNotMatch(celdas.slice(0, celdas.indexOf("</tr>")),
+    /admin__en-pruebas/,
+    "y ya no cuelga del número de fallos: ahí no podía cubrir el descuadre");
+
+  /* Y se pinta APAGADA: es contexto del fallo, no una segunda cifra. Con el
+     mismo peso competiría con el número, o peor, se leería como algo que hay
+     que restar — que es exactamente lo contrario de lo que hace. */
+  const css = sinComentariosCss(read(HOJA));
+  assert.match(css, /admin__en-pruebas[^{]*\{[^}]*--color-text-muted/,
+    "en el gris apagado, no compitiendo con el número");
+  assert.match(css, /admin__en-pruebas[^{]*\{[^}]*display:\s*block/,
+    "y en su propio renglón");
+  assert.doesNotMatch(seccionJs, /excluyendoAdmins\(\)/,
+    "y NO se consulta el interruptor: acá no se excluye a nadie");
+  assert.doesNotMatch(seccionJs, /sin_admins/,
+    "ni existe una vista filtrada que restar");
+});
+
+test("the section declares the two things it does not count", () => {
+  /*
+    Las dos son decisiones de alcance, no descuidos, y ninguna se deduce
+    mirando la tabla. Un panel que calla lo que deja fuera es un panel que
+    miente por omisión — ya pasó cuatro veces en esta pantalla.
+  */
+  const prosa = sinComentariosHtml(read(PAGINA))
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ");
+
+  assert.match(
+    prosa,
+    /no (se pudo|pudimos) identificar el banco|sin banco identificado/i,
+    "que los archivos sin banco quedan fuera: la cifra subreporta el total"
+  );
+  assert.match(
+    prosa,
+    /no afecta a esta sección/i,
+    "y que el interruptor no la gobierna — acá por decisión, no por " +
+      "imposibilidad: un fallo cuenta lo haya encontrado quien sea"
+  );
 });
 
 test("the accounts table is NOT filtered — it is a registry, not a measurement", () => {
@@ -1604,8 +1806,14 @@ test("the control states what it governs and what it leaves alone", () => {
   */
   const html = sinComentariosHtml(read(PAGINA));
 
-  assert.match(html, /La tabla de cuentas no cambia/i,
+  /* Los espacios se colapsan ANTES de buscar: el ajuste de línea del HTML
+     parte la frase —"los fallos por ⏎ banco no cambian"— y el aserto fallaría
+     contra una página que sí dice lo que se le pide. */
+  const alcance = html.replace(/\s+/g, " ");
+  assert.match(alcance, /La tabla de cuentas.{0,60}no cambian?/i,
     "el control dice a qué NO afecta, que es lo que nadie deduce");
+  assert.match(alcance, /fallos por banco/i,
+    "y nombra la cuarta sección, que tampoco puede gobernar");
 });
 
 /* ---------------------------------------------------------------------------
@@ -1724,18 +1932,25 @@ test("the section declares the two things it cannot promise", () => {
     un `<strong>` en el medio las parte otra vez. Sin esto, el aserto falla
     contra una página que sí dice lo que se le pide.
   */
-  const prosa = sinComentariosHtml(read(PAGINA))
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ");
+  /* Acotado A SU SECCIÓN y no a la página entera.
+
+     Barrer todo el documento hacía que este aserto tropezara con "Fallos por
+     banco", que sí declara —con razón— que el interruptor no la afecta. Un
+     `doesNotMatch` de alcance global se rompe cada vez que otra sección dice
+     algo parecido, y el rojo no señala nada real. */
+  const prosa = seccionHtml(read(PAGINA), "seccionPermanencia");
 
   assert.doesNotMatch(
     prosa,
     /no afecta a esta sección/i,
     "ya no puede decir que el interruptor no la toca: desde la 0035 sí la toca"
   );
+  /* Se busca la AFIRMACIÓN, no dos palabras sueltas. La versión anterior
+     pedía "sin sesión" sobre la página entera y pasaba por texto de otra
+     sección: verde por la razón equivocada, que es peor que rojo. */
   assert.match(
     prosa,
-    /sin (haber )?iniciar sesión|sin sesión/i,
+    /sólo alcanza a quien entró con sesión iniciada/i,
     "declara el límite real: excluir sólo alcanza a los admins CON sesión"
   );
   assert.match(
