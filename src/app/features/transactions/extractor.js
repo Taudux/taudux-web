@@ -880,7 +880,14 @@ let serieActual = [];
   el área de datos por el lado que primero tope y preserveAspectRatio remata:
   el logo jamás se estira, sólo escala.
 */
-const MARCA_URL = "/static/marca-taudux.png";
+/* La ruta es `/assets/images/`, la del sitio, y NO `/static/`.
+
+   Decía `/static/marca-taudux.png`, que es la convención de Flask: correcta en
+   el proyecto del que se portó este código, falsa acá — la raíz web es `src/`
+   y ese archivo nunca existió con ese nombre. Cada gráfica dibujaba un
+   `<image>` contra un 404, y con `opacity: 0.13` una imagen rota se lee como
+   una mancha del fondo, no como un error. Nadie lo vio durante semanas. */
+const MARCA_URL = "/assets/images/logo-horizontal.png";
 const MARCA_ASPECTO = 2048 / 724;
 
 function marcaAgua(ancho, alto, margen) {

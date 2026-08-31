@@ -385,3 +385,39 @@ test("every title inside a veilable panel is a DIRECT child, or the veil hides i
       + "velo lo va a difuminar y no se puede deshacer desde el hijo");
   }
 });
+
+/*
+  LAS RUTAS DE ASSETS TIENEN QUE EXISTIR, y esta suite no lo verificaba.
+
+  `MARCA_URL` apuntaba a `/static/marca-taudux.png` — la convención de FLASK,
+  correcta en el proyecto del que se portó este código, y falsa acá: la raíz
+  web es `src/` y las imágenes viven en `src/assets/images/`. El archivo nunca
+  viajó con ese nombre.
+
+  Cada gráfica dibujaba entonces un `<image>` de SVG contra un 404. Nadie lo
+  vio porque con `opacity: 0.13` una imagen rota se lee como una mancha del
+  fondo, no como un error.
+
+  Es el defecto típico de portar código entre proyectos con convenciones de
+  rutas distintas: compila, corre, no tira un solo error en consola, y falla
+  en silencio.
+*/
+test("the watermark URL points at a file that actually exists under src/", () => {
+  // Sin comentarios: el racional de `marcaAgua()` nombra `logo-horizontal.png`
+  // en prosa, y sobre el fuente crudo el aserto pasaría por la razón
+  // equivocada aunque la constante siguiera rota.
+  const js = sinComentariosJs(read(SCRIPT));
+
+  const m = js.match(/const\s+MARCA_URL\s*=\s*"([^"]+)"/);
+  assert.ok(m, "falta la constante MARCA_URL");
+
+  const ruta = m[1];
+  assert.ok(ruta.startsWith("/"),
+    `MARCA_URL debe ser absoluta desde la raíz web, y es "${ruta}"`);
+
+  // La raíz web es `src/` (vercel.json: outputDirectory).
+  const enDisco = path.join(ROOT, "src", ruta.replace(/^\//, ""));
+  assert.ok(fs.existsSync(enDisco),
+    `MARCA_URL apunta a "${ruta}", que no existe en src/. `
+    + "Un <image> de SVG contra un 404 no avisa: se ve como una mancha.");
+});
