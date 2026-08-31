@@ -112,3 +112,69 @@ test("fields the user already filled in are never overwritten, even with a full 
   assert.equal(formulario.elements.email.value, "propio@example.com");
   assert.equal(formulario.elements.telefono.value, "0000000000");
 });
+
+/*
+  EL FONDO DE PARTÍCULAS TIENE QUE ATRAVESAR TODA LA PÁGINA.
+
+  Estaba encerrado en el hero y se cortaba al scrollear: Servicios, Tecnología
+  y Contacto quedaban lisos. Ahora el lienzo es `fixed` y vive FUERA de las
+  secciones.
+
+  Lo que lo rompía no era obvio: `.home__section` se pintaba
+  `background-color: var(--color-background)` —redundante, porque el `body` ya
+  pinta ese mismo color— y con eso TAPABA el lienzo que corre por debajo. El
+  fondo no desaparecía: quedaba cubierto. Un color pleno en una sección vuelve
+  a romperlo sin que nada falle.
+*/
+const INDEX = "src/index.html";
+const HOME_CSS = "src/app/features/home/home.css";
+const HOME_JS = "src/app/features/home/home.js";
+
+const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
+const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+test("the particle backdrop lives outside every section, so scrolling cannot end it", () => {
+  const html = sinComentariosHtml(read(INDEX));
+
+  const fondo = html.indexOf('id="particles-fondo"');
+  assert.notEqual(fondo, -1, "falta el contenedor global del fondo");
+
+  // Fuera de cualquier <section> y del <header> del hero: si estuviera dentro,
+  // volvería a terminarse con su sección.
+  const primeraSeccion = Math.min(
+    ...[html.indexOf("<header"), html.indexOf("<section")].filter((i) => i !== -1),
+  );
+  assert.ok(fondo < primeraSeccion,
+    "el fondo debe declararse ANTES del contenido, como hijo directo de <body>");
+
+  // Y el revelado de "Quiénes somos" NO es un fondo: depende de estar dentro
+  // de su sección. No se toca.
+  assert.match(html, /id="particles-quienes"/,
+    "el revelado de Quiénes somos debe seguir en su sección");
+});
+
+test("no landing section paints an opaque colour over the backdrop", () => {
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const inicio = css.indexOf(".home__section");
+  assert.notEqual(inicio, -1, "falta la regla .home__section");
+  const fin = css.indexOf("}", inicio);
+  assert.notEqual(fin, -1, "la regla .home__section no cierra");
+
+  assert.doesNotMatch(
+    css.slice(inicio, fin),
+    /background(-color)?\s*:/,
+    "un color pleno acá tapa el lienzo fijo y el fondo vuelve a 'desaparecer'",
+  );
+});
+
+test("the backdrop loader points at the global container, not the old hero one", () => {
+  const js = read(HOME_JS);
+
+  assert.match(js, /tsParticles\.load\("particles-fondo"/,
+    "el fondo debe cargarse en el contenedor global");
+  assert.doesNotMatch(js, /"particles-hero"/,
+    "el contenedor del hero ya no existe: una carga contra él sería silenciosa");
+  assert.match(js, /tsParticles\.load\("particles-quienes"/,
+    "y el revelado debe seguir cargándose aparte");
+});

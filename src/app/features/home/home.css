@@ -5,10 +5,46 @@ html {
   scroll-behavior: smooth;
 }
 
+/*
+  EL FONDO DE LA PÁGINA, y por qué se mudó acá desde `.hero`.
+
+  Ese gradiente vivía en `.hero` y era OPACO, así que tapaba cualquier capa
+  puesta detrás: con el lienzo de partículas fijo a la ventana, la primera
+  pantalla se quedaba sin fondo animado.
+
+  Fijo y en `--z-behind` queda por debajo del lienzo y por encima del color
+  plano del `body`, que es el orden que hace falta:
+
+      body (color plano)  <  este gradiente  <  #particles-fondo  <  contenido
+*/
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-behind);
+  pointer-events: none;
+  background: linear-gradient(180deg, #020408 0%, #050a11 62%, #06131b 100%);
+}
+
+/*
+  El lienzo de partículas de toda la página.
+
+  Fijo, no absoluto: así el mismo canvas acompaña el scroll en lugar de
+  terminarse con su sección. `pointer-events: none` porque este fondo no
+  reacciona al mouse —el que sí lo hace es el revelado de "Quiénes somos", y
+  ése tiene su propio contenedor.
+*/
+#particles-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-base);
+  pointer-events: none;
+}
+
 .hero {
   min-height: 100vh;
   min-height: 100svh;
-  background: linear-gradient(180deg, #020408 0%, #050a11 62%, #06131b 100%);
+  /* Sin fondo propio: lo pinta `body::before`, por debajo del lienzo. */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -17,12 +53,30 @@ html {
   overflow: hidden;
 }
 
+/*
+  Las dos capas atmosféricas del hero, con su disolvencia al pie.
+
+  EL PORQUÉ DE LA MÁSCARA. Las dos llegan con intensidad al borde inferior —el
+  glow está centrado en `50% 112%`, o sea justo debajo, y la viñeta oscurece
+  hasta 0.78 de alfa en los bordes— y el hero tiene `overflow: hidden`. Sin
+  disolverlas, ese borde es un CORTE: una línea horizontal dura que cruza la
+  pantalla al scrollear.
+
+  Antes no se notaba porque las secciones de abajo pintaban un color plano
+  parecido al del corte. Desde que son transparentes —para dejar ver el fondo
+  de partículas— el salto quedó a la vista.
+
+  Se disuelven en el último 22% en vez de recortarse, así la transición al
+  resto de la página es continua.
+*/
 .hero::before,
 .hero::after {
   content: "";
   position: absolute;
   z-index: var(--z-base);
   pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
 }
 
 .hero::before {
@@ -37,23 +91,9 @@ html {
   background: radial-gradient(ellipse at center, transparent 38%, rgba(1, 4, 8, 0.18) 66%, rgba(0, 2, 5, 0.78) 100%);
 }
 
-/*
-  Sin margen arriba (el hero es la primera sección, nada que tape la navbar
-  ahí), pero con margen abajo: sin él, partículas cerca del borde inferior
-  quedan detrás de la navbar (fixed, con blur al hacer scroll) al pasar de
-  esta sección a la siguiente.
-*/
-.hero__particles {
-  position: absolute;
-  inset: 0 0 12% 0;
-  z-index: var(--z-base);
-  overflow: hidden;
-  pointer-events: none;
-}
-
 /* El glow lo dibuja tsParticles por partícula (shadow en home.js); un filter
    sobre el canvas se re-aplicaría al lienzo completo en cada frame. */
-.hero__particles canvas {
+#particles-fondo canvas {
   opacity: 0.88;
 }
 
@@ -271,6 +311,10 @@ html {
 .home__section {
   min-height: 100vh;
   min-height: 100svh;
+  /* Apilamiento explícito: el lienzo de partículas es `fixed` en `--z-base`,
+     así que sin esto el contenido de las secciones quedaría por debajo. */
+  position: relative;
+  z-index: var(--z-content);
   display: grid;
   /*
     minmax(0, 1fr) y no 1fr: sin el mínimo en 0 la pista se estira al
@@ -281,7 +325,18 @@ html {
   grid-template-columns: minmax(0, 1fr);
   align-content: center;
   padding-block: clamp(2.5rem, 6vw, 5rem);
-  background-color: var(--color-background);
+  /*
+    SIN fondo propio, y no es un descuido.
+
+    Tenía `background-color: var(--color-background)`, que era redundante —el
+    `body` ya pinta ese mismo color— y además TAPABA el lienzo de partículas,
+    que es `fixed` por debajo. Ése era exactamente el motivo de que el fondo
+    "desapareciera" al scrollear: no es que las partículas se terminaran, es
+    que estas secciones las cubrían.
+
+    Si alguna sección necesitara un fondo distinto, va con transparencia o
+    sobre un pseudo-elemento, nunca con un color pleno.
+  */
 }
 
 .about {
