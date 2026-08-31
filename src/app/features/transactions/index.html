@@ -355,8 +355,15 @@
         su escala.
       -->
       <div class="grafica panel" id="panelGraficas">
+        <!-- El título va FUERA de la cabecera, como hijo directo del panel.
+             No es cosmético: el velo de `.velado` exceptúa al título con un
+             combinador de hijo directo, así que dentro del wrapper se
+             difuminaba con él — y quien llegaba sin cuenta veía una mancha de
+             colores sin saber qué se le ofrecía. Desde adentro no tiene
+             arreglo: un `filter` en un ancestro abre un contexto de render
+             nuevo y ningún `filter: none` lo revierte. -->
+        <h2 class="detalle__titulo grafica__titulo">Tu mes, día a día</h2>
         <div class="grafica__cabecera">
-          <h2 class="detalle__titulo" style="margin:0">Tu mes, día a día</h2>
           <button type="button" class="grafica__expandir" id="btnExpandir"
                   title="Ver en pantalla completa">⛶ Pantalla completa</button>
           <div class="leyenda" id="leyenda">

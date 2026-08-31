@@ -502,6 +502,16 @@
     la identidad nunca dependa solo del color.
   */
   .grafica { padding: 1.75rem; margin-bottom: 1.5rem; position: relative; }
+  /* El título salió de la cabecera para que el velo no se lo lleve (ver el
+     comentario en `index.html`). Al dejar de ser ítem flex necesita su propio
+     margen: antes el espacio lo aportaba la cabecera. */
+  .grafica__titulo { margin: 0 0 0.85rem; }
+
+  /* Con el título afuera, la cabecera queda con DOS hijos —el botón de
+     pantalla completa y la leyenda—. Se mantiene `space-between`: el botón
+     ancla a la izquierda, bajo el título, y la leyenda sigue a la derecha
+     donde estaba. Empujar los dos a la derecha dejaría el renglón vacío por
+     la mitad y desalineado respecto del resto de los paneles. */
   .grafica__cabecera { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
   .leyenda { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.82rem; color: var(--color-text-muted); }
   .leyenda__item { display: inline-flex; align-items: center; gap: 0.4rem; }

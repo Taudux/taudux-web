@@ -320,3 +320,68 @@ test("reading the stored id never breaks the page", () => {
     "todo acceso a localStorage va envuelto en try/catch"
   );
 });
+
+/*
+  EL TÍTULO TIENE QUE SOBREVIVIR AL VELO, y para eso tiene que ser HIJO DIRECTO.
+
+  `extractor.css` difumina el contenido de un panel bloqueado exceptuando el
+  título, con un combinador de HIJO DIRECTO:
+
+      .velado > :not(.detalle__titulo):not(.bloqueado__aviso) { filter: blur(7px) }
+
+  Un título anidado en un wrapper no queda exento: se vela el wrapper entero y
+  el título se va con él. Y **no se puede arreglar desde adentro** — un
+  `filter` en un ancestro crea un contexto de render nuevo, así que ningún
+  `filter: none` en el hijo lo revierte.
+
+  Pasó con `#panelGraficas`, que tenía su `<h2>` dentro de `.grafica__cabecera`:
+  quien llegaba sin cuenta veía una mancha de colores sin saber qué le estaban
+  ofreciendo — lo contrario de lo que el propio comentario del CSS declara.
+*/
+const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
+
+// Paneles que `aplicarBloqueo()` puede velar (TODOS_LOS_PANELES en extractor.js).
+const PANELES_VELABLES = ["panelTabla", "resumen", "panelGraficas",
+                          "panelMsi", "panelConceptos"];
+
+test("every title inside a veilable panel is a DIRECT child, or the veil hides it", () => {
+  const html = sinComentariosHtml(read(PAGINA));
+
+  for (const id of PANELES_VELABLES) {
+    const marca = html.indexOf(`id="${id}"`);
+    assert.notEqual(marca, -1, `falta el panel ${id} en la página`);
+
+    // Desde el `>` que cierra la etiqueta de apertura del panel.
+    const abre = html.indexOf(">", marca);
+    assert.notEqual(abre, -1, `la etiqueta de ${id} no cierra`);
+
+    /* El cuerpo del panel, acotado a SU cierre.
+       Sin acotar, un panel vacío —`#resumen` lo llena el JS— deja que la
+       búsqueda del título se escape y encuentre el del panel siguiente: rojo
+       contra código correcto, señalando al panel que no es. Ya pasó. */
+    let profundidadPanel = 1;
+    let fin = abre + 1;
+    const etiquetas = /<div\b|<\/div>/g;
+    etiquetas.lastIndex = fin;
+    for (let m = etiquetas.exec(html); m && profundidadPanel > 0; m = etiquetas.exec(html)) {
+      profundidadPanel += m[0] === "</div>" ? -1 : 1;
+      fin = etiquetas.lastIndex;
+    }
+    const cuerpo = html.slice(abre, fin);
+
+    const titulo = cuerpo.indexOf('class="detalle__titulo"');
+    if (titulo === -1) continue;   // no todos los paneles tienen título
+
+    const entre = cuerpo.slice(0, titulo);
+
+    /* Si entre la apertura del panel y el título hay un `<div>` sin cerrar,
+       el título está anidado y el velo lo alcanza. Se cuenta la profundidad
+       en vez de buscar un wrapper concreto: mañana puede llamarse distinto. */
+    const profundidad = (entre.match(/<div\b/g) || []).length
+                      - (entre.match(/<\/div>/g) || []).length;
+
+    assert.equal(profundidad, 0,
+      `el título de ${id} está anidado ${profundidad} nivel(es) adentro: el `
+      + "velo lo va a difuminar y no se puede deshacer desde el hijo");
+  }
+});
