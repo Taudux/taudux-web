@@ -67,6 +67,20 @@
           </div>
         </div>
 
+        <!-- Nace SIN `checked` a propósito: quien no la toca conserva el
+             comportamiento de siempre —la sesión muere al cerrar la pestaña—
+             y persistirla es una decisión explícita. En un equipo compartido
+             esa diferencia es todo.
+
+             Su valor se guarda al enviar el formulario, y `supabase-client.js`
+             lo consulta en el momento exacto de escribir el token —no al
+             construir el cliente—, así que la elección hecha acá gobierna
+             dónde termina la sesión de este mismo login. -->
+        <label class="auth__checkbox" for="recordarme">
+          <input type="checkbox" id="recordarme">
+          <span>Recordarme en este equipo</span>
+        </label>
+
         <button type="submit" class="auth__submit button button--glow" data-loading-text="Accediendo…">Iniciar sesión</button>
       </form>
 

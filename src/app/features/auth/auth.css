@@ -127,6 +127,34 @@
     font-size: 0.85rem;
   }
 
+  /* La casilla de "Recordarme".
+   *
+   * Mismo patrón que `.portal__checkbox`, que es el precedente del sitio: el
+   * `<label>` envuelve al input, así que el texto también alterna la casilla —
+   * en una pantalla táctil, la diferencia entre un blanco de 17px y uno de
+   * toda la línea.
+   *
+   * `text-align: left` porque la tarjeta de auth centra su contenido y sin
+   * esto el par casilla+texto quedaría flotando en el medio, desalineado de
+   * los campos que tiene encima. */
+  .auth__checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-align: left;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .auth__checkbox input[type="checkbox"] {
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
   .auth__phone-row {
     display: flex;
     gap: 0.5rem;
