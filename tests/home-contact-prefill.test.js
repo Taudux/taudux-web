@@ -178,3 +178,35 @@ test("the backdrop loader points at the global container, not the old hero one",
   assert.match(js, /tsParticles\.load\("particles-quienes"/,
     "y el revelado debe seguir cargándose aparte");
 });
+
+test("the backdrop's height doesn't follow the shrinking mobile viewport", () => {
+  /*
+    En móvil, la barra de direcciones se retrae al empezar a deslizar desde
+    arriba y el viewport CRECE de golpe. Con `inset: 0`, el contenedor del
+    lienzo seguía ese alto, y tsParticles reconstruye el canvas —3,4 MP a
+    DPR 3— cada vez que su caja cambia de tamaño: justo en el arranque del
+    scroll, que es cuando Jorge reportó el trabón.
+
+    Ojo, esto NO se arregla con `interactivity.events.resize: false`: se probó
+    el 2026-09-01 y el lienzo se reconstruyó igual, porque la librería observa
+    su propio canvas por dentro, al margen de esa opción. La única palanca es
+    que la caja deje de cambiar de alto.
+
+    `lvh` es la altura de la ventana con la barra RETRAÍDA, y no se mueve
+    mientras la barra aparece o desaparece. El fondo queda un poco más alto
+    que la pantalla cuando la barra está visible — que es exactamente lo que
+    se quiere en un fondo fijo: cubrir de más, nunca de menos.
+  */
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const inicio = css.indexOf("#particles-fondo");
+  assert.notEqual(inicio, -1, "falta la regla del contenedor del fondo");
+  const fin = css.indexOf("}", inicio);
+  assert.notEqual(fin, -1, "la regla #particles-fondo no cierra");
+  const regla = css.slice(inicio, fin);
+
+  assert.match(regla, /height:\s*100lvh/,
+    "el alto se ancla a la ventana grande, no al viewport que encoge");
+  assert.doesNotMatch(regla, /inset:\s*0\s*;/,
+    "`inset: 0` vuelve a atar el alto al viewport dinámico");
+});

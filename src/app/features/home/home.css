@@ -36,7 +36,28 @@ body::before {
 */
 #particles-fondo {
   position: fixed;
-  inset: 0;
+  inset: 0 0 auto 0;
+
+  /* El alto se ancla a la ventana GRANDE, no al viewport que encoge.
+   *
+   * En móvil, la barra de direcciones se retrae al empezar a deslizar desde
+   * arriba y el viewport crece de golpe. Con `inset: 0` esta caja seguía ese
+   * alto, y tsParticles reconstruye su canvas —3,4 MP a DPR 3, medido— cada
+   * vez que la caja cambia de tamaño: el trabón caía justo en el arranque del
+   * scroll.
+   *
+   * No alcanza con apagar `interactivity.events.resize` en la config: se
+   * probó el 2026-09-01 y el lienzo se reconstruyó igual, porque la librería
+   * observa su propio canvas por dentro al margen de esa opción.
+   *
+   * `lvh` no se mueve mientras la barra aparece o desaparece. El fondo queda
+   * algo más alto que la pantalla con la barra visible, que es justo lo que
+   * se quiere de un fondo fijo: cubrir de más, nunca de menos. El `vh` de
+   * arriba es el respaldo para navegadores sin `lvh`, y en móvil ya se
+   * comporta igual. */
+  height: 100vh;
+  height: 100lvh;
+
   z-index: var(--z-base);
   pointer-events: none;
 }
