@@ -94,6 +94,24 @@
           </p>
         </header>
 
+        <!-- EL MES DEL PANEL, navegable hacia atrás.
+
+             Existe por una tarde concreta: el 2026-08-31 a las 18:00 de México
+             el panel "se vació" — el periodo se calcula en UTC y allá ya era
+             septiembre. Los datos de agosto seguían en la base; lo que no
+             había era forma de pedirlos. Con este control, cada fin de mes la
+             historia deja de volverse invisible.
+
+             Nace SIN valor ni tope: los dos los fija `admin.js` con el
+             `periodo` que echa el servidor en la primera respuesta. El reloj
+             del cliente no opina — esa misma tarde decía agosto mientras el
+             servidor decía septiembre, y un tope calculado acá ofrecería un
+             mes que el servidor considera futuro. -->
+        <label class="admin__periodo">
+          <span class="admin__periodo-etiqueta">Mes</span>
+          <input type="month" class="field" id="selectorPeriodo">
+        </label>
+
         <!-- EL INTERRUPTOR VA ACÁ, ARRIBA DE TODO LO QUE AFECTA.
 
              Vivía dentro de Distribución Geográfica y sólo limpiaba esa

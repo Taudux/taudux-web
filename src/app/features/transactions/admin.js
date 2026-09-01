@@ -1543,6 +1543,37 @@
     aparte de `GET /api/admin/perfiles`, que sí puede leerlo porque corre con
     el service role en el servidor.
   */
+
+  /*
+    El mes que el panel está mirando. Vacío = el actual del servidor.
+
+    EL SERVIDOR MANDA EL RELOJ, y no es un capricho: el 2026-08-31 a las 18:00
+    de México el reloj local decía agosto y el del servidor —que calcula el
+    mes en UTC— decía septiembre, y el panel entero "se vació" seis horas antes
+    de la medianoche local. Por eso el valor inicial y el tope del selector
+    salen del `periodo` que echa la respuesta, nunca de `new Date()`: un tope
+    calculado acá ofrecería un mes que el servidor considera futuro, o le
+    negaría al administrador el mes en curso.
+  */
+  let periodoElegido = "";
+
+  function gobernarSelectorPeriodo(periodo) {
+    const nodo = el("selectorPeriodo");
+    if (!nodo || !periodo) return;
+    // Sólo la primera respuesta fija el tope y el valor: al navegar hacia
+    // atrás, el tope tiene que seguir siendo el mes actual del servidor.
+    if (!nodo.max) nodo.max = periodo;
+    if (!nodo.value) nodo.value = periodo;
+  }
+
+  el("selectorPeriodo")?.addEventListener("change", () => {
+    const nodo = el("selectorPeriodo");
+    // Vaciar el campo no significa "ningún mes": se ignora hasta elegir uno.
+    if (!nodo.value) return;
+    periodoElegido = nodo.value;
+    cargarUsuariosDelSitio();
+  });
+
   async function cargarUsuariosDelSitio() {
     const lista = el("listaPerfiles");
 
@@ -1572,11 +1603,15 @@
     // visible pero sin editar, porque no se sabe qué tiene guardada.
     let extra = {};
     try {
-      const r = await apiFetch("/api/admin/perfiles");
+      // El mes elegido viaja en la URL; vacío significa "el actual del
+      // servidor", que es el comportamiento de siempre.
+      const r = await apiFetch("/api/admin/perfiles"
+        + (periodoElegido ? `?periodo=${periodoElegido}` : ""));
       if (r.ok) {
         const cuerpo = await r.json();
         extra = cuerpo.perfiles || {};
         recordarPanel(cuerpo);
+        gobernarSelectorPeriodo(cuerpo.periodo);
         // Del MISMO viaje: el endpoint devuelve los agregados, así que los dos
         // gráficos no cuestan una consulta más. Se pintan acá y no en su propia
         // carga por eso.

@@ -509,6 +509,26 @@
   /* Vive a nivel PÁGINA, arriba de las tres secciones que gobierna, y por eso
    * se separa del primer panel con una línea: sin ella se leería como parte de
    * la tabla de cuentas, que es justamente la sección a la que NO afecta. */
+  /* El mes que el panel está mirando. En línea y discreto: es un control de
+     navegación, no un dato. La etiqueta va en el gris de las notas por lo
+     mismo. */
+  .admin__periodo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-block-end: 1.25rem;
+  }
+
+  .admin__periodo-etiqueta {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+  }
+
+  .admin__periodo .field {
+    inline-size: auto;
+    padding: 0.45rem 0.7rem;
+  }
+
   .admin__filtro-global {
     margin-block-end: 1.75rem;
     padding-block-end: 1.25rem;

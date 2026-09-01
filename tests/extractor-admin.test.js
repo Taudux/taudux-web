@@ -2113,3 +2113,36 @@ test("an older server that cannot filter says so instead of lying", () => {
       "estuviera filtrado"
   );
 });
+
+/*
+  EL PANEL PUEDE MIRAR HACIA ATRÁS, y la fecha límite la pone el SERVIDOR.
+
+  El 2026-08-31 a las 18:00 de México el panel "se vació": en UTC ya era
+  septiembre. Nada se corrompió — el periodo se calcula en UTC y no había forma
+  de pedir otro mes, así que agosto entero se volvió invisible.
+
+  De esa tarde salen las dos reglas que este test blinda:
+
+  1. Existe un selector de mes y el fetch puede pedir un periodo concreto.
+  2. Su valor inicial y su tope salen del `periodo` que ECHA el servidor,
+     nunca del reloj del cliente — que ese día decía agosto mientras el
+     servidor decía septiembre. Un `max` calculado con `new Date()` local
+     ofrecería un mes que el servidor considera futuro, o negaría el actual.
+*/
+test("the admin panel can look back: a month selector ruled by the server clock", () => {
+  const html = sinComentariosHtml(read(PAGINA));
+
+  assert.match(html, /id="selectorPeriodo"/, "falta el selector de mes");
+  const input = html.match(/<input[^>]*id="selectorPeriodo"[^>]*>/)?.[0] ?? "";
+  assert.ok(input, "el selector debe ser un <input>");
+  assert.match(input, /type="month"/, "de tipo month: el grano del panel es el mes");
+
+  const js = sinComentariosJs(read(SCRIPT));
+
+  assert.match(js, /periodo=\$\{/,
+    "el fetch debe poder llevar el mes elegido en la URL");
+  assert.match(js, /\.max\s*=\s*[a-zA-Z_$.]*periodo/,
+    "el tope del selector sale del periodo que echa el servidor");
+  assert.match(js, /\.value\s*=\s*[a-zA-Z_$.]*periodo/,
+    "y el valor inicial también: el reloj del cliente no opina");
+});
