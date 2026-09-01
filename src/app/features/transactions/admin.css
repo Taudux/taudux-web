@@ -301,11 +301,16 @@
    * pasar a tabla —cada dato tomó su columna— y vuelve porque separarlos los
    * presentaba como dos datos independientes cuando identifican a la misma
    * persona. Y le cobraban a la tabla un ancho que necesitan las columnas
-   * editables: con una columna menos, el scroll horizontal aparece más tarde. */
-  .admin__quien {
-    display: grid;
-    gap: 0.15rem;
-    min-inline-size: 0;
+   * editables: con una columna menos, el scroll horizontal aparece más tarde.
+   *
+   * La celda NO cambia de `display`: llevó `grid` para apilar, y un `td` con
+   * otro display deja de participar como table-cell — su caja no se estira al
+   * alto de la fila. Medido 2026-08-31: 65px contra los 75px de la fila, con
+   * el borde inferior, el fondo y la barrita de acento terminando 10px antes
+   * que los del resto (la divisoria se veía con un escalón). Los dos spans ya
+   * son block y se apilan solos; el respiro lo pone este margen. */
+  .admin__quien .admin__meta {
+    margin-block-start: 0.15rem;
   }
 
   .admin__usuario {

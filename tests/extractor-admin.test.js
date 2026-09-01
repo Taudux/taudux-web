@@ -622,6 +622,34 @@ test("the bank metrics box can clip whatever grows inside it", () => {
   );
 });
 
+test("the identity cell stays a real table cell", () => {
+  /*
+    `td.admin__quien` llevó `display: grid` para apilar nombre y correo, y un
+    `td` con otro display DEJA de participar como table-cell: su caja ya no se
+    estira al alto de la fila. Medido el 2026-08-31: la celda quedaba en 65px
+    contra los 75px de la fila, así que su borde inferior, su fondo y la
+    barrita de acento terminaban 10px antes que los del resto — la divisoria
+    se veía "chueca", con un escalón al final de la columna Usuario.
+
+    Los dos spans de adentro ya son `display: block` y se apilan solos; el
+    respiro entre ellos lo pone un margen, que no exige cambiarle el display a
+    la celda. Se fija la propiedad, no el valor: cualquier display en ese `td`
+    (grid, flex, block) rompe la fila igual.
+  */
+  const css = sinComentariosCss(read(HOJA));
+
+  assert.doesNotMatch(
+    css,
+    /\.admin__quien\s*\{[^}]*display\s*:/,
+    "un td con display propio deja de estirarse al alto de su fila"
+  );
+  assert.match(
+    css,
+    /\.admin__quien\s+\.admin__meta\s*\{[^}]*margin-block-start/,
+    "el respiro entre nombre y correo es del margen, no de un gap de grid"
+  );
+});
+
 test("its stylesheet keeps only the rules the profile list still uses", () => {
   const css = sinComentariosCss(read(HOJA));
 
