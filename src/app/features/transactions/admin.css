@@ -124,19 +124,37 @@
     position: relative;
   }
 
-  /* El mínimo es el umbral donde empieza el scroll horizontal: por debajo, las
-     celdas se apretarían y el botón "Guardar" partiría su texto en dos líneas.
-     Subió de 40rem a 64rem con las columnas editables, y volvió a 52rem el
-     mismo día al apilar nombre y correo en una sola celda — una columna menos
-     de texto ancho es exactamente lo que sobraba. */
+  /* La misma promesa para la caja de la métrica por banco (#tablaMetricaBanco
+     comparte esta clase con los dos gráficos). Hoy nada la necesita — esa
+     tabla cabe entera —; es el cinturón para el día en que un nombre de banco
+     largo o una columna nueva la ensanche: lo ancho scrollea DENTRO de su
+     caja, nunca la página. */
+  .admin__grafico {
+    overflow-x: auto;
+  }
+
   .admin__tabla {
     width: 100%;
-    min-inline-size: 52rem;
     border-collapse: collapse;
     background: var(--color-field);
     border: var(--border-subtle);
     border-radius: var(--radius-field);
     overflow: hidden;
+  }
+
+  /* El mínimo es el umbral donde empieza el scroll horizontal: por debajo, las
+     celdas se apretarían y el botón "Guardar" partiría su texto en dos líneas.
+     Subió de 40rem a 64rem con las columnas editables, y volvió a 52rem el
+     mismo día al apilar nombre y correo en una sola celda — una columna menos
+     de texto ancho es exactamente lo que sobraba.
+
+     Acotado a la lista de perfiles porque `.admin__tabla` también la lleva la
+     tabla de métricas por banco, que mide 366px de max-content y nunca pidió
+     mínimo alguno: en la clase compartida la inflaba a 832px dentro de una
+     caja sin scroll y estiraba la página entera (medido 2026-08-31: 396px de
+     desborde en una ventana de 485px). */
+  .admin__lista .admin__tabla {
+    min-inline-size: 52rem;
   }
 
   /* `vertical-align: top` y no el `middle` por defecto.
@@ -319,11 +337,15 @@
   /* La cuenta con acceso ilimitado no lleva campo: no hay número que fijar, y
      un input deshabilitado con un "∞" adentro sería un control mintiendo sobre
      lo que se puede escribir. El texto ocupa el mismo ancho para que la columna
-     no baile entre filas. */
+     no baile entre filas.
+
+     Sin centrar: el símbolo comparte el eje de inicio con el encabezado, el
+     campo numérico y el "N usados este mes" de abajo. Centrado dentro de la
+     caja de 5rem quedaba 35px a la derecha de ese eje (medido 2026-08-31) y
+     la columna entera se leía desalineada. */
   .admin__numero--infinito {
     display: inline-block;
     color: var(--color-text-muted);
-    text-align: center;
   }
 
   /* Debajo del límite mensual, en gris y más chico: el consumo acompaña al

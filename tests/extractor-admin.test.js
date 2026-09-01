@@ -575,6 +575,53 @@ test("the scroll box can actually clip what it scrolls", () => {
   );
 });
 
+test("the wide-table floor belongs to the profile table alone", () => {
+  /*
+    `.admin__tabla` la comparten DOS tablas con necesidades opuestas: la de
+    perfiles (5 columnas editables, que pidió el mínimo ancho para que "Guardar"
+    no parta su texto) y la de métricas por banco (3 columnas, 366px de
+    max-content medidos — nunca necesitó más).
+
+    Con el mínimo en la clase compartida, la tabla de bancos heredaba 832px
+    dentro de un contenedor sin scroll y estiraba el DOCUMENTO entero: medido
+    el 2026-08-31 en una ventana de 485px, 396px de scroll horizontal de
+    página. El valor exacto del mínimo no se fija acá —ya cambió dos veces con
+    las columnas—; lo que se fija es DE QUIÉN es.
+  */
+  const css = sinComentariosCss(read(HOJA));
+
+  const bloqueBase = css.match(/\.admin__tabla\s*\{([^}]*)\}/);
+  assert.ok(bloqueBase, "la regla base .admin__tabla existe");
+  assert.ok(
+    !bloqueBase[1].includes("min-inline-size"),
+    "el mínimo no vive en la clase compartida: la tabla de bancos lo heredaría"
+  );
+
+  assert.match(
+    css,
+    /\.admin__lista\s+\.admin__tabla\s*\{[^}]*min-inline-size/,
+    "el mínimo vive acotado a la tabla de perfiles, que fue la que lo pidió"
+  );
+});
+
+test("the bank metrics box can clip whatever grows inside it", () => {
+  /*
+    `#tablaMetricaBanco` es un `.admin__grafico`, y esa clase no tenía NINGUNA
+    regla: su `overflow-x` era `visible` y cualquier hijo más ancho que la caja
+    atravesaba la página (así se coló el desborde de 396px del 2026-08-31).
+
+    Hoy la tabla de bancos cabe sin scroll; esta regla es el cinturón para el
+    día en que un banco de nombre largo o una columna nueva la ensanche. Es el
+    mismo patrón que `.admin__lista` arriba y `.tabla-envoltorio` en
+    `extractor.css`: lo ancho scrollea DENTRO de su caja, nunca la página.
+  */
+  assert.match(
+    sinComentariosCss(read(HOJA)),
+    /\.admin__grafico\s*\{[^}]*overflow-x:\s*auto/,
+    "el contenedor de la métrica recorta su propio desborde"
+  );
+});
+
 test("its stylesheet keeps only the rules the profile list still uses", () => {
   const css = sinComentariosCss(read(HOJA));
 
