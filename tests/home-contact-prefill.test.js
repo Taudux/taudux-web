@@ -245,3 +245,39 @@ test("the hero stops animating once it is scrolled past", () => {
       `${selector} también anima en bucle: pausarlo a medias no sirve`);
   });
 });
+
+test("the gradient and the canvas end at the same edge", () => {
+  /*
+    Las dos capas del fondo van en PAREJA: el gradiente (`body::before`) y el
+    lienzo de partículas (`#particles-fondo`) tienen que terminar en el mismo
+    borde, o se ve la costura donde una acaba y la otra sigue.
+
+    Pasó el 2026-09-01: se ancló el lienzo a `100lvh` —para que la barra de
+    direcciones móvil dejara de reconstruirlo— y el gradiente se quedó con
+    `inset: 0`, atado al viewport dinámico. Con las barras visibles el
+    gradiente quedaba más corto, y en la franja sobrante seguían dibujándose
+    partículas sobre el color plano del `body` en vez del final del degradado.
+    Reproducido en Chrome: una línea horizontal idéntica a la que Jorge
+    reportó en Opera.
+
+    Se fija que ambos declaren la MISMA unidad. Anclar uno solo es justo lo
+    que causó el problema.
+  */
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const bloqueDe = (selector) => {
+    const inicio = css.indexOf(selector);
+    assert.notEqual(inicio, -1, `falta la regla ${selector}`);
+    const fin = css.indexOf("}", inicio);
+    assert.notEqual(fin, -1, `la regla ${selector} no cierra`);
+    return css.slice(inicio, fin);
+  };
+
+  ["body::before", "#particles-fondo"].forEach((selector) => {
+    const regla = bloqueDe(selector);
+    assert.match(regla, /height:\s*100lvh/,
+      `${selector} debe anclarse al viewport grande, como su pareja`);
+    assert.doesNotMatch(regla, /inset:\s*0\s*;/,
+      `${selector} con 'inset: 0' vuelve a estirarse con el viewport dinámico`);
+  });
+});

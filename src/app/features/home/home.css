@@ -20,7 +20,18 @@ html {
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: 0 0 auto 0;
+
+  /* Mismo anclaje que `#particles-fondo`: las dos capas del fondo van en
+     PAREJA y tienen que terminar en el mismo borde.
+     Cuando el lienzo pasó a `100lvh` y este gradiente se quedó con
+     `inset: 0` —atado al viewport dinámico—, con las barras del navegador
+     visibles quedaba más corto: en la franja sobrante seguían dibujándose
+     partículas sobre el color plano del body en vez del final del degradado,
+     y se veía una línea horizontal de corte. */
+  height: 100vh;
+  height: 100lvh;
+
   z-index: var(--z-behind);
   pointer-events: none;
   background: linear-gradient(180deg, #020408 0%, #050a11 62%, #06131b 100%);
