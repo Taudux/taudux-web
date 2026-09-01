@@ -421,3 +421,44 @@ test("the watermark URL points at a file that actually exists under src/", () =>
     `MARCA_URL apunta a "${ruta}", que no existe en src/. `
     + "Un <image> de SVG contra un 404 no avisa: se ve como una mancha.");
 });
+
+/*
+  EL VISOR NECESITA UN TOPE DE ANCHO, y su ausencia se reportó desde otra
+  pantalla: "no estaba centrado, estaba un poco grande".
+
+  El visor es `position: fixed; inset: 0`, así que sin tope su contenido barre
+  la pantalla de borde a borde. Medido: en un monitor de 3440px la gráfica se
+  dibujaba a 3384, con 254px entre punto y punto.
+
+  Y hay un agravante que sólo se ve al mirar el alto: `redibujarVisor()` lo
+  calcula como una FRACCIÓN de la ventana (30% con saldo, 48% sin él), así que
+  alto y ancho crecían juntos y la proporción quedaba clavada en ~5,8:1 en
+  TODOS los monitores 16:9. La gráfica no se veía más grande: se veía igual de
+  chata, sólo que más larga.
+
+  Con el tope, cuanto más alta la pantalla más proporcionada queda.
+*/
+const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+test("the expanded chart viewer caps its width instead of sweeping the screen", () => {
+  const css = sinComentariosCss(read(ESTILOS));
+
+  /* El tope va sobre los HIJOS del visor, no sobre `.visor`: el fondo tiene
+     que seguir cubriendo la pantalla entera —es lo que lo hace un modal— y lo
+     que se acota es su contenido. */
+  const marca = css.indexOf(".visor > *");
+  assert.notEqual(marca, -1,
+    "falta el tope sobre los hijos del visor: sin él su contenido crece sin límite");
+
+  const abre = css.indexOf("{", marca);
+  assert.notEqual(abre, -1, "la regla no abre");
+  const cierra = css.indexOf("}", abre);
+  assert.notEqual(cierra, -1, "la regla no cierra");
+
+  const regla = css.slice(abre, cierra);
+
+  assert.match(regla, /max-inline-size|max-width/,
+    "debe declarar un tope de ancho");
+  assert.match(regla, /margin-inline:\s*auto|margin:\s*0\s+auto/,
+    "y centrarse: un tope sin centrado deja el contenido pegado a un borde");
+});

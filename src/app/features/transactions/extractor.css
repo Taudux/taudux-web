@@ -535,6 +535,33 @@
     background: var(--color-background-deep);
     overflow-y: auto;
   }
+  /*
+    EL CONTENIDO DEL VISOR SE ACOTA; EL FONDO NO.
+
+    `.visor` sigue cubriendo la pantalla entera —es lo que lo hace un modal— y
+    el tope va sobre sus HIJOS. Sin esto el contenido barría el monitor de
+    borde a borde: medido, en una pantalla de 3440px la gráfica se dibujaba a
+    3384, con 254px entre punto y punto, el título pegado a un extremo y el
+    rango al otro. Fue un reporte real desde otra pantalla de escritorio.
+
+    POR QUÉ 1600 Y NO `--ancho-sitio` (1200). Este visor existe justamente para
+    dar MÁS espacio que la vista compacta; topearlo en el ancho general del
+    sitio lo dejaría igual de angosto que aquello de lo que se viene, y
+    expandir perdería sentido.
+
+    Y arregla la proporción, que era el fondo del problema:
+    `redibujarVisor()` calcula el alto como una fracción de la ventana, así que
+    alto y ancho crecían juntos y la gráfica quedaba clavada en ~5,8:1 en TODOS
+    los monitores 16:9 — no se veía más grande, se veía igual de chata pero más
+    larga. Con el tope, cuanto más alta la pantalla más proporcionada queda:
+    2,5:1 en 4K contra los 5,8:1 de antes.
+  */
+  .visor > * {
+    inline-size: 100%;
+    max-inline-size: 1600px;
+    margin-inline: auto;
+  }
+
   .visor__cabecera { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
   .visor__titulo { font-size: 1.15rem; margin-right: auto; }
   .visor__cerrar {
