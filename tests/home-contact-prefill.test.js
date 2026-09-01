@@ -210,3 +210,38 @@ test("the backdrop's height doesn't follow the shrinking mobile viewport", () =>
   assert.doesNotMatch(regla, /inset:\s*0\s*;/,
     "`inset: 0` vuelve a atar el alto al viewport dinámico");
 });
+
+test("the hero stops animating once it is scrolled past", () => {
+  /*
+    Cinco animaciones INFINITAS viven en el hero: el flotar del logo, el pulso
+    de su resplandor —sobre un pseudo-elemento con `filter: blur(44px)`— y los
+    tres trazos del SVG. Medido el 2026-09-01: las cinco seguían corriendo con
+    `hero--logo-hidden` aplicada, porque `visibility: hidden` NO detiene una
+    animación CSS; sólo deja de pintarla, y el estilo se sigue recalculando en
+    cada frame.
+
+    Eso importa por el fondo: tsParticles avanza cada partícula según el DELTA
+    de tiempo entre frames, así que un frame largo no la frena — la hace
+    avanzar de golpe lo que se atrasó. Ése es el "salto brusco" que se ve al
+    deslizar, y por eso el hero tiene que callarse cuando ya no se ve.
+
+    Se fija el `animation-play-state`, no los nombres de las animaciones: si
+    mañana se agrega una sexta, la regla la cubre igual.
+  */
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const inicio = css.indexOf(".hero--logo-hidden .hero__logo-stage,");
+  assert.notEqual(inicio, -1,
+    "falta la regla que calla al hero fuera de vista");
+  const fin = css.indexOf("}", inicio);
+  const regla = css.slice(inicio, fin);
+
+  assert.match(regla, /animation-play-state:\s*paused/,
+    "fuera de vista, las animaciones del hero se pausan");
+
+  // Las tres familias tienen que estar: dejar una viva deja el frame largo.
+  ["hero__logo-stage::before", "hero__light-path"].forEach((selector) => {
+    assert.ok(regla.includes(selector),
+      `${selector} también anima en bucle: pausarlo a medias no sirve`);
+  });
+});

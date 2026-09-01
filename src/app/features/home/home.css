@@ -210,6 +210,27 @@ body::before {
   transition-delay: 0.5s;
 }
 
+/* Fuera de vista, el hero se calla.
+ *
+ * `visibility: hidden` deja de PINTAR, pero no detiene una animación CSS: el
+ * estilo se sigue recalculando en cada frame. Medido el 2026-09-01, las cinco
+ * animaciones infinitas de acá seguían corriendo con la clase puesta — el
+ * flotar del logo, el pulso de su resplandor (sobre un pseudo-elemento con
+ * `filter: blur(44px)`, de lo más caro que hay en móvil) y los tres trazos
+ * del SVG.
+ *
+ * Y eso se ve en el FONDO, no en el hero: tsParticles avanza cada partícula
+ * según el delta de tiempo entre frames, así que un frame largo no la frena,
+ * la hace recuperar de un tirón lo que se atrasó. De ahí el salto brusco al
+ * deslizar en móvil.
+ *
+ * Se reanudan solas: la clase se quita al volver arriba. */
+.hero--logo-hidden .hero__logo-stage,
+.hero--logo-hidden .hero__logo-stage::before,
+.hero--logo-hidden .hero__light-path {
+  animation-play-state: paused;
+}
+
 @keyframes hero-logo-reveal {
   0% {
     opacity: 0;
