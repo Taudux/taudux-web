@@ -26,7 +26,7 @@ const leer = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
 
 const CONFIG = JSON.parse(leer("vercel.json"));
 
-/* La regla que gobierna a la aplicación, y la del deck de AFGI.
+/* La regla que gobierna a la aplicación, y la única excepción: la página de R.
  *
  * Vercel aplica TODAS las reglas que coinciden y, para una misma cabecera,
  * gana la ÚLTIMA: reemplaza el valor entero, no lo mezcla. El orden es parte
@@ -40,11 +40,10 @@ const valorDe = (regla, nombre) =>
   (regla?.headers || []).find((h) => h.key.toLowerCase() === nombre.toLowerCase())?.value;
 
 const RUTA_APP = "/(.*)";
-/* `(.*)` pegado al literal, sin barra antes: es la única forma que cubre
- * `/afgi`, `/afgi/` y `/afgi/…` con una sola regla (ver el test de la barra
- * final). Producción sirve las dos formas con 200 y sin redirect. */
-const RUTA_AFGI = "/afgi(.*)";
-/* La página de R del entorno de código: la única con `'unsafe-eval'`. */
+/* La página de R del entorno de código: la única con `'unsafe-eval'`. `(.*)`
+ * pegado al literal, sin barra antes: es la única forma que cubre `/r`, `/r/`
+ * y `/r/…` con una sola regla (ver el test de la barra final). Producción
+ * sirve las dos formas con 200 y sin redirect. */
 const RUTA_R = "/app/features/codigo/r(.*)";
 
 const cspApp = () => valorDe(reglaDe(RUTA_APP), "Content-Security-Policy") || "";
@@ -224,22 +223,32 @@ test("the other three hardening headers are served", () => {
                "strict-origin-when-cross-origin");
 });
 
-test("the /afgi rule comes AFTER the general one — order is the contract", () => {
+test("the deck runs under the general CSP: there is no per-path rule for /afgi", () => {
   /*
-    Vercel aplica TODAS las reglas que coinciden y, para una misma cabecera,
-    gana la ÚLTIMA. Medido en producción el 2026-09-05: con `/afgi/(.*)` antes
-    que `/(.*)`, `curl -sI https://taudux.com/afgi/` devolvía la CSP general
-    y Chrome bloqueaba el `<script>` inline del deck (`afgi/index.html:1748`):
-    las flechas no hacían nada. La doc de Vercel no documenta la precedencia de
-    `headers`; la medición es la autoridad.
+    Hubo una regla propia para `/afgi` con `'unsafe-inline'` porque el deck
+    traía su navegación en un `<script>` inline. Costó dos arreglos seguidos
+    (el orden de las reglas, medido en producción el 2026-09-05, y la forma del
+    `source`) y nunca fue necesaria: el script vive ahora en `afgi/deck.js` y
+    el deck corre bajo la política general como cualquier otra página. Sin
+    regla no hay excepción que mantener ni orden que cuidar.
   */
-  const orden = reglas().map((r) => r.source);
-  const iAfgi = orden.indexOf(RUTA_AFGI);
-  const iApp = orden.indexOf(RUTA_APP);
+  const conAfgi = reglas().filter((r) => r.source.startsWith("/afgi"));
+  assert.deepEqual(conAfgi, [],
+    "el deck no necesita regla propia: su script ya no es inline");
+});
 
-  assert.notEqual(iAfgi, -1, `falta la regla de ${RUTA_AFGI}`);
-  assert.ok(iAfgi > iApp,
-    "la regla de /afgi debe ir DESPUÉS de la general, o la general la pisa");
+test("the deck loads its script from an absolute path: /afgi is served without a trailing slash too", () => {
+  /*
+    Producción responde 200 tanto en `/afgi/` como en `/afgi`. Desde la segunda,
+    un `src="deck.js"` relativo resolvería a `/deck.js` y el deck quedaría sin
+    navegación sólo en esa forma de la URL: el tipo de bug que aparece en un
+    enlace y no en otro.
+  */
+  const html = leer("src/afgi/index.html");
+  assert.match(html, /<script[^>]*\ssrc="\/afgi\/deck\.js"/,
+    "el deck debe cargar /afgi/deck.js con ruta absoluta");
+  assert.ok(fs.existsSync(path.join(ROOT, "src/afgi/deck.js")),
+    "falta src/afgi/deck.js");
 });
 
 test("only the R page may eval — webR's runtime needs it, nothing else does", () => {
@@ -307,14 +316,15 @@ test("every per-path rule matches its page with and without the trailing slash",
   });
 });
 
-test("no page outside /afgi introduces inline scripts or on* handlers", () => {
+test("no page introduces inline scripts or on* handlers", () => {
   /*
     **El guard que sostiene el `script-src` estricto.**
 
-    Hoy es cierto: cero handlers inline y un solo `<script>` sin `src` en todo
-    el repo, el del deck. Ese hecho es lo que permite la política estricta — si
-    alguien agrega un `onclick=` mañana, la página se rompe en producción y el
-    arreglo tentador es relajar el CSP.
+    Hoy es cierto: cero handlers inline y cero `<script>` sin `src` en todo el
+    repo (el del deck de AFGI se mudó a `afgi/deck.js` el 2026-09-05, y con él
+    se fue la única página exenta). Ese hecho es lo que permite la política
+    estricta — si alguien agrega un `onclick=` mañana, la página se rompe en
+    producción y el arreglo tentador es relajar el CSP.
 
     Este test hace que se rompa acá primero, que es mucho más barato.
   */
@@ -323,7 +333,7 @@ test("no page outside /afgi introduces inline scripts or on* handlers", () => {
     for (const entrada of fs.readdirSync(dir, { withFileTypes: true })) {
       const completo = path.join(dir, entrada.name);
       if (entrada.isDirectory()) {
-        if (entrada.name !== "afgi") recorrer(completo);
+        recorrer(completo);
       } else if (entrada.name.endsWith(".html")) {
         paginas.push(completo);
       }
