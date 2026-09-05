@@ -43,6 +43,8 @@ const RUTA_APP = "/(.*)";
 /* `:path*` cubre `/afgi` y `/afgi/`: producción sirve las dos formas con 200
  * y sin redirect, así que las dos necesitan la política del deck. */
 const RUTA_AFGI = "/afgi/:path*";
+/* La página de R del entorno de código: la única con `'unsafe-eval'`. */
+const RUTA_R = "/app/features/codigo/r/:path*";
 
 const cspApp = () => valorDe(reglaDe(RUTA_APP), "Content-Security-Policy") || "";
 
@@ -237,6 +239,45 @@ test("the /afgi rule comes AFTER the general one — order is the contract", () 
   assert.notEqual(iAfgi, -1, `falta la regla de ${RUTA_AFGI}`);
   assert.ok(iAfgi > iApp,
     "la regla de /afgi debe ir DESPUÉS de la general, o la general la pisa");
+});
+
+test("only the R page may eval — webR's runtime needs it, nothing else does", () => {
+  /*
+    webR no arranca sin `'unsafe-eval'`: su `R.js` importa
+    `emscripten_run_script`, que es `eval()` sobre una cadena, y R lo llama al
+    iniciar. El worker nace de un `blob:` y hereda la CSP de la página, así que
+    `'wasm-unsafe-eval'` no alcanza. Probado por bisección en Chrome el
+    2026-09-05: con la CSP general exacta, R se cuelga en "Iniciando R…"; con
+    la misma más `'unsafe-eval'`, corre.
+
+    La excepción se acota a esa página: una regla propia, DESPUÉS de la general
+    (Vercel aplica la última que coincide) y con la política COMPLETA (no se
+    mezcla con la general). El aserto de deriva fija la propiedad, no el
+    literal: sacando ese único token, la política tiene que ser la general.
+  */
+  const orden = reglas().map((r) => r.source);
+  const iR = orden.indexOf(RUTA_R);
+  assert.notEqual(iR, -1, `falta la regla de ${RUTA_R}`);
+  assert.ok(iR > orden.indexOf(RUTA_APP),
+    "la regla de R debe ir DESPUÉS de la general, o la general la pisa");
+
+  const cspR = valorDe(reglaDe(RUTA_R), "Content-Security-Policy") || "";
+  const scriptR = cspR.split(";").map((p) => p.trim()).find((p) => p.startsWith("script-src ")) || "";
+  assert.match(scriptR, /(^|\s)'unsafe-eval'(\s|$)/,
+    "la página de R necesita 'unsafe-eval' o webR no arranca");
+
+  assert.equal(cspR.replace(/ 'unsafe-eval'(?= )/, ""), cspApp(),
+    "quitando 'unsafe-eval', la CSP de R debe ser idéntica a la general: si difieren, se desviaron");
+
+  ["X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy"].forEach((nombre) => {
+    assert.equal(valorDe(reglaDe(RUTA_R), nombre), valorDe(reglaDe(RUTA_APP), nombre),
+      `${nombre} de la regla de R debe ser el mismo que el de la general`);
+  });
+
+  reglas().filter((r) => r.source !== RUTA_R).forEach((r) => {
+    assert.doesNotMatch(valorDe(r, "Content-Security-Policy") || "", /(^|\s)'unsafe-eval'/,
+      `${r.source} no debe abrir eval(): sólo la página de R lo necesita`);
+  });
 });
 
 test("no page outside /afgi introduces inline scripts or on* handlers", () => {
