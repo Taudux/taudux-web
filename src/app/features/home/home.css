@@ -309,6 +309,13 @@ body::before {
   }
 }
 
+/*
+  El pico va a 0.7 y no a 1: el degradado del trazo pasa por blanco puro a
+  propósito (index.html, #logo-edge-beam-gradient) y con el halo del
+  feGaussianBlur encima, al 100% pegaba más que el propio logo. Bajar la
+  opacidad del keyframe atenúa trazo y halo en la misma proporción sin tocar
+  el SVG.
+*/
 @keyframes hero-light-core {
   0%,
   6% {
@@ -317,11 +324,11 @@ body::before {
   }
 
   11% {
-    opacity: 1;
+    opacity: 0.7;
   }
 
   36% {
-    opacity: 1;
+    opacity: 0.7;
     stroke-dashoffset: 0;
   }
 
@@ -340,11 +347,11 @@ body::before {
   }
 
   30% {
-    opacity: 1;
+    opacity: 0.7;
   }
 
   72% {
-    opacity: 1;
+    opacity: 0.7;
     stroke-dashoffset: 0;
   }
 
