@@ -17,7 +17,7 @@ const ENLACES_NAVEGACION_BASE = [
       dos clics dentro de "Tools" un admin no lo encontraría. Estuvo al final
       hasta el 2026-08-20; se movió arriba porque quien lo usa lo usa seguido y
       no tiene por qué recorrer el menú entero cada vez. Para quien no es admin
-      la entrada no existe (ver filtrarEnlacesPorRol). El orden está fijado en
+      la entrada no existe (ver filtrarEnlacesVisibles). El orden está fijado en
       tests/navbar-jerarquia.test.js.
 
       Encabezar el array NO significa encabezar lo que el usuario ve: este
@@ -49,7 +49,18 @@ const ENLACES_NAVEGACION_BASE = [
     habilitado: true,
     soloAdmin: true,
   },
-  { texto: "Mi cuenta", href: "/app/features/portal/", habilitado: true },
+  {
+    /*
+      `soloSesion` porque el portal es lo único del menú que exige sesión
+      (`requerirSesion()` en portal.js). Sin esto la entrada se ofrecía a
+      cualquiera y convivía con el "Acceder" del pie del mismo panel: dos
+      cosas que se contradicen, y un clic que rebotaba al login.
+    */
+    texto: "Mi cuenta",
+    href: "/app/features/portal/",
+    habilitado: true,
+    soloSesion: true,
+  },
   {
     texto: "Academy",
     hijos: [
@@ -85,22 +96,28 @@ const ENLACES_NAVEGACION_BASE = [
 ];
 
 /*
-  Los items `soloAdmin` desaparecen del menú para quien no lo sea, en vez de
-  pintarse en gris: anunciarle una sección que no le corresponde sólo genera
-  preguntas. Ojo, esto es cosmética — la URL sigue abriendo para cualquiera
-  porque el sitio es estático y no hay servidor que niegue nada. Sirve para
-  ordenar el menú, NO como control de acceso.
+  Dos criterios de visibilidad, una sola pasada: `soloAdmin` y `soloSesion`.
+  Los items que no corresponden desaparecen del menú en vez de pintarse en
+  gris: anunciarle a alguien una sección que no le toca sólo genera preguntas.
+
+  Ojo, esto es cosmética — la URL sigue abriendo para cualquiera porque el
+  sitio es estático y no hay servidor que niegue nada. Sirve para ordenar el
+  menú, NO como control de acceso: al admin lo respalda el backend, y a la
+  sesión, `requerirSesion()` en la página destino.
+
+  Los criterios viajan en un objeto y no como booleanos sueltos: en la llamada,
+  `filtrar(enlaces, false, true)` no dice cuál es cuál.
 
   Devuelve copias: ENLACES_NAVEGACION_BASE es un módulo compartido entre los dos
   paneles (mobile y cuenta), y filtrarlo en el lugar dejaría el menú recortado
   para el siguiente montaje.
 */
-function filtrarEnlacesPorRol(enlaces, esUsuarioAdmin) {
+function filtrarEnlacesVisibles(enlaces, { esAdmin, haySesion }) {
   return enlaces
-    .filter((enlace) => !enlace.soloAdmin || esUsuarioAdmin)
+    .filter((enlace) => (!enlace.soloAdmin || esAdmin) && (!enlace.soloSesion || haySesion))
     .map((enlace) =>
       enlace.hijos
-        ? { ...enlace, hijos: filtrarEnlacesPorRol(enlace.hijos, esUsuarioAdmin) }
+        ? { ...enlace, hijos: filtrarEnlacesVisibles(enlace.hijos, { esAdmin, haySesion }) }
         : enlace
     )
     // Una cabecera que se quedó sin hijos se despliega y no ofrece nada.
@@ -452,10 +469,10 @@ async function montarMenus() {
       el navbar se monta en todas.
     */
     const perfil = session ? await obtenerPerfil(session) : null;
-    const enlacesNavegacion = filtrarEnlacesPorRol(
-      ENLACES_NAVEGACION_BASE,
-      perfil?.rol === "admin"
-    );
+    const enlacesNavegacion = filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, {
+      esAdmin: perfil?.rol === "admin",
+      haySesion: Boolean(session),
+    });
 
     const listaNavegacion = document.getElementById("menuNavegacionLista");
     if (listaNavegacion) {

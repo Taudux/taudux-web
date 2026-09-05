@@ -255,12 +255,27 @@ test("the portal never reports failures through the global operation channel", (
   assert.doesNotMatch(js, /reportarFallo/);
 });
 
-test("the navbar enables the account link and points it at the portal page", () => {
+test("the navbar enables the account link, points it at the portal and gates it on a session", () => {
+  /*
+    Se fijan las propiedades de la entrada por separado, no su forma literal: el
+    aserto anterior era un solo regex con las llaves y el orden exactos, y se
+    rompió al agregarle `soloSesion` sin que nada estuviera mal.
+
+    `soloSesion` importa desde acá: sin él, el menú ofrecía el portal a quien no
+    tenía sesión, y el clic rebotaba al login (`requerirSesion()`).
+  */
   const js = read("src/app/shared/navbar/navbar.js");
-  assert.match(
-    js,
-    /\{\s*texto:\s*"Mi cuenta",\s*href:\s*"\/app\/features\/portal\/",\s*habilitado:\s*true\s*\}/
-  );
+  const inicio = js.indexOf('texto: "Mi cuenta"');
+  assert.notEqual(inicio, -1, "falta la entrada de cuenta");
+
+  // Se corta en el cierre de la entrada: sin acotar, el regex encontraría
+  // `soloSesion` en cualquier otra parte del archivo y el test no probaría nada.
+  const cuerpo = js.slice(inicio, js.indexOf("},", inicio));
+
+  assert.match(cuerpo, /href:\s*"\/app\/features\/portal\/"/, "debe apuntar al portal");
+  assert.match(cuerpo, /habilitado:\s*true/, "debe estar habilitada");
+  assert.match(cuerpo, /soloSesion:\s*true/,
+    "debe pedir sesión: sin eso se le ofrece a quien no la tiene y el clic rebota al login");
 });
 
 test("perfil.service.js and portal.perfil.js load before portal.js, and after auth.service.js", () => {

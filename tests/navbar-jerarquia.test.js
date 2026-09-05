@@ -47,7 +47,7 @@ function cargarNavbar() {
     `${read("src/app/shared/navbar/navbar.js")}
     this.crearItemMenu = crearItemMenu;
     this.crearAcordeonMenu = crearAcordeonMenu;
-    this.filtrarEnlacesPorRol = filtrarEnlacesPorRol;
+    this.filtrarEnlacesVisibles = filtrarEnlacesVisibles;
     this.ENLACES_NAVEGACION_BASE = ENLACES_NAVEGACION_BASE;`,
     context
   );
@@ -95,22 +95,22 @@ test("the AI detector is admin-only and disabled", () => {
   assert.equal(detector.href, "/app/features/detector/detector.html");
 });
 
-test("filtrarEnlacesPorRol drops soloAdmin entries for non-admins and keeps them for admins", () => {
-  const { filtrarEnlacesPorRol } = cargarNavbar();
+test("filtrarEnlacesVisibles drops soloAdmin entries for non-admins and keeps them for admins", () => {
+  const { filtrarEnlacesVisibles } = cargarNavbar();
   const enlaces = [
     { texto: "Público", href: "/publico", habilitado: true },
     { texto: "Secreto", href: "/secreto", habilitado: false, soloAdmin: true },
   ];
 
-  const paraCualquiera = filtrarEnlacesPorRol(enlaces, false).map((e) => e.texto);
-  const paraAdmin = filtrarEnlacesPorRol(enlaces, true).map((e) => e.texto);
+  const paraCualquiera = filtrarEnlacesVisibles(enlaces, { esAdmin: false, haySesion: true }).map((e) => e.texto);
+  const paraAdmin = filtrarEnlacesVisibles(enlaces, { esAdmin: true, haySesion: true }).map((e) => e.texto);
 
   assert.deepEqual(paraCualquiera, ["Público"]);
   assert.deepEqual(paraAdmin, ["Público", "Secreto"]);
 });
 
-test("filtrarEnlacesPorRol reaches inside groups, not just the top level", () => {
-  const { filtrarEnlacesPorRol } = cargarNavbar();
+test("filtrarEnlacesVisibles reaches inside groups, not just the top level", () => {
+  const { filtrarEnlacesVisibles } = cargarNavbar();
   const enlaces = [
     {
       texto: "Tools",
@@ -121,19 +121,65 @@ test("filtrarEnlacesPorRol reaches inside groups, not just the top level", () =>
     },
   ];
 
-  const [grupo] = filtrarEnlacesPorRol(enlaces, false);
+  const [grupo] = filtrarEnlacesVisibles(enlaces, { esAdmin: false, haySesion: true });
 
   assert.deepEqual(grupo.hijos.map((h) => h.texto), ["Abierto"]);
 });
 
-test("filtrarEnlacesPorRol drops a group left with no children", () => {
+test("filtrarEnlacesVisibles drops a group left with no children", () => {
   // Una cabecera vacía es peor que ninguna: se despliega y no ofrece nada.
-  const { filtrarEnlacesPorRol } = cargarNavbar();
+  const { filtrarEnlacesVisibles } = cargarNavbar();
   const enlaces = [
     { texto: "Tools", hijos: [{ texto: "Interno", href: "/i", soloAdmin: true }] },
   ];
 
-  assert.deepEqual(filtrarEnlacesPorRol(enlaces, false), []);
+  assert.deepEqual(filtrarEnlacesVisibles(enlaces, { esAdmin: false, haySesion: true }), []);
+});
+
+test("the account entry is hidden from visitors without a session", () => {
+  /*
+    Se veía en producción, en una ventana anónima: el panel listaba "Mi cuenta"
+    y, unas líneas más abajo, "Acceder". Las dos a la vez se contradicen.
+
+    El menú tenía un solo criterio de visibilidad, el rol; no existía la idea de
+    "esto requiere sesión", así que la entrada se pintaba siempre.
+  */
+  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesVisibles } = cargarNavbar();
+  const textos = (haySesion) =>
+    filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: false, haySesion })
+      .map((enlace) => enlace.texto);
+
+  assert.ok(!textos(false).includes("Mi cuenta"),
+    "sin sesión no se ofrece 'Mi cuenta': 'Acceder' ya está al pie del mismo panel");
+  assert.ok(textos(true).includes("Mi cuenta"),
+    "con sesión 'Mi cuenta' vuelve");
+});
+
+test("nothing offered to a signed-out visitor leads to a page that demands a session", () => {
+  /*
+    Se fija la PROPIEDAD —no ofrecer lo que rebota al login— y no el literal de
+    la entrada, así que el aserto sigue valiendo si mañana se agrega otra página
+    con `requerirSesion()`. Hoy la única es el portal.
+
+    Ojo: esto es cosmética del menú. Quien hace cumplir la sesión es
+    `requerirSesion()` en la página destino, no este filtro.
+  */
+  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesVisibles } = cargarNavbar();
+  const RUTAS_QUE_EXIGEN_SESION = ["/app/features/portal/"];
+
+  const recolectarHrefs = (enlaces) =>
+    enlaces.flatMap((enlace) =>
+      enlace.hijos ? recolectarHrefs(enlace.hijos) : enlace.href ? [enlace.href] : []
+    );
+
+  const hrefs = recolectarHrefs(
+    filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: false, haySesion: false })
+  );
+
+  RUTAS_QUE_EXIGEN_SESION.forEach((ruta) => {
+    assert.ok(!hrefs.some((href) => href.startsWith(ruta)),
+      `sin sesión el menú no debe ofrecer ${ruta}: rebota al login`);
+  });
 });
 
 /* Visibilidad ante buscadores. Ninguna de las dos páginas de Tools debe
@@ -185,14 +231,14 @@ test("the navbar resolves the profile once and reuses it for both role and name"
   );
 });
 
-test("filtrarEnlacesPorRol does not mutate the shared base array", () => {
+test("filtrarEnlacesVisibles does not mutate the shared base array", () => {
   // ENLACES_NAVEGACION_BASE es un módulo compartido: filtrarlo en una página no
   // puede dejar el menú recortado para la siguiente.
-  const { filtrarEnlacesPorRol, ENLACES_NAVEGACION_BASE } = cargarNavbar();
+  const { filtrarEnlacesVisibles, ENLACES_NAVEGACION_BASE } = cargarNavbar();
   const tools = ENLACES_NAVEGACION_BASE.find((e) => e.texto === "Tools");
   const hijosAntes = tools.hijos.length;
 
-  filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, false);
+  filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: false, haySesion: true });
 
   assert.equal(tools.hijos.length, hijosAntes, "el filtro debe devolver copias");
 });
@@ -408,7 +454,7 @@ test("no feature script writes over the navbar's own menu", () => {
 });
 
 test("the admin panel is reachable from every page, not just its own", () => {
-  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesPorRol } = cargarNavbar();
+  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesVisibles } = cargarNavbar();
 
   // Aplanar y buscar son dos pasos: mezclarlos hace que la recursión devuelva
   // el resultado de `find` —posiblemente undefined— donde `flatMap` espera un
@@ -434,11 +480,11 @@ test("the admin panel is reachable from every page, not just its own", () => {
   // /api/admin/*. Pero anunciarle el panel a quien no es admin sólo confunde.
   assert.equal(panel.soloAdmin, true);
   assert.ok(
-    !buscar(filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, false)),
+    !buscar(filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: false, haySesion: true })),
     "quien no es admin no debe ver la entrada"
   );
   assert.ok(
-    buscar(filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, true)),
+    buscar(filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: true, haySesion: true })),
     "quien es admin sí debe verla"
   );
 });
@@ -459,7 +505,7 @@ test("the admin panel leads the site links, above 'Mi cuenta'", () => {
     el desplegable de cuenta—. Ese orden visual vive en el DOM y lo verifica el
     navegador, no esta suite.
   */
-  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesPorRol } = cargarNavbar();
+  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesVisibles } = cargarNavbar();
 
   assert.match(
     ENLACES_NAVEGACION_BASE[0].texto || "", /administraci/i,
@@ -469,7 +515,7 @@ test("the admin panel leads the site links, above 'Mi cuenta'", () => {
   // Y para quien no es admin la entrada desaparece, así que el primer enlace
   // del grupo vuelve a ser "Mi cuenta": no queda un hueco donde estaba.
   assert.equal(
-    filtrarEnlacesPorRol(ENLACES_NAVEGACION_BASE, false)[0].texto,
+    filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: false, haySesion: true })[0].texto,
     "Mi cuenta",
     "sin el panel, los enlaces arrancan en 'Mi cuenta'"
   );
