@@ -77,7 +77,21 @@ test("script-src is strict — no 'unsafe-inline', no 'unsafe-eval'", () => {
   assert.ok(script, "falta la directiva script-src");
   assert.doesNotMatch(script, /'unsafe-inline'/,
     "un script-src con 'unsafe-inline' no frena el XSS: es una cabecera que tranquiliza sin proteger");
-  assert.doesNotMatch(script, /'unsafe-eval'/,
+  /*
+    El aserto va ANCLADO, y la diferencia importa: `'wasm-unsafe-eval'`
+    contiene `'unsafe-eval'` como substring, así que un regex suelto los
+    confunde y prohíbe los dos.
+
+    No son lo mismo. `'unsafe-eval'` abre `eval()` y `new Function()` sobre
+    cadenas —el agujero que este test existe para cerrar—; `'wasm-unsafe-eval'`
+    sólo habilita compilar WebAssembly, que es lo que Chromium exige para que
+    arranquen los intérpretes de Python, SQL y R del entorno de código.
+
+    Con el anclaje, permitir WASM es una decisión explícita y lo peligroso
+    sigue prohibido. Sin él, la única forma de habilitar WASM sería borrar este
+    aserto entero.
+  */
+  assert.doesNotMatch(script, /(^|\s)'unsafe-eval'/,
     "no hay eval() en el repo, así que no hay excusa para permitirlo");
 });
 
