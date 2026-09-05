@@ -276,3 +276,32 @@ test("no page outside /afgi introduces inline scripts or on* handlers", () => {
     );
   }
 });
+
+test("workers may come from a blob, scripts may not", () => {
+  /*
+    webR —el intérprete de R del entorno de código— crea su worker desde una
+    URL `blob:` que fabrica en memoria. Sin `worker-src`, el navegador cae a
+    `script-src` como respaldo, ahí no hay `blob:`, y R no arranca. Medido en
+    el preview del PR #3 el 2026-09-02: *"Creating a worker from 'blob:…'
+    violates the following Content Security Policy directive"*. Python y SQL sí
+    arrancaban, porque sus workers son archivos propios del sitio.
+
+    Se abre `worker-src` y NO `script-src`, y la diferencia es la que importa:
+    permitir `blob:` en `script-src` dejaría ejecutar CUALQUIER script fabricado
+    en memoria —el vector clásico para convertir un XSS en ejecución de código—
+    mientras que acotarlo a workers da exactamente lo que webR necesita y nada
+    más.
+
+    El aserto va en las dos direcciones a propósito: el día que algo se rompa y
+    alguien lo "arregle" metiendo `blob:` en la directiva ancha, este test lo
+    frena.
+  */
+  const worker = directiva("worker-src");
+
+  assert.ok(worker, "falta worker-src: sin ella el navegador cae a script-src y webR no arranca");
+  assert.match(worker, /blob:/,
+    "webR fabrica su worker en memoria: sin blob: el entorno de R no carga");
+
+  assert.doesNotMatch(directiva("script-src"), /blob:/,
+    "blob: en script-src permitiría ejecutar cualquier script fabricado en memoria; el permiso va acotado a worker-src");
+});
