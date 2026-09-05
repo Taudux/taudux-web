@@ -129,6 +129,7 @@ test("fields the user already filled in are never overwritten, even with a full 
 const INDEX = "src/index.html";
 const HOME_CSS = "src/app/features/home/home.css";
 const HOME_JS = "src/app/features/home/home.js";
+const FIELD_CSS = "src/app/shared/field/field.css";
 
 const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
 const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -165,6 +166,78 @@ test("no landing section paints an opaque colour over the backdrop", () => {
     css.slice(inicio, fin),
     /background(-color)?\s*:/,
     "un color pleno acá tapa el lienzo fijo y el fondo vuelve a 'desaparecer'",
+  );
+});
+
+/*
+  Decisión del 2026-09-05: la sección de contacto dejó de ser una tarjeta. El
+  texto se apoya en un resplandor radial detrás de la sección —el mismo recurso
+  que ya usa .hero::before—, no en un borde. Las clases `panel` siguen en el
+  HTML porque ui-consolidation.test.js las exige y panel.css lo comparten otras
+  páginas; la caja se anula desde home.css, que vive en @layer features y por
+  eso le gana a components sin especificidad.
+*/
+test("the contact panel draws light, not a box", () => {
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  // La regla base, no las de los media queries (que vienen después).
+  const inicio = css.indexOf(".contact__panel {");
+  assert.notEqual(inicio, -1, "falta la regla base .contact__panel");
+  const regla = css.slice(inicio, css.indexOf("}", inicio));
+
+  const anulaciones = [
+    [/(^|[^-])border\s*:\s*0/, "border: 0"],
+    [/border-radius\s*:\s*0/, "border-radius: 0"],
+    [/background\s*:\s*none/, "background: none"],
+    [/box-shadow\s*:\s*none/, "box-shadow: none"],
+    [/backdrop-filter\s*:\s*none/, "backdrop-filter: none"],
+  ];
+  for (const [patron, nombre] of anulaciones) {
+    assert.match(regla, patron,
+      `.contact__panel debe anular la pintura de .panel con ${nombre}`);
+  }
+  assert.doesNotMatch(regla, /linear-gradient/,
+    "la tarjeta no vuelve a pintarse con un degradado propio");
+
+  // El resplandor vive en un pseudo-elemento por DEBAJO del contenido y no
+  // intercepta clics. Nunca en un background de la sección: ver el test de
+  // arriba.
+  const bloom = css.indexOf(".contact::before");
+  assert.notEqual(bloom, -1, "falta el resplandor .contact::before");
+  const reglaBloom = css.slice(bloom, css.indexOf("}", bloom));
+  assert.match(reglaBloom, /radial-gradient/,
+    "el resplandor es radial, como el del hero");
+  assert.match(reglaBloom, /z-index\s*:\s*var\(--z-behind\)/,
+    "el resplandor va detrás del contenido de la sección");
+  assert.match(reglaBloom, /pointer-events\s*:\s*none/,
+    "el resplandor no debe robar clics al formulario");
+});
+
+test("softening the contact fields keeps their focus and error colours alive", () => {
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  // ".contact__field {" con llave: ".contact__field-group" también existe.
+  const inicio = css.indexOf(".contact__field {");
+  assert.notEqual(inicio, -1, "falta la regla .contact__field");
+  const regla = css.slice(inicio, css.indexOf("}", inicio));
+
+  // El borde se suaviza redefiniendo el token que .field lee. Un border-color
+  // directo desde esta capa le ganaría a :focus, [aria-invalid] y [data-match]
+  // de field.css, y el campo dejaría de marcarse en cian o en rojo.
+  assert.match(regla, /--color-border\s*:/,
+    "el borde suave se declara vía --color-border");
+  assert.doesNotMatch(regla, /(^|[^-])border-color\s*:/,
+    "border-color directo silencia los estados de foco y error de field.css");
+
+  // La otra mitad del contrato: .field tiene que seguir LEYENDO ese token. Si
+  // field.css lo renombra, el borde suave desaparece sin que nada falle.
+  const fieldCss = sinComentariosCss(read(FIELD_CSS));
+  const inicioField = fieldCss.indexOf(".field {");
+  assert.notEqual(inicioField, -1, "falta la regla base .field en field.css");
+  assert.match(
+    fieldCss.slice(inicioField, fieldCss.indexOf("}", inicioField)),
+    /var\(--color-border\)/,
+    ".field debe leer --color-border, o lo que redefine .contact__field no llega al borde",
   );
 });
 

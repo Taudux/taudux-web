@@ -617,17 +617,61 @@ body::before {
   padding-inline: 1.5rem;
 }
 
+/*
+  Luz en lugar de caja (decisión del 2026-09-05). La sección dejó de pintarse
+  como tarjeta: el texto se apoya en un resplandor radial detrás de todo el
+  ancho, el mismo recurso que ya usa .hero::before. Va en un pseudo-elemento y
+  no en un background de la sección —ver el comentario de .home__section: un
+  fondo ahí tapa el lienzo de partículas.
+
+  Las alphas (0.16 azul, 0.10 cian) son más altas que las del hero (0.07 /
+  0.14) a propósito: acá el resplandor es la única estructura visual, y a la
+  alpha del hero se perdía en el fondo. El segundo foco cae a 68%, el centro
+  real de la columna del formulario en desktop; en columna única es sólo
+  atmósfera.
+*/
+.contact::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-behind);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 35% 45% at 68% 50%, rgba(0, 180, 220, 0.10), transparent 70%),
+    radial-gradient(ellipse 60% 55% at 50% 50%, rgba(24, 82, 210, 0.16), transparent 70%);
+}
+
+/*
+  Las clases `panel panel--…` siguen en el HTML (ui-consolidation.test.js las
+  exige) y panel.css no se toca: lo comparten privacidad, notas y el extractor.
+  La caja se anula desde acá, que vive en @layer features y le gana a
+  components sin importar la especificidad. El padding se conserva para que
+  las columnas no se muevan de donde estaban.
+*/
 .contact__panel {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.05));
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 40px rgba(0, 255, 255, 0.05);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
   padding: 60px;
-  backdrop-filter: blur(8px);
   display: flex;
   gap: 60px;
   justify-content: space-between;
   align-items: flex-start;
   flex-wrap: wrap;
+}
+
+/*
+  Los campos conservan su caja —son inputs, la caja es su affordance— pero
+  pierden dureza. El borde se suaviza redefiniendo el token que .field lee, y
+  NO con border-color: una declaración directa desde esta capa le ganaría a
+  :focus, [aria-invalid] y [data-match] de field.css, y el campo dejaría de
+  marcarse en cian al enfocar y en rojo al fallar.
+*/
+.contact__field {
+  --color-border: rgba(255, 255, 255, 0.12);
+  background: rgba(30, 30, 30, 0.7);
 }
 
 .contact__info {
