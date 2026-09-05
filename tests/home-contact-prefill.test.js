@@ -252,6 +252,34 @@ test("the backdrop loader points at the global container, not the old hero one",
     "y el revelado debe seguir cargándose aparte");
 });
 
+test("the starfield floor is one number: the animation never undercuts value.min", () => {
+  /*
+    tsParticles tiene DOS mínimos por propiedad animada: `value.min`, con el
+    que nace la partícula, y `animation.minimumValue`, hasta donde baja la
+    animación. Si el segundo queda por debajo del primero, el piso que se
+    declaró no es el piso que se ve: la estrella sigue cayendo a la zona que
+    una pantalla con poco brillo aplasta. Medido en vivo el 2026-09-05:
+    opacidad declarada 0.12, real 0.08.
+
+    Sólo opacidad, a propósito: `size` arrastra el mismo desfase de origen
+    (0.35 < 0.5) y no se tocó en este cambio; pinnearlo acá obligaría a
+    moverlo.
+  */
+  const js = read(HOME_JS);
+  const inicio = js.indexOf('tsParticles.load("particles-fondo"');
+  assert.notEqual(inicio, -1, "falta la carga del fondo");
+  const fin = js.indexOf('tsParticles.load("particles-quienes"');
+  const fondo = js.slice(inicio, fin === -1 ? undefined : fin);
+
+  const bloque = fondo.slice(fondo.indexOf("opacity: {"));
+  const min = bloque.match(/value:\s*\{\s*min:\s*([\d.]+)/);
+  const minimo = bloque.match(/minimumValue:\s*([\d.]+)/);
+  assert.ok(min && minimo,
+    "opacity: faltan value.min o animation.minimumValue en el fondo");
+  assert.ok(Number(minimo[1]) >= Number(min[1]),
+    `opacity: animation.minimumValue (${minimo[1]}) queda por debajo de value.min (${min[1]})`);
+});
+
 test("the backdrop's height doesn't follow the shrinking mobile viewport", () => {
   /*
     En móvil, la barra de direcciones se retrae al empezar a deslizar desde
