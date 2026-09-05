@@ -21,7 +21,7 @@
       ]
     },
     {
-      "source": "/afgi/:path*",
+      "source": "/afgi(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
@@ -33,7 +33,7 @@
       ]
     },
     {
-      "source": "/app/features/codigo/r/:path*",
+      "source": "/app/features/codigo/r(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",

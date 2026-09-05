@@ -40,11 +40,12 @@ const valorDe = (regla, nombre) =>
   (regla?.headers || []).find((h) => h.key.toLowerCase() === nombre.toLowerCase())?.value;
 
 const RUTA_APP = "/(.*)";
-/* `:path*` cubre `/afgi` y `/afgi/`: producción sirve las dos formas con 200
- * y sin redirect, así que las dos necesitan la política del deck. */
-const RUTA_AFGI = "/afgi/:path*";
+/* `(.*)` pegado al literal, sin barra antes: es la única forma que cubre
+ * `/afgi`, `/afgi/` y `/afgi/…` con una sola regla (ver el test de la barra
+ * final). Producción sirve las dos formas con 200 y sin redirect. */
+const RUTA_AFGI = "/afgi(.*)";
 /* La página de R del entorno de código: la única con `'unsafe-eval'`. */
-const RUTA_R = "/app/features/codigo/r/:path*";
+const RUTA_R = "/app/features/codigo/r(.*)";
 
 const cspApp = () => valorDe(reglaDe(RUTA_APP), "Content-Security-Policy") || "";
 
@@ -277,6 +278,32 @@ test("only the R page may eval — webR's runtime needs it, nothing else does", 
   reglas().filter((r) => r.source !== RUTA_R).forEach((r) => {
     assert.doesNotMatch(valorDe(r, "Content-Security-Policy") || "", /(^|\s)'unsafe-eval'/,
       `${r.source} no debe abrir eval(): sólo la página de R lo necesita`);
+  });
+});
+
+test("every per-path rule matches its page with and without the trailing slash", () => {
+  /*
+    Vercel compila cada `source` con path-to-regexp 6 y `strict: true`
+    (`packages/routing-utils/src/superstatic.ts`), así que la barra final se
+    exige tal cual está en el patrón. Medido con esa misma librería y opciones
+    el 2026-09-05:
+
+      /afgi/(.*)    ✗ /afgi   ✓ /afgi/   ✓ /afgi/x
+      /afgi/:path*  ✓ /afgi   ✗ /afgi/   ✓ /afgi/x   (se publicó así y R siguió sin su CSP)
+      /afgi(.*)     ✓ /afgi   ✓ /afgi/   ✓ /afgi/x
+
+    Producción sirve `/x` y `/x/` con 200 y sin redirect, así que un source que
+    deja afuera una de las dos formas deja esa página con la CSP general. Se
+    prohíben los dos sufijos que ya fallaron y se exige el que cubre las tres
+    formas; no se fija el literal completo.
+  */
+  reglas().filter((r) => r.source !== RUTA_APP).forEach((r) => {
+    assert.doesNotMatch(r.source, /\/\(\.\*\)$/,
+      `${r.source}: "/(.*)" al final no cubre la URL sin barra`);
+    assert.doesNotMatch(r.source, /:path\*$/,
+      `${r.source}: ":path*" al final no cubre la URL con barra`);
+    assert.match(r.source, /[^/]\(\.\*\)$/,
+      `${r.source}: debe terminar en "(.*)" pegado al literal para cubrir las dos formas`);
   });
 });
 
