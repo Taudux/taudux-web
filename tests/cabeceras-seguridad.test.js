@@ -28,8 +28,10 @@ const CONFIG = JSON.parse(leer("vercel.json"));
 
 /* La regla que gobierna a la aplicación, y la del deck de AFGI.
  *
- * Vercel aplica la PRIMERA coincidencia del array, así que el orden es parte
- * del contrato: si la general quedara antes, `/afgi` nunca vería la suya.
+ * Vercel aplica TODAS las reglas que coinciden y, para una misma cabecera,
+ * gana la ÚLTIMA: reemplaza el valor entero, no lo mezcla. El orden es parte
+ * del contrato: una regla por ruta va DESPUÉS de la general, o la general la
+ * pisa (medido en producción el 2026-09-05).
  */
 const reglas = () => CONFIG.headers || [];
 const reglaDe = (fuente) => reglas().find((r) => r.source === fuente);
@@ -38,7 +40,9 @@ const valorDe = (regla, nombre) =>
   (regla?.headers || []).find((h) => h.key.toLowerCase() === nombre.toLowerCase())?.value;
 
 const RUTA_APP = "/(.*)";
-const RUTA_AFGI = "/afgi/(.*)";
+/* `:path*` cubre `/afgi` y `/afgi/`: producción sirve las dos formas con 200
+ * y sin redirect, así que las dos necesitan la política del deck. */
+const RUTA_AFGI = "/afgi/:path*";
 
 const cspApp = () => valorDe(reglaDe(RUTA_APP), "Content-Security-Policy") || "";
 
@@ -217,19 +221,22 @@ test("the other three hardening headers are served", () => {
                "strict-origin-when-cross-origin");
 });
 
-test("the /afgi rule comes BEFORE the general one — order is the contract", () => {
+test("the /afgi rule comes AFTER the general one — order is the contract", () => {
   /*
-    Vercel aplica la PRIMERA regla que coincide. El deck tiene un `<script>`
-    inline propio (`afgi/index.html:1748`) y necesita su política laxa; si la
-    general quedara antes, `/afgi` nunca vería la suya y el deck se rompería.
+    Vercel aplica TODAS las reglas que coinciden y, para una misma cabecera,
+    gana la ÚLTIMA. Medido en producción el 2026-09-05: con `/afgi/(.*)` antes
+    que `/(.*)`, `curl -sI https://taudux.com/afgi/` devolvía la CSP general
+    y Chrome bloqueaba el `<script>` inline del deck (`afgi/index.html:1748`):
+    las flechas no hacían nada. La doc de Vercel no documenta la precedencia de
+    `headers`; la medición es la autoridad.
   */
   const orden = reglas().map((r) => r.source);
   const iAfgi = orden.indexOf(RUTA_AFGI);
   const iApp = orden.indexOf(RUTA_APP);
 
   assert.notEqual(iAfgi, -1, `falta la regla de ${RUTA_AFGI}`);
-  assert.ok(iAfgi < iApp,
-    "la regla de /afgi debe ir antes que la general, o nunca se aplica");
+  assert.ok(iAfgi > iApp,
+    "la regla de /afgi debe ir DESPUÉS de la general, o la general la pisa");
 });
 
 test("no page outside /afgi introduces inline scripts or on* handlers", () => {
