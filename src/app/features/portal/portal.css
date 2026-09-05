@@ -1,6 +1,16 @@
 /* Portal de cuenta: barra lateral de secciones más el panel de contenido. */
 
 @layer features {
+/*
+  La altura pelada, no --espacio-bajo-navbar como el resto de las páginas: acá
+  el aire ya lo pone .portal__header con su padding-block de 2.5rem. Sumarle el
+  1.5rem del token daría 10.5rem, casi un tercio más de aire que cualquier otra
+  pantalla, y el título del portal nacería flotando.
+
+  Sigue colgando de la misma perilla, que es lo que importa: si el navbar cambia
+  de alto, esto lo sigue solo. Lo que no comparte es el escalón, porque el
+  escalón acá lo pone otro. Fijado en tests/ui-consolidation.test.js.
+*/
 .portal {
   min-block-size: 100vh;
   padding-block-start: var(--navbar-height);

@@ -1,9 +1,16 @@
 /* Estilos compartidos por el catálogo público y la administración de cursos. */
 
 @layer features {
+/*
+  El despeje del navbar fijo sale del token, no de un número suelto. Antes
+  decía 8rem, que ya traía sumada la altura de la barra: mirándolo no había
+  forma de saber cuánto era barra y cuánto era aire, ni cuáles hojas tocar si
+  la barra cambiaba de alto. Ahora el aire es lo único que se elige acá, y la
+  altura la pone --navbar-height. Rinde el mismo 8rem de siempre.
+*/
 .courses__main {
   min-height: 100vh;
-  padding: 8rem 2rem 4rem;
+  padding: var(--espacio-bajo-navbar) 2rem 4rem;
   background-color: var(--color-background);
 }
 
@@ -567,8 +574,14 @@
 }
 
 @media (max-width: 600px) {
+  /*
+    En móvil el catálogo achica el aire, pero sigue colgando de la misma
+    perilla: el 7rem viejo era 6.5 de barra + 0.5 de aire, todo fundido en un
+    número que no se podía auditar. Acá se lee que lo que cambia es el aire
+    (1.5rem → 0.5rem), no la altura de la barra.
+  */
   .courses--catalog .courses__main {
-    padding: 7rem 1rem 3rem;
+    padding: calc(var(--navbar-height) + 0.5rem) 1rem 3rem;
   }
 
   .courses--catalog .courses__header {

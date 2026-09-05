@@ -5,6 +5,37 @@ const loginEmail = document.getElementById("loginEmail");
 const loginPassword = document.getElementById("loginPassword");
 const reenviarButton = document.getElementById("reenviarButton");
 const googleButton = document.getElementById("googleButton");
+const recordarmeCheckbox = document.getElementById("recordarme");
+
+/*
+  Guarda la elección de "Recordarme" ANTES de que el login viaje.
+
+  El orden no es cosmético: quien la lee es el **documento siguiente**, cuando
+  `supabase-client.js` construye su cliente y elige dónde guardar la sesión.
+  Escribirla después de `iniciarSesion()` llegaría tarde — la sesión ya estaría
+  en el storage viejo.
+
+  Por eso también se llama antes del redirect a Google: ahí el navegador se va
+  a `accounts.google.com` y vuelve con un documento nuevo, que es justamente el
+  que tiene que encontrarla escrita. Mismo patrón que la marca de reauth del
+  portal (`portal.js`).
+
+  En `try/catch` y sin ruido, como todo acceso a storage en este repo: un
+  navegador con el storage bloqueado no puede impedir que alguien inicie
+  sesión — simplemente no lo vamos a recordar.
+*/
+function guardarPreferenciaRecordarme() {
+  try {
+    if (recordarmeCheckbox?.checked) {
+      localStorage.setItem("taudux_recordarme", "1");
+    } else {
+      localStorage.removeItem("taudux_recordarme");
+    }
+  } catch {
+    // Storage bloqueado: la sesión caerá a sessionStorage, que es el default
+    // seguro. No hay nada que avisar.
+  }
+}
 
 const parametrosLogin = new URLSearchParams(window.location.search);
 const errorEnlaceLogin = parametrosErrorAuth();
@@ -40,6 +71,11 @@ loginForm.addEventListener("submit", async (evento) => {
     return;
   }
 
+  // ANTES de autenticar, y no es cosmético: el token se escribe durante
+  // `iniciarSesion()` y el almacenamiento se resuelve en ese instante. Guardar
+  // la preferencia después dejaría la sesión del lado equivocado.
+  guardarPreferenciaRecordarme();
+
   establecerFormularioOcupado(loginForm, true);
   try {
     const resultado = await iniciarSesion(loginEmail.value.trim(), loginPassword.value);
@@ -60,6 +96,11 @@ loginForm.addEventListener("submit", async (evento) => {
 googleButton.addEventListener("click", async () => {
   if (formularioEstaOcupado(loginForm)) return;
   ocultarEstadoAuth();
+
+  // Antes del redirect: el navegador se va a Google y vuelve con un documento
+  // nuevo, que es el que tiene que encontrar esta preferencia escrita.
+  guardarPreferenciaRecordarme();
+
   establecerBotonOcupado(googleButton, true);
   const resultado = await iniciarSesionConGoogle();
   // En el camino feliz el navegador ya se fue a Google; solo se llega acá si falló.

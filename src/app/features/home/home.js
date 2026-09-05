@@ -21,10 +21,23 @@ function observarAparicion(selector, modificador, umbral) {
   elementos.forEach((elemento) => observador.observe(elemento));
 }
 
-function cargarParticulasHero() {
+/*
+  El fondo de partículas de TODA la página.
+
+  Estaba encerrado en el hero y por eso se cortaba al scrollear: Servicios,
+  Tecnología y Contacto quedaban lisos. Ahora carga en `#particles-fondo`, un
+  contenedor fijo a la ventana que vive fuera de las secciones.
+
+  `fullScreen` sigue en `false` a propósito: el posicionamiento lo resuelve el
+  CSS del contenedor, que es donde ya está declarado el apilamiento del resto
+  de la página. Dejar que tsParticles cree su propio lienzo de pantalla
+  completa metería un z-index gestionado por la librería en medio de esa
+  escala.
+*/
+function cargarParticulasFondo() {
   if (!window.tsParticles) return;
 
-  window.tsParticles.load("particles-hero", {
+  window.tsParticles.load("particles-fondo", {
     /* 30 fps basta para partículas que derivan lento y reduce a la mitad el
        costo de redibujar el canvas de pantalla completa en cada frame. */
     fpsLimit: 30,
@@ -259,7 +272,7 @@ document.addEventListener("DOMContentLoaded", () => {
   actualizarEstadoHero();
   observarAparicion(".about", "about--visible", 0.15);
   observarAparicion(".services__card", "services__card--visible", 0.3);
-  cargarParticulasHero();
+  cargarParticulasFondo();
   cargarParticulasAbout();
   configurarCarruseles();
   configurarFormularioContacto();

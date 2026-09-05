@@ -9,6 +9,12 @@
   la tabla eventos_negocio de Supabase (migración 0027), que sobrevive al
   borrado de la cuenta y no depende de que el navegador siga ejecutando JS.
 
+  OJO: la permanencia del extractor NO se lee de acá. Desde el 2026-08-28 se
+  mide aparte, en la base propia, y el porqué está escrito en
+  `/app/core/telemetry/permanencia.js` — resumido: este archivo sólo ESCRIBE a
+  Google, nadie lee de vuelta, y los bloqueadores lo tumban. Las dos cifras no
+  van a coincidir, y no es un error.
+
   Propiedad "Taudux" / stream "taudux.com", creada el 2026-08-07.
 */
 

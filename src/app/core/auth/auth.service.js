@@ -219,6 +219,23 @@ async function cerrarSesion({ scope = "global" } = {}) {
   if (error) {
     return { ok: false, codigo: error.code, mensaje: traducirErrorAuth(error) };
   }
+
+  /*
+    Cerrar sesión también olvida el "Recordarme".
+
+    En un equipo compartido cerrar sesión tiene que significar exactamente eso:
+    si la preferencia sobreviviera, el siguiente login nacería con la casilla
+    marcada y la persona siguiente heredaría una sesión persistente que nunca
+    pidió.
+
+    Va DESPUÉS del `signOut` y sólo en el camino feliz: si el cierre falló, la
+    sesión sigue viva y su preferencia todavía la describe.
+  */
+  try {
+    localStorage.removeItem("taudux_recordarme");
+  } catch {
+    // Storage bloqueado: entonces nunca se guardó nada que borrar.
+  }
   return { ok: true };
 }
 

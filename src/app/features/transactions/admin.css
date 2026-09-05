@@ -1,0 +1,1087 @@
+/* Panel de administración del extractor.
+ *
+ * Reusa el arranque y los contenedores de las pantallas de cursos
+ * (`courses.css`), así que acá sólo vive lo propio: la lista de cuentas del
+ * sitio.
+ *
+ * Tenía además el formulario de alta de accesos (`.admin__alta`, su
+ * `.admin__error` y el interruptor `.admin__switch`), el aviso de accesos
+ * temporales (`.admin__aviso`) y el visor de JSON de los paneles internos
+ * (`#panelInterno`). Se fueron el 2026-08-20 con el markup al que vestían:
+ * ninguna de esas secciones mostraba datos ciertos (hallazgos F30 y F25).
+ *
+ * El 2026-08-21 la tabla dejó de ser sólo lectura: la columna Plan —que
+ * repetía "free" en todas las filas— dio lugar a los dos números editables y a
+ * su botón (`.admin__numero`, `.admin__toggle`, `.admin__guardar`), y
+ * `.admin__plan` se fue con ella.
+ */
+@layer features {
+
+  /* El offset que despega el contenido del navbar fijo.
+   *
+   * Vive acá y no en la hoja de cursos porque `admin.html` reusa el markup y
+   * las clases de aquellas pantallas pero NO su hoja: el `padding: 8rem 2rem
+   * 4rem` está en `.courses__main` de `cursos.css`, que esta página no carga —
+   * y su `<main>` lleva `.courses`, no `.courses__main`, así que tampoco
+   * casaría si la cargara.
+   *
+   * El contenido siempre arrancó debajo de la barra. No se notaba porque lo
+   * primero era el aviso de accesos temporales, que a nadie le dolía tapado; al
+   * borrar las cuatro secciones de arriba (2026-08-20) quedó primero "Usuarios
+   * del sitio" y el título apareció cortado. El defecto es viejo: el borrado
+   * sólo lo destapó.
+   *
+   * Se replica la declaración, no la hoja: traer `cursos.css` entera metería
+   * las reglas del catálogo, que esta pantalla no usa.
+   *
+   * El valor sale del token compartido y no de un 8rem escrito a mano. Ese
+   * número ya traía sumada la altura de la barra, así que no se podía
+   * auditar: mirándolo no se sabía cuánto era barra y cuánto aire, ni cuáles
+   * hojas había que tocar si la barra cambiaba de alto. Con el token el aire
+   * es lo único que se elige, y se elige en un solo lugar. Rinde el mismo
+   * 8rem, así que no se mueve nada en pantalla. */
+  .courses {
+    padding-block-start: var(--espacio-bajo-navbar);
+
+    /* Las dos series del panel, con nombre propio y en UN solo lugar.
+     *
+     * Hasta el 2026-08-27 eran dos intensidades del mismo cian, con este
+     * argumento escrito acá abajo: "dos matices dicen 'dos partes de lo
+     * mismo'; dos colores dirían 'dos mediciones independientes'". El
+     * argumento es bueno en prosa y no sobrevivió a la pantalla — medido
+     * mirando la leyenda real, los dos tonos no se distinguían.
+     *
+     * Se paga un costo y conviene decirlo: el ámbar es `--color-warning`, que
+     * en el resto del sitio significa "cuidado". Por eso NO se usa ese token
+     * directamente sino uno con el nombre de lo que mide acá; el día que la
+     * paleta cambie, cambia en esta línea y no repartida por la hoja. */
+    --serie-con-sesion: var(--color-accent);
+    --serie-sin-sesion: var(--color-warning);
+  }
+
+  /* EL ATRIBUTO `hidden` GANA. Y hay que decirlo acá porque esta hoja se lo
+   * quitó tres veces sin querer.
+   *
+   * El `display: none` del atributo lo pone la hoja del NAVEGADOR, con la
+   * especificidad más baja que existe. Cualquier `display` de autor le gana —
+   * y esta hoja declara varios porque los necesita para maquetar. Resultado:
+   * un elemento con `hidden` puesto que se sigue viendo, y un `.hidden = true`
+   * en el JavaScript que no hace nada.
+   *
+   * Las tres veces, todas encontradas MIRANDO la pantalla y ninguna por un
+   * test:
+   *
+   *   · `.admin__municipios` (`display: grid`) — la lista nacía ABIERTA, con
+   *     el chevron diciendo que estaba cerrada.
+   *   · `.admin__insignia` (`display: inline-block`) — con `hidden` se veía
+   *     igual: una pastilla cian vacía de 13px al lado del mes.
+   *   · y esa misma insignia en Distribución Geográfica, que hereda la regla.
+   *
+   * `!important` no es pereza acá: es la forma estándar de devolverle al
+   * atributo la prioridad que su propia hoja no puede defender. Y cierra la
+   * clase entera de bug en vez de taparla una regla por vez. */
+  [hidden] {
+    display: none !important;
+  }
+
+  /* Va debajo del título de la lista y dice de dónde salen esos datos. No es
+     decoración: sin ella nadie sabe si el padrón sale de la base o de lo que
+     el servicio recuerde — la confusión que costó las secciones borradas. */
+  .admin__ayuda {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-block-end: 1rem;
+  }
+
+  .admin__mes {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+  }
+
+  /* Contenedor de scroll: una tabla de seis columnas no debe apretar sus
+   * celdas en mobile ni ocultar ninguna. Con overflow-x acá alcanza, sin
+   * envoltura HTML aparte — la tabla fija su propio min-width.
+   *
+   * EL `position: relative` NO ES DECORATIVO Y NO SE BORRA.
+   *
+   * `overflow` sólo recorta lo que cae dentro de su cadena de bloques
+   * contenedores. Dentro del `<th>` del botón vive un
+   * `<span class="u-visually-hidden">Guardar cambios</span>`, que es
+   * `position: absolute` (styles.css). Sin un ancestro posicionado acá, su
+   * bloque contenedor era la `<section>` —fuera de esta caja—, así que este
+   * `overflow-x` nunca lo recortaba: se plantaba en el extremo derecho de una
+   * tabla de 832px y estiraba el DOCUMENTO entero.
+   *
+   * Medido el 2026-08-28 en una ventana de 485px: 276px de scroll horizontal
+   * en toda la página, arrastrados por un elemento de 1px que nadie ve. Con
+   * esta línea el desborde cae a cero y la tabla sigue scrolleando por dentro.
+   *
+   * No mueve nada: no hay `top` ni `left`. Sólo le da a esta caja el rol que
+   * le faltaba para poder recortar lo que promete recortar. */
+  .admin__lista {
+    overflow-x: auto;
+    position: relative;
+  }
+
+  /* La misma promesa para la caja de la métrica por banco (#tablaMetricaBanco
+     comparte esta clase con los dos gráficos). Hoy nada la necesita — esa
+     tabla cabe entera —; es el cinturón para el día en que un nombre de banco
+     largo o una columna nueva la ensanche: lo ancho scrollea DENTRO de su
+     caja, nunca la página. */
+  .admin__grafico {
+    overflow-x: auto;
+  }
+
+  .admin__tabla {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--color-field);
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    overflow: hidden;
+  }
+
+  /* El mínimo es el umbral donde empieza el scroll horizontal: por debajo, las
+     celdas se apretarían y el botón "Guardar" partiría su texto en dos líneas.
+     Subió de 40rem a 64rem con las columnas editables, y volvió a 52rem el
+     mismo día al apilar nombre y correo en una sola celda — una columna menos
+     de texto ancho es exactamente lo que sobraba.
+
+     Acotado a la lista de perfiles porque `.admin__tabla` también la lleva la
+     tabla de métricas por banco, que mide 366px de max-content y nunca pidió
+     mínimo alguno: en la clase compartida la inflaba a 832px dentro de una
+     caja sin scroll y estiraba la página entera (medido 2026-08-31: 396px de
+     desborde en una ventana de 485px). */
+  .admin__lista .admin__tabla {
+    min-inline-size: 52rem;
+  }
+
+  /* `vertical-align: top` y no el `middle` por defecto.
+   *
+   * Las celdas de esta tabla NO tienen el mismo contenido: bajo "Cupo mensual"
+   * va el input MÁS el consumo del mes, así que su bloque es más alto.
+   * Centrando cada celda por separado, cada control quedaba a una altura
+   * distinta —medido: 388, 398, 402 y 398 px en la misma fila— y la fila se
+   * leía torcida sin que se pudiera señalar qué estaba mal.
+   *
+   * Alineando arriba, todos los controles arrancan del mismo borde y el texto
+   * del consumo cuelga por debajo sin arrastrar a nadie. */
+  .admin__tabla th,
+  .admin__tabla td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  /* El checkbox mide 18px contra los 33px de un campo numérico: alineado
+     arriba quedaría flotando sobre la línea de los inputs. El margen lo baja
+     hasta que su centro coincide con el de ellos (medido: 403 contra 404).
+     El BOTÓN no lo lleva —mide 32px, casi lo mismo que un input—, y ponérselo
+     lo dejaba 6px por debajo de todo lo demás. */
+  .admin__toggle {
+    margin-block-start: 0.4rem;
+  }
+
+  .admin__tabla thead th {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    border-bottom: var(--border-subtle);
+  }
+
+  /* El `th` va con los `td`: la divisoria tiene que cruzar la fila ENTERA.
+   *
+   * Sólo `td` dejaba la primera columna sin línea, y eso se disimulaba
+   * mientras el encabezado de fila era un renglón. Desde que la anotación
+   * "N en pruebas" vive ahí, la fila la mide el `th` y el corte a media
+   * columna se ve. */
+  .admin__tabla tbody tr:not(:last-child) td,
+  .admin__tabla tbody tr:not(:last-child) th {
+    border-bottom: var(--border-subtle);
+  }
+
+  /* La severidad de un fallo, en "Fallos por banco".
+   *
+   * NO SE USA EL NARANJA, y no es una preferencia: en este panel
+   * `--serie-sin-sesion` ES `--color-warning`, y las tres secciones de arriba
+   * lo llevan usando para decir "sin sesión". Pintar un fallo con él haría que
+   * el mismo color signifique dos cosas en la misma pantalla.
+   *
+   * La familia del error no la ocupa ninguna serie, así que queda libre.
+   *
+   * SÓLO SE COLOREA EL FALLO DURO, y a esto se llegó midiendo, después de
+   * descartar dos intentos:
+   *
+   *   1. `--color-error-text` (#ffb4b4) para el caso leve, razonando "misma
+   *      familia, menos intensidad". FALSO en un tema oscuro: da **11.38** de
+   *      contraste contra los **4.91** del rojo pleno, así que el caso leve
+   *      gritaba más que el grave. En oscuro, más claro es MÁS fuerte.
+   *   2. El mismo rojo atenuado hacia el fondo (#a9383c). La jerarquía quedaba
+   *      bien, pero cae a **3.03** — por debajo del 4.5 que pide WCAG AA para
+   *      texto normal.
+   *
+   * Y ahí está el techo real: `--color-error` ya está en **4.91**, al borde
+   * del mínimo. NO HAY ESPACIO para un segundo rojo por debajo que siga siendo
+   * legible, así que una escala de dos intensidades no cabe en esta paleta.
+   *
+   * El descuadre se distingue por PESO y por su columna, no por color. Su
+   * severidad la dice el encabezado, que para eso está.
+   *
+   * El CERO no se pinta: si todas las celdas gritan, ninguna avisa. */
+  .admin__fallo {
+    color: var(--color-error);
+    font-weight: 700;
+  }
+
+  .admin__descuadre {
+    font-weight: 700;
+  }
+
+  /* "1 en pruebas", debajo del nombre del banco.
+   *
+   * Va en su propio renglón y en el gris apagado a propósito: es CONTEXTO de
+   * la fila, no una segunda cifra. Puesta al lado y con el mismo peso, se
+   * leería como si compitiera con el número —o peor, como si hubiera que
+   * restarla—, y el punto de esta sección es que los intentos de
+   * administración NO se restan: un fallo es un fallo lo haya encontrado quien
+   * lo haya encontrado.
+   *
+   * Vive en el `th` de la fila y no en la celda de "Fallaron" para poder
+   * cubrir también los DESCUADRES, que es la otra columna que cuenta. De ahí
+   * que el `font-weight: 400` no sea decorativo: dentro de un `th` hay que
+   * deshacer la negrita que pone el navegador, o la anotación pesaría más que
+   * el nombre del banco. */
+  .admin__en-pruebas {
+    display: block;
+    margin-block-start: 0.15rem;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+  }
+
+  /* La administración se distingue por el acento y no sólo por la insignia:
+     la tabla se lee de un vistazo y el color hace el trabajo antes que la
+     lectura. El nombre viene de cuando marcaba el acceso ilimitado; hoy
+     marca el rol. Una fila no tiene borde propio que teñir, así que el
+     criterio pasa a un tinte de fondo más una franja a la izquierda. */
+  .admin__fila--ilimitado td {
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+
+  /* La franja NO puede ser un `border`.
+   *
+   * Un borde ocupa espacio: empujaba el contenido 3px a la derecha, así que
+   * las filas de administración arrancaban en X=489 y el resto en X=486. A
+   * simple vista se lee como filas desalineadas, y el ojo lo nota antes de
+   * poder nombrarlo — medido el 2026-08-21.
+   *
+   * `inset-inline-start: 0` sobre un pseudo-elemento absoluto pinta la franja
+   * SIN participar del layout: todas las celdas conservan el mismo padding y
+   * el texto de todas las filas arranca en la misma columna. La celda necesita
+   * `position: relative` para ser el ancla. */
+  .admin__fila--ilimitado td:first-child {
+    position: relative;
+  }
+
+  .admin__fila--ilimitado td:first-child::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 3px;
+    background: var(--color-accent);
+  }
+
+  /* Nombre y correo apilados en UNA celda (2026-08-21).
+   *
+   * Existió como wrapper `<div>` cuando la lista era de tarjetas, se fue al
+   * pasar a tabla —cada dato tomó su columna— y vuelve porque separarlos los
+   * presentaba como dos datos independientes cuando identifican a la misma
+   * persona. Y le cobraban a la tabla un ancho que necesitan las columnas
+   * editables: con una columna menos, el scroll horizontal aparece más tarde.
+   *
+   * La celda NO cambia de `display`: llevó `grid` para apilar, y un `td` con
+   * otro display deja de participar como table-cell — su caja no se estira al
+   * alto de la fila. Medido 2026-08-31: 65px contra los 75px de la fila, con
+   * el borde inferior, el fondo y la barrita de acento terminando 10px antes
+   * que los del resto (la divisoria se veía con un escalón). Los dos spans ya
+   * son block y se apilan solos; el respiro lo pone este margen. */
+  .admin__quien .admin__meta {
+    margin-block-start: 0.15rem;
+  }
+
+  .admin__usuario {
+    display: block;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .admin__meta {
+    display: block;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+  }
+
+  /* Los dos campos numéricos.
+   *
+   * Llevan también `.field`, que vive en la capa `components`: esta capa
+   * (`features`) va después en el orden declarado en `styles.css`, así que lo
+   * de acá gana sin necesidad de `!important`. El padding compartido es de
+   * 1rem, pensado para un formulario a lo ancho; dentro de una celda de tabla
+   * dejaría filas altísimas. */
+  .admin__numero {
+    inline-size: 5rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  /* La cuenta con acceso ilimitado no lleva campo: no hay número que fijar, y
+     un input deshabilitado con un "∞" adentro sería un control mintiendo sobre
+     lo que se puede escribir. El texto ocupa el mismo ancho para que la columna
+     no baile entre filas.
+
+     Sin centrar: el símbolo comparte el eje de inicio con el encabezado, el
+     campo numérico y el "N usados este mes" de abajo. Centrado dentro de la
+     caja de 5rem quedaba 35px a la derecha de ese eje (medido 2026-08-31) y
+     la columna entera se leía desalineada. */
+  .admin__numero--infinito {
+    display: inline-block;
+    color: var(--color-text-muted);
+  }
+
+  /* Debajo del límite mensual, en gris y más chico: el consumo acompaña al
+     número que se está editando, no compite con él. */
+  .admin__consumo {
+    display: block;
+    margin-block-start: 0.35rem;
+    color: var(--color-text-subtle);
+    font-size: 0.7rem;
+  }
+
+  /* El nombre NO es `.admin__switch`: aquel era el interruptor del alta de
+     accesos que se borró por no otorgar nada (hallazgo F30), y un test afirma
+     su ausencia. Reusar el nombre mezclaría dos historias que terminaron
+     distinto. */
+  .admin__toggle {
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  /* Un botón por fila, no uno por pantalla: el `.button--outline` compartido
+     está dimensionado para acciones de página y en una celda se ve enorme. */
+  .admin__guardar {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  /* Deshabilitado ES el indicador de "sin cambios" de esta tabla, así que
+     tiene que leerse como apagado y no como disponible. */
+  .admin__guardar:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .admin__guardar:disabled:hover {
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+  }
+
+  /* La fila que está viajando. El botón ya dice "Guardando…"; esto le da el
+     mismo estado al resto de la fila, que sigue editable pero desactualizada. */
+  .admin__fila[aria-busy="true"] td {
+    opacity: 0.6;
+  }
+
+  .admin__vacio {
+    color: var(--color-text-muted);
+  }
+
+  /* --- Desde dónde se usa ------------------------------------------------ */
+
+  /* Grilla de tres columnas y no una tabla: el nombre a su ancho natural, la
+     barra ocupando todo lo que sobre, y el número alineado a la derecha. Con
+     `1fr` en el medio, las barras de todas las filas arrancan y terminan en la
+     misma vertical — que es lo único que hace comparables dos barras. */
+  .admin__regiones-lista {
+    display: grid;
+    gap: 0.5rem 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Los dos niveles comparten la grilla: si el municipio tuviera columnas
+     propias, sus barras arrancarían en otra vertical que las del estado y
+     dejarían de ser comparables — que es lo único que hace útil una barra. */
+  /* Cuatro columnas fijas —chevron, nombre, barra, número— y el ancho del
+     nombre es una medida CONCRETA y no `max-content`, porque los municipios
+     viven en una lista anidada: dos grillas distintas resuelven `max-content`
+     por separado y sus barras arrancarían en verticales que además cambian con
+     los datos. Con un ancho fijo, las dos columnas miden lo mismo siempre y la
+     única diferencia que queda es la sangría deliberada de la lista anidada —
+     que es la que dice cuál cuelga de cuál. */
+  .admin__region,
+  .admin__municipio {
+    display: grid;
+    grid-template-columns: 0.9rem 11rem 1fr 2.75rem auto;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  /* Con una sola serie a la vista no hay par que poner, y la columna se va en
+     vez de quedarse vacía: dejarla correría la barra y el número a la derecha
+     un espacio que nada ocupa. */
+  .admin__regiones--una-serie .admin__region,
+  .admin__regiones--una-serie .admin__municipio {
+    grid-template-columns: 0.9rem 11rem 1fr auto;
+  }
+
+  /* En pantalla angosta el nombre cede antes que la barra: una barra de dos
+     píxeles no se compara con nada, un nombre en dos líneas se lee igual. */
+  @media (max-width: 40rem) {
+    .admin__region,
+    .admin__municipio {
+      grid-template-columns: 0.9rem 6.5rem 1fr 2.75rem auto;
+    }
+
+    .admin__regiones--una-serie .admin__region,
+    .admin__regiones--una-serie .admin__municipio {
+      grid-template-columns: 0.9rem 6.5rem 1fr auto;
+    }
+  }
+
+  .admin__region-nombre {
+    font-size: 0.85rem;
+  }
+
+  /* El municipio se distingue por TRES cosas a la vez —sangría, tamaño y
+     color— y no por una sola. Con un único indicio, la jerarquía se pierde en
+     cuanto alguien lee rápido o la pantalla es chica; el estilo tiene que
+     decir cuál es el estado sin que haga falta un rótulo. */
+  .admin__municipio {
+    padding-inline-start: 1.25rem;
+  }
+
+  .admin__municipio .admin__region-nombre,
+  .admin__municipio .admin__region-conteo {
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+  }
+
+  /* Y la pista más fina: el municipio es detalle del estado, no su par. */
+  .admin__municipio .admin__barra-pista {
+    block-size: 0.35rem;
+  }
+
+  /* La pista da la referencia: sin un fondo visible, una barra corta no se lee
+     como "poco" sino como "casi nada", porque no hay contra qué medirla. */
+  .admin__barra-pista {
+    display: block;
+    block-size: 0.6rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 6%);
+    overflow: hidden;
+  }
+
+  .admin__barra {
+    display: block;
+    block-size: 100%;
+    border-radius: inherit;
+    background: var(--color-accent, #38bdf8);
+  }
+
+  /* Gris apagado, no el color de acento: "sin ubicación" suele ser una de las
+     barras más largas —cerca de la mitad de las IPs no baja de país— y con el
+     mismo color se leería como el estado que más usa la herramienta, que es
+     justo lo contrario de lo que dice. */
+  .admin__barra--sin-ubicar {
+    background: rgb(255 255 255 / 18%);
+  }
+
+  /* El mismo acento, atenuado. NO un color distinto: el municipio es una parte
+     del estado que tiene encima, y dos colores los presentarían como dos
+     mediciones independientes. La transparencia dice "lo mismo, más abajo". */
+  .admin__barra--municipio {
+    background: color-mix(in srgb, var(--color-accent, #38bdf8) 45%, transparent);
+  }
+
+  /* Cuando la pestaña elige UNA serie, la barra toma su color entero en vez de
+     apilar dos tramos. Van después de `--municipio` a propósito: con la misma
+     especificidad gana la última, y acá el color de la serie tiene que ganarle
+     al tono genérico del municipio.
+
+     "Sin ubicación" NO recibe estas clases —se filtra en el JS— porque su gris
+     apagado es lo que impide que se lea como el estado que más usa la
+     herramienta, y eso vale en los tres modos. */
+  .admin__barra--cuenta { background: var(--serie-con-sesion); }
+  .admin__barra--anon { background: var(--serie-sin-sesion); }
+
+  /* La separa del bloque de estados reales: son dos cosas distintas y la línea
+     lo dice sin necesidad de un rótulo. */
+  .admin__regiones-lista--cola {
+    margin-block-start: 0.75rem;
+    padding-block-start: 0.75rem;
+    border-block-start: 1px solid rgb(255 255 255 / 10%);
+  }
+
+  /* --- El interruptor de administración (global, 2026-08-27) ------------- */
+
+  /* Vive a nivel PÁGINA, arriba de las tres secciones que gobierna, y por eso
+   * se separa del primer panel con una línea: sin ella se leería como parte de
+   * la tabla de cuentas, que es justamente la sección a la que NO afecta. */
+  /* El mes que el panel está mirando. En línea y discreto: es un control de
+     navegación, no un dato. La etiqueta va en el gris de las notas por lo
+     mismo. */
+  .admin__periodo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-block-end: 1.25rem;
+  }
+
+  .admin__periodo-etiqueta {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+  }
+
+  .admin__periodo .field {
+    inline-size: auto;
+    padding: 0.45rem 0.7rem;
+  }
+
+  .admin__filtro-global {
+    margin-block-end: 1.75rem;
+    padding-block-end: 1.25rem;
+    border-block-end: 1px solid rgb(255 255 255 / 10%);
+  }
+
+  /* Un `<button role="switch">` y no un checkbox disfrazado: no hay un solo
+   * `appearance: none` en el repo, y así un lector de pantalla lo anuncia como
+   * interruptor. El texto va DENTRO del botón, así que el blanco de clic es
+   * toda la etiqueta y no un cuadradito de 18px — en pantalla táctil, esa es
+   * la diferencia entre acertarle y no. */
+  .admin__interruptor {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .admin__interruptor:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    border-radius: var(--radius-field);
+  }
+
+  .admin__interruptor-pista {
+    position: relative;
+    display: block;
+    flex-shrink: 0;
+    inline-size: 2.6rem;
+    block-size: 1.45rem;
+    border-radius: var(--radius-pill);
+    background: rgb(255 255 255 / 12%);
+    transition: background var(--transition-fast);
+  }
+
+  /* Encendido = excluyendo administración, que es el estado por defecto. Toma
+   * el acento del sitio y no un verde propio: el panel ya tiene dos colores con
+   * significado —cian "con sesión", ámbar "sin sesión"— y un tercero sin dato
+   * detrás compite con ellos sin decir nada. */
+  .admin__interruptor[aria-checked="true"] .admin__interruptor-pista {
+    background: var(--color-accent);
+  }
+
+  /* La perilla se mueve; NO se usa `left` porque animar una propiedad de
+   * layout obliga al navegador a recalcular posiciones en cada cuadro.
+   * `transform` va en el compositor. */
+  .admin__interruptor-perilla {
+    position: absolute;
+    inset-block-start: 0.175rem;
+    inset-inline-start: 0.175rem;
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    border-radius: 50%;
+    background: var(--color-text);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 45%);
+    transition: transform var(--transition-fast);
+  }
+
+  .admin__interruptor[aria-checked="true"] .admin__interruptor-perilla {
+    transform: translateX(1.15rem);
+    background: var(--color-background);
+  }
+
+  /* La línea de alcance NO es decorativa: el interruptor gobierna tres
+   * secciones de cuatro, y que la tabla de cuentas quede afuera no se deduce
+   * mirando. Sin esto, encenderlo y ver la tabla intacta se lee como que el
+   * control está roto. */
+  .admin__filtro-alcance {
+    margin: 0.35rem 0 0 3.25rem;
+    color: var(--color-text-subtle);
+    font-size: 0.78rem;
+  }
+
+  /* El aviso de la sección que NO pudo cumplir el filtro.
+   *
+   * Ámbar como la serie "sin sesión" sería confundirlo con un dato; va en el
+   * gris apagado de las notas, con una barra que lo separa del gráfico. Y
+   * desaparece solo el día que el servidor mande el agregado que le falta. */
+  .admin__nota-sin-filtrar {
+    margin-block-start: 0.75rem;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 2px solid var(--serie-sin-sesion);
+    color: var(--color-text-subtle);
+    font-size: 0.78rem;
+  }
+
+  /* El desglose de los archivos sin banco identificado.
+   *
+   * Un renglón por cubo: los tres compiten entre sí y en línea corrida se
+   * leerían como una frase, que es justo lo que este desglose vino a deshacer.
+   *
+   * NO lleva la barra de `.admin__nota-sin-filtrar` ni su color: eso es una
+   * nota sobre lo que la sección no cuenta, y esto SÍ son datos medidos. El
+   * total va con el peso del cuerpo y los tres cubos apagados debajo, misma
+   * jerarquía que "N en pruebas" — contexto, no una segunda cifra. */
+  .admin__sin-identificar {
+    margin-block-start: 0.75rem;
+    color: var(--color-text);
+    font-size: 0.8rem;
+  }
+
+  .admin__sin-identificar span {
+    display: block;
+    margin-block-start: 0.15rem;
+    padding-inline-start: 0.75rem;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+  }
+
+  /* --- Columnas apiladas y serie temporal (2026-08-25) ------------------- */
+
+  /* La leyenda es obligatoria, no decorativa: sin ella los dos colores de una
+     columna apilada son adivinanza. Y el texto acompaña al color — quien no
+     distingue esos dos tonos igual lee cuál es cuál. */
+  .admin__leyenda {
+    display: flex;
+    gap: 1.25rem;
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  .admin__leyenda li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  /* La serie que la pestaña activa NO está mostrando. Se apaga en vez de
+     desaparecer: verla tachada dice "existe, no la estás viendo", y sacarla
+     dejaría una leyenda de un solo ítem que se lee como si esa fuera la única
+     serie que hay.
+
+     Dos indicios y no uno —opacidad y tachado—: con sólo opacidad, en una
+     pantalla mala o con poca vista, la diferencia no se nota. */
+  .admin__leyenda-item--apagado {
+    opacity: 0.4;
+    text-decoration: line-through;
+  }
+
+  .admin__leyenda-color {
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    border-radius: 2px;
+  }
+
+  /* Dos colores, no dos intensidades del mismo — y el cambio se decidió
+     MIRANDO esta leyenda: a 0.75rem, el cian al 100% y el cian al 40% eran
+     el mismo cuadradito. Un indicio que no se distingue no es un indicio.
+     El texto sigue al lado, porque el color nunca alcanza solo. */
+  .admin__leyenda-color--cuenta { background: var(--serie-con-sesion); }
+  .admin__leyenda-color--anon { background: var(--serie-sin-sesion); }
+
+  /* --- Distribución Geográfica (2026-08-27) ------------------------------ */
+
+  /* La insignia del total, al lado del mes. Dice de cuántas extracciones habla
+     todo lo de abajo — y respeta el filtro de administración, así que cambia
+     cuando se marca la casilla. Que cambie ES la señal de que el filtro hace
+     algo: la versión anterior no movía un solo número. */
+  /* OJO al tocar esto: hasta el 2026-08-28 había DOS `.admin__insignia` en esta
+   * hoja —ésta y la de la insignia "Admin" de las tarjetas de actividad— y la
+   * de abajo ganaba propiedad por propiedad, porque venía después con la misma
+   * especificidad. Lo que se veía en pantalla era una MEZCLA de las dos.
+   *
+   * Al retirar la sección de actividad, esta regla quedó sola. Se le incorporó
+   * lo que de verdad estaba rindiendo, para que la insignia no cambie de
+   * aspecto por un borrado que no tenía nada que ver con ella. */
+  .admin__insignia {
+    display: inline-block;
+    margin-inline-start: 0.5rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+    color: #04121c;
+    font-family: var(--font-body);
+    font-size: 0.6rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    vertical-align: 0.1em;
+  }
+
+  /* Los controles se envuelven en pantallas chicas en vez de comprimir el
+     buscador hasta que no quepa una palabra. */
+  .admin__controles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-block-end: 1rem;
+  }
+
+  .admin__orden {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  /* Botones y no un `<select>`: los tres criterios caben a la vista y el que
+     está activo se lee sin abrir nada. */
+  .admin__chip {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding: 0.3rem 0.8rem;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  .admin__chip:hover {
+    color: var(--color-text);
+    border-color: var(--serie-con-sesion);
+  }
+
+  /* El activo se marca por DOS cosas —color y borde—, no sólo por color: con
+     un único indicio, quien no distinga bien los tonos no sabe cuál está
+     puesto, y el orden de la lista quedaría inexplicado. */
+  .admin__chip--activo {
+    border-color: var(--serie-con-sesion);
+    color: var(--serie-con-sesion);
+  }
+
+  .admin__buscador {
+    flex: 1 1 12rem;
+    max-inline-size: 18rem;
+    font-size: 0.8rem;
+  }
+
+  .admin__region-bloque {
+    display: block;
+  }
+
+  /* La fila es un `<button>`: abre y cierra sus municipios, así que tiene que
+     alcanzarse con el teclado y anunciarse como control. Un `<div>` con
+     `onclick` no hace ninguna de las dos cosas. */
+  .admin__region {
+    inline-size: 100%;
+    border: 0;
+    padding: 0.35rem 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  /* "Sin ubicación" no abre nada —no tiene municipios que mostrar—, así que no
+     es un botón ni finge serlo.
+
+     Y por eso mismo no tiene chevron: su texto salta a la segunda columna, la
+     misma que ocupan los nombres de los estados. Sin esto caía en la columna
+     de 0.9rem reservada al chevron y la fila se apilaba en tres renglones. */
+  .admin__region--plana {
+    cursor: default;
+  }
+
+  .admin__region--plana .admin__region-nombre {
+    grid-column: 2;
+  }
+
+  .admin__region:hover .admin__region-nombre {
+    color: var(--serie-con-sesion);
+  }
+
+  .admin__region:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-field);
+  }
+
+  /* Rota al abrirse. `aria-expanded` es lo que lo dice de verdad; esto es la
+     versión visual de la misma información. */
+  .admin__chevron {
+    inline-size: 0.55rem;
+    block-size: 0.55rem;
+    border-inline-end: 2px solid var(--color-text-subtle);
+    border-block-start: 2px solid var(--color-text-subtle);
+    transform: rotate(45deg);
+    transition: transform var(--transition-fast);
+  }
+
+  .admin__region[aria-expanded="true"] .admin__chevron {
+    transform: rotate(135deg);
+  }
+
+  /* El par exacto: lo que la barra dice en proporción, dicho en números.
+   *
+   * Y CADA UNO EN EL COLOR DE SU SERIE, que es lo que lo vuelve útil: el par
+   * enseña solo cuál color es cuál, así que la leyenda deja de ser el requisito
+   * para leer la barra y pasa a ser respaldo.
+   *
+   * `tabular-nums` para que las columnas de números no bailen de fila en fila:
+   * con cifras de ancho variable, "1·4" y "52·4" desalinean el punto y la vista
+   * pierde la columna. */
+  .admin__region-par {
+    justify-self: end;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .admin__par-cuenta { color: var(--serie-con-sesion); }
+  .admin__par-anon { color: var(--serie-sin-sesion); }
+
+  /* El separador va apagado a propósito: es puntuación, no un tercer dato. */
+  .admin__par-punto {
+    margin-inline: 0.15rem;
+    color: var(--color-text-subtle);
+  }
+
+  .admin__region-conteo {
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  /* Las dos series dentro de la misma barra. Horizontales, así que van en
+     fila; la suma de sus dos anchos es el 100% de su propia barra. */
+  .admin__barra {
+    display: flex;
+  }
+
+  .admin__barra-parte {
+    display: block;
+    block-size: 100%;
+  }
+
+  .admin__barra-parte--cuenta { background: var(--serie-con-sesion); }
+  .admin__barra-parte--anon { background: var(--serie-sin-sesion); }
+
+  /* El detalle de un estado. Sangrado y con una guía a la izquierda: la
+     jerarquía se lee por el estilo, sin necesidad de un rótulo que la explique.
+     Es lo que las columnas apiladas habían perdido. */
+  .admin__municipios {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0.25rem 0 0.6rem;
+    padding: 0 0 0 0.6rem;
+    border-inline-start: 1px solid rgb(255 255 255 / 10%);
+    list-style: none;
+  }
+
+
+  /* El nombre del municipio salta a la segunda columna: la primera es la del
+     chevron, y dejarla vacía es lo que alinea su barra con la del estado que
+     tiene encima. Sin eso, las dos barras arrancarían en verticales distintas
+     y dejarían de ser comparables. */
+  .admin__municipio .admin__region-nombre {
+    grid-column: 2;
+  }
+
+  /* Ni "cargar más" ni paginado: despliega el resto ahí mismo. Con 18 estados
+     no hay nada que traer del servidor — ya está todo en memoria, del mismo
+     viaje. */
+  .admin__mas {
+    inline-size: 100%;
+    margin-block-start: 0.75rem;
+    border: 0;
+    border-block-start: 1px solid rgb(255 255 255 / 10%);
+    padding: 0.6rem 0 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .admin__mas:hover {
+    color: var(--serie-con-sesion);
+  }
+  /* La serie temporal. `preserveAspectRatio="none"` en el SVG la estira a lo
+     ancho del panel; el alto lo fija esta regla. */
+  .admin__serie {
+    inline-size: 100%;
+    block-size: 10rem;
+    display: block;
+    overflow: visible;
+  }
+
+  /* `vector-effect` mantiene el grosor constante pese al estirado del viewBox:
+     sin él, la línea se deforma y se ve más gruesa en un eje que en el otro. */
+  .admin__serie-linea {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* Los MISMOS tokens que la sección geográfica, y no por prolijidad: las dos
+     secciones parten el uso en las mismas dos series y se leen en la misma
+     pantalla. Si cada una eligiera su paleta, el panel hablaría dos idiomas de
+     color y el ámbar significaría una cosa arriba y otra abajo. */
+  .admin__serie-linea--cuenta { stroke: var(--serie-con-sesion); }
+  .admin__serie-linea--anon { stroke: var(--serie-sin-sesion); }
+
+  .admin__serie-eje {
+    display: flex;
+    justify-content: space-between;
+    margin-block-start: 0.35rem;
+    color: var(--color-text-subtle);
+    font-size: 0.7rem;
+  }
+
+
+  /* --- Permanencia y tiempo de uso (2026-08-28) -------------------------- */
+
+  /* Columnas verticales, que volvieron acá después de irse con la fusión
+     geográfica del 2026-08-28. Allá sobraban —una lista de estados se lee
+     mejor en horizontal—; acá las pide el dato: un histograma tiene un eje
+     ordenado y la altura es la comparación. */
+  .admin__columnas {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    block-size: 11rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .admin__columna {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    block-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .admin__columna-total {
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* La pista da la referencia. Sin un fondo visible, una columna corta no se
+     lee como "poco" sino como "casi nada", porque no hay contra qué medirla. */
+  .admin__columna-pista {
+    inline-size: 100%;
+    block-size: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    background: rgb(255 255 255 / 6%);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  /* Las dos series apiladas. Vertical, así que la suma de las dos alturas es el
+     100% de su propia columna — no del total del histograma. */
+  .admin__columna-pila {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin__columna-parte {
+    display: block;
+  }
+
+  .admin__columna-parte--cuenta { background: var(--serie-con-sesion); }
+  .admin__columna-parte--anon { background: var(--serie-sin-sesion); }
+
+  /* Corte por palabra y no por letra: `overflow-wrap: anywhere` es lo que esta
+     hoja usa para los correos, y heredado acá partía "30s-1m" en cualquier
+     lado. Medido el 2026-08-25 con los nombres de municipio, mismo defecto. */
+  .admin__columna-nombre {
+    color: var(--color-text-subtle);
+    font-size: 0.68rem;
+    text-align: center;
+    overflow-wrap: normal;
+    white-space: nowrap;
+  }
+
+  /* Los tres cortes gruesos. Separados del histograma por una línea porque son
+     otra lectura del mismo dato: el gráfico muestra la forma, esto el resumen
+     que se cita en una conversación. */
+  .admin__cortes {
+    display: flex;
+    gap: 0.75rem;
+    margin: 1.25rem 0 0;
+    padding-block-start: 1rem;
+    border-block-start: 1px solid rgb(255 255 255 / 10%);
+    list-style: none;
+  }
+
+  .admin__corte {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.75rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-field);
+  }
+
+  .admin__corte-nombre {
+    color: var(--color-text-subtle);
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  .admin__corte-cifra {
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* En pantalla angosta los tres cortes se apilan: a un tercio de 320px, el
+     rótulo "De 1 a 5 min · Estándar" se parte en cuatro renglones. */
+  @media (max-width: 34rem) {
+    .admin__cortes {
+      flex-direction: column;
+    }
+  }
+}

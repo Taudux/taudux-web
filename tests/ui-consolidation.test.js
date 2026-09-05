@@ -551,3 +551,115 @@ test("the navbar aligns with the content, but scrolling never reimposes a fixed 
   assert.doesNotMatch(sinComentarios, /\bpadding:\s*/);
   assert.match(sinComentarios, /padding-block:\s*0\.5rem/);
 });
+
+/*
+  === El offset bajo el navbar fijo ===
+
+  Mismo patrón que --ancho-sitio: una perilla (--navbar-height) y un escalón
+  derivado con calc() (--espacio-bajo-navbar). Los tests que siguen protegen
+  la derivación y la unicidad de la perilla, no el número que hoy rinde.
+*/
+
+// Todas las hojas bajo src/, con las rutas normalizadas a "/" para poder
+// compararlas igual en Windows y en el CI.
+const hojasDeEstilo = () =>
+  fs.readdirSync(path.join(ROOT, "src"), { recursive: true })
+    .filter((archivo) => /\.css$/.test(archivo))
+    .map((archivo) => archivo.split(path.sep).join("/"));
+
+const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+test("--navbar-height is one knob declared exactly once in the whole stylesheet set", () => {
+  /*
+    El defecto que originó esto: extractor.css redeclaraba --navbar-height en
+    5rem y, como se carga después de styles.css y en la misma capa, pisaba la
+    perilla SOLO en esa página. El síntoma visible no era el navbar sino
+    scroll-padding-top, que cuelga del mismo token. Una perilla que se puede
+    pisar en silencio no es una perilla.
+  */
+  const declaran = hojasDeEstilo()
+    .filter((hoja) => /--navbar-height\s*:/.test(sinComentariosCss(read(`src/${hoja}`))));
+
+  assert.deepEqual(declaran, ["styles.css"]);
+});
+
+test("--espacio-bajo-navbar derives from --navbar-height via calc(), not a resolved value", () => {
+  /*
+    Igual que --ancho-medio con --ancho-sitio: si alguien "simplifica" el
+    calc() a 8rem, hoy se ve idéntico y la perilla deja de existir sin que
+    nada avise. Este test protege la derivación, no el valor resultante.
+  */
+  const styles = read("src/styles.css");
+  assert.match(styles, /--espacio-bajo-navbar:\s*calc\(\s*var\(--navbar-height\)/);
+});
+
+test("every page that mounts the navbar derives its top offset from the shared token", () => {
+  const esperados = [
+    { file: "src/app/features/courses/cursos.css", needle: "padding: var(--espacio-bajo-navbar) 2rem 4rem;" },
+    { file: "src/app/features/courses/curso-detalle.css", needle: "padding: var(--espacio-bajo-navbar) 1.5rem 4rem;" },
+    { file: "src/app/shared/coming-soon/coming-soon.css", needle: "padding: var(--espacio-bajo-navbar) 2rem 4rem;" },
+    { file: "src/app/features/legal/privacidad.css", needle: "padding: var(--espacio-bajo-navbar) 1.5rem 4rem;" },
+    { file: "src/app/features/transactions/admin.css", needle: "padding-block-start: var(--espacio-bajo-navbar);" },
+    { file: "src/app/features/transactions/extractor.css", needle: "padding-block-start: var(--espacio-bajo-navbar);" },
+    // El catálogo achica el aire en móvil, pero sigue colgando del navbar.
+    { file: "src/app/features/courses/cursos.css", needle: "padding: calc(var(--navbar-height) + 0.5rem) 1rem 3rem;" },
+    // El portal usa la altura pelada a propósito: su .portal__header ya pone
+    // el aire por dentro (ver el comentario en portal.css).
+    { file: "src/app/features/portal/portal.css", needle: "padding-block-start: var(--navbar-height);" },
+  ];
+
+  for (const { file, needle } of esperados) {
+    assert.ok(read(file).includes(needle), `${file} debe declarar ${needle}`);
+  }
+});
+
+test("no page hardcodes a top offset in rem anymore — the token owns it", () => {
+  /*
+    Barrido genérico: cualquier padding superior de 5rem o más es, por tamaño,
+    un despeje del navbar disfrazado de número suelto. Los comentarios se
+    quitan antes de mirar porque varias hojas MENCIONAN el valor viejo en
+    prosa al explicar de dónde salía.
+  */
+  const encontrados = [];
+  for (const hoja of hojasDeEstilo()) {
+    const css = sinComentariosCss(read(`src/${hoja}`));
+    for (const match of css.matchAll(/padding(?:-top|-block(?:-start)?)?\s*:\s*([\d.]+)rem/g)) {
+      if (Number(match[1]) >= 5) encontrados.push(`${hoja}: ${match[0]}`);
+    }
+  }
+
+  /*
+    Única excepción, deliberada: .auth no despeja el navbar, contrapesa un
+    centrado. Ver el test siguiente y el comentario en auth.css.
+  */
+  assert.deepEqual(encontrados, ["app/features/auth/auth.css: padding: 6rem"]);
+});
+
+test(".auth stays out of the shared token on purpose — it counterweights a centering", () => {
+  /*
+    .auth centra la tarjeta en el viewport (min-height: 100vh +
+    justify-content: center). Su 6rem/3rem no es un despeje: es el desbalance
+    que corre el centro óptico hacia abajo para compensar el navbar. Colgarlo
+    de --espacio-bajo-navbar rompería el centrado y movería seis páginas.
+  */
+  const auth = read("src/app/features/auth/auth.css");
+  const regla = auth.match(/\.auth\s*\{([^}]*)\}/);
+  assert.ok(regla, ".auth debe existir");
+  assert.match(regla[1], /justify-content:\s*center/);
+  assert.doesNotMatch(regla[1], /var\(--espacio-bajo-navbar\)/);
+});
+
+test("the extractor's <main> carries the class that clears the fixed navbar", () => {
+  /*
+    El defecto que originó todo el cambio: este <main> no tenía ningún padding
+    superior y el título del hero quedaba tapado por el navbar fijo.
+  */
+  assert.ok(
+    read("src/app/features/transactions/index.html").includes('<main class="extractor u-contenedor">'),
+    "el <main> del extractor debe llevar la clase .extractor junto al contenedor",
+  );
+  assert.match(
+    read("src/app/features/transactions/extractor.css"),
+    /\.extractor\s*\{[^}]*padding-block-start:\s*var\(--espacio-bajo-navbar\)/,
+  );
+});

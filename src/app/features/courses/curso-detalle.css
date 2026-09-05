@@ -5,9 +5,15 @@
 */
 
 @layer features {
+/*
+  El despeje del navbar fijo sale del token. Decía 8rem, un número que ya
+  traía sumada la altura de la barra y por eso no se podía auditar: no se
+  sabía cuánto era barra y cuánto aire. Ahora el aire es lo único que se
+  elige acá; la altura la pone --navbar-height. Rinde el mismo 8rem.
+*/
 .curso-detalle__main {
   min-height: 100vh;
-  padding: 8rem 1.5rem 4rem;
+  padding: var(--espacio-bajo-navbar) 1.5rem 4rem;
   background-color: var(--color-background);
 }
 

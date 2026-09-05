@@ -57,6 +57,23 @@
     --navbar-height: 6.5rem;
 
     /*
+      El escalón derivado: lo que tiene que dejar libre el <main> de una página
+      interna para que su primer título no nazca debajo de la barra fija.
+
+      Existe porque cada página resolvía ese despeje por su cuenta, con un
+      número suelto (8rem acá, 7rem allá) que ya traía sumada la altura del
+      navbar. Un número así no se puede auditar: mirándolo no se sabe cuánto es
+      barra y cuánto es aire, y si la barra cambia de alto no hay forma de
+      saber cuáles hay que tocar. Acá el aire está a la vista, y es lo único
+      que se elige.
+
+      El aire es 1.5rem porque es lo que ya rendían las páginas que estaban
+      bien: 6.5 + 1.5 = 8rem. El token unifica de dónde sale el número, no lo
+      redecora.
+    */
+    --espacio-bajo-navbar: calc(var(--navbar-height) + 1.5rem);
+
+    /*
       La perilla del sitio. Cambiar SOLO este valor reajusta todo el layout.
       Los escalones son proporcionales porque son el mismo espacio visual
       visto a distintas densidades de contenido.

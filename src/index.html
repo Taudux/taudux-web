@@ -21,6 +21,17 @@
 </head>
 
 <body>
+  <!-- El fondo de partículas de TODA la página, y por eso vive acá y no dentro
+       de una sección: encerrado en el hero se cortaba al scrollear y las
+       secciones de abajo quedaban lisas. Fijo a la ventana, así el mismo
+       lienzo acompaña el scroll en vez de repetirse por sección.
+
+       No confundir con `#particles-quienes`, que sigue adentro de "Quiénes
+       somos": aquél NO es un fondo, es un revelado —sus partículas perforan
+       una tapa para dejar ver una imagen— y depende de estar acotado a esa
+       sección. -->
+  <div id="particles-fondo" aria-hidden="true"></div>
+
   <nav class="navbar" id="navbar" aria-label="Navegación principal">
     <a href="/" class="navbar__brand">
       <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo pequeño" class="navbar__logo">
@@ -44,7 +55,6 @@
 
   <header class="hero">
     <h1 class="u-visually-hidden">Taudux — Software development &amp; data analytics</h1>
-    <div id="particles-hero" class="hero__particles" aria-hidden="true"></div>
     <div class="hero__logo-stage">
       <img src="/assets/images/01.png" alt="Taudux logo grande" class="hero__logo">
       <svg class="hero__light-overlay" viewBox="0 0 1432 872" aria-hidden="true" focusable="false">

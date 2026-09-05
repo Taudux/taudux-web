@@ -112,3 +112,172 @@ test("fields the user already filled in are never overwritten, even with a full 
   assert.equal(formulario.elements.email.value, "propio@example.com");
   assert.equal(formulario.elements.telefono.value, "0000000000");
 });
+
+/*
+  EL FONDO DE PARTÍCULAS TIENE QUE ATRAVESAR TODA LA PÁGINA.
+
+  Estaba encerrado en el hero y se cortaba al scrollear: Servicios, Tecnología
+  y Contacto quedaban lisos. Ahora el lienzo es `fixed` y vive FUERA de las
+  secciones.
+
+  Lo que lo rompía no era obvio: `.home__section` se pintaba
+  `background-color: var(--color-background)` —redundante, porque el `body` ya
+  pinta ese mismo color— y con eso TAPABA el lienzo que corre por debajo. El
+  fondo no desaparecía: quedaba cubierto. Un color pleno en una sección vuelve
+  a romperlo sin que nada falle.
+*/
+const INDEX = "src/index.html";
+const HOME_CSS = "src/app/features/home/home.css";
+const HOME_JS = "src/app/features/home/home.js";
+
+const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
+const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+test("the particle backdrop lives outside every section, so scrolling cannot end it", () => {
+  const html = sinComentariosHtml(read(INDEX));
+
+  const fondo = html.indexOf('id="particles-fondo"');
+  assert.notEqual(fondo, -1, "falta el contenedor global del fondo");
+
+  // Fuera de cualquier <section> y del <header> del hero: si estuviera dentro,
+  // volvería a terminarse con su sección.
+  const primeraSeccion = Math.min(
+    ...[html.indexOf("<header"), html.indexOf("<section")].filter((i) => i !== -1),
+  );
+  assert.ok(fondo < primeraSeccion,
+    "el fondo debe declararse ANTES del contenido, como hijo directo de <body>");
+
+  // Y el revelado de "Quiénes somos" NO es un fondo: depende de estar dentro
+  // de su sección. No se toca.
+  assert.match(html, /id="particles-quienes"/,
+    "el revelado de Quiénes somos debe seguir en su sección");
+});
+
+test("no landing section paints an opaque colour over the backdrop", () => {
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const inicio = css.indexOf(".home__section");
+  assert.notEqual(inicio, -1, "falta la regla .home__section");
+  const fin = css.indexOf("}", inicio);
+  assert.notEqual(fin, -1, "la regla .home__section no cierra");
+
+  assert.doesNotMatch(
+    css.slice(inicio, fin),
+    /background(-color)?\s*:/,
+    "un color pleno acá tapa el lienzo fijo y el fondo vuelve a 'desaparecer'",
+  );
+});
+
+test("the backdrop loader points at the global container, not the old hero one", () => {
+  const js = read(HOME_JS);
+
+  assert.match(js, /tsParticles\.load\("particles-fondo"/,
+    "el fondo debe cargarse en el contenedor global");
+  assert.doesNotMatch(js, /"particles-hero"/,
+    "el contenedor del hero ya no existe: una carga contra él sería silenciosa");
+  assert.match(js, /tsParticles\.load\("particles-quienes"/,
+    "y el revelado debe seguir cargándose aparte");
+});
+
+test("the backdrop's height doesn't follow the shrinking mobile viewport", () => {
+  /*
+    En móvil, la barra de direcciones se retrae al empezar a deslizar desde
+    arriba y el viewport CRECE de golpe. Con `inset: 0`, el contenedor del
+    lienzo seguía ese alto, y tsParticles reconstruye el canvas —3,4 MP a
+    DPR 3— cada vez que su caja cambia de tamaño: justo en el arranque del
+    scroll, que es cuando Jorge reportó el trabón.
+
+    Ojo, esto NO se arregla con `interactivity.events.resize: false`: se probó
+    el 2026-09-01 y el lienzo se reconstruyó igual, porque la librería observa
+    su propio canvas por dentro, al margen de esa opción. La única palanca es
+    que la caja deje de cambiar de alto.
+
+    `lvh` es la altura de la ventana con la barra RETRAÍDA, y no se mueve
+    mientras la barra aparece o desaparece. El fondo queda un poco más alto
+    que la pantalla cuando la barra está visible — que es exactamente lo que
+    se quiere en un fondo fijo: cubrir de más, nunca de menos.
+  */
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const inicio = css.indexOf("#particles-fondo");
+  assert.notEqual(inicio, -1, "falta la regla del contenedor del fondo");
+  const fin = css.indexOf("}", inicio);
+  assert.notEqual(fin, -1, "la regla #particles-fondo no cierra");
+  const regla = css.slice(inicio, fin);
+
+  assert.match(regla, /height:\s*100lvh/,
+    "el alto se ancla a la ventana grande, no al viewport que encoge");
+  assert.doesNotMatch(regla, /inset:\s*0\s*;/,
+    "`inset: 0` vuelve a atar el alto al viewport dinámico");
+});
+
+test("the hero stops animating once it is scrolled past", () => {
+  /*
+    Cinco animaciones INFINITAS viven en el hero: el flotar del logo, el pulso
+    de su resplandor —sobre un pseudo-elemento con `filter: blur(44px)`— y los
+    tres trazos del SVG. Medido el 2026-09-01: las cinco seguían corriendo con
+    `hero--logo-hidden` aplicada, porque `visibility: hidden` NO detiene una
+    animación CSS; sólo deja de pintarla, y el estilo se sigue recalculando en
+    cada frame.
+
+    Eso importa por el fondo: tsParticles avanza cada partícula según el DELTA
+    de tiempo entre frames, así que un frame largo no la frena — la hace
+    avanzar de golpe lo que se atrasó. Ése es el "salto brusco" que se ve al
+    deslizar, y por eso el hero tiene que callarse cuando ya no se ve.
+
+    Se fija el `animation-play-state`, no los nombres de las animaciones: si
+    mañana se agrega una sexta, la regla la cubre igual.
+  */
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const inicio = css.indexOf(".hero--logo-hidden .hero__logo-stage,");
+  assert.notEqual(inicio, -1,
+    "falta la regla que calla al hero fuera de vista");
+  const fin = css.indexOf("}", inicio);
+  const regla = css.slice(inicio, fin);
+
+  assert.match(regla, /animation-play-state:\s*paused/,
+    "fuera de vista, las animaciones del hero se pausan");
+
+  // Las tres familias tienen que estar: dejar una viva deja el frame largo.
+  ["hero__logo-stage::before", "hero__light-path"].forEach((selector) => {
+    assert.ok(regla.includes(selector),
+      `${selector} también anima en bucle: pausarlo a medias no sirve`);
+  });
+});
+
+test("the gradient and the canvas end at the same edge", () => {
+  /*
+    Las dos capas del fondo van en PAREJA: el gradiente (`body::before`) y el
+    lienzo de partículas (`#particles-fondo`) tienen que terminar en el mismo
+    borde, o se ve la costura donde una acaba y la otra sigue.
+
+    Pasó el 2026-09-01: se ancló el lienzo a `100lvh` —para que la barra de
+    direcciones móvil dejara de reconstruirlo— y el gradiente se quedó con
+    `inset: 0`, atado al viewport dinámico. Con las barras visibles el
+    gradiente quedaba más corto, y en la franja sobrante seguían dibujándose
+    partículas sobre el color plano del `body` en vez del final del degradado.
+    Reproducido en Chrome: una línea horizontal idéntica a la que Jorge
+    reportó en Opera.
+
+    Se fija que ambos declaren la MISMA unidad. Anclar uno solo es justo lo
+    que causó el problema.
+  */
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const bloqueDe = (selector) => {
+    const inicio = css.indexOf(selector);
+    assert.notEqual(inicio, -1, `falta la regla ${selector}`);
+    const fin = css.indexOf("}", inicio);
+    assert.notEqual(fin, -1, `la regla ${selector} no cierra`);
+    return css.slice(inicio, fin);
+  };
+
+  ["body::before", "#particles-fondo"].forEach((selector) => {
+    const regla = bloqueDe(selector);
+    assert.match(regla, /height:\s*100lvh/,
+      `${selector} debe anclarse al viewport grande, como su pareja`);
+    assert.doesNotMatch(regla, /inset:\s*0\s*;/,
+      `${selector} con 'inset: 0' vuelve a estirarse con el viewport dinámico`);
+  });
+});
