@@ -6,7 +6,12 @@
     top: 0;
     left: 0;
     width: 100%;
-    padding-block: 1rem;
+    /*
+      El alto deja de emerger del logo + el padding: se declara desde la
+      perilla única (styles.css). box-sizing: border-box (reset de
+      styles.css) hace que el borde de abajo quede DENTRO de este alto.
+    */
+    block-size: var(--navbar-height);
     /*
       El navbar sigue siendo de borde a borde (su fondo con blur en ::before
       lo necesita, ver abajo), pero su contenido se alinea con .u-contenedor.
@@ -28,9 +33,9 @@
     align-items: center;
     border-bottom: 1px solid transparent;
     z-index: var(--z-navbar);
-    transition:
-      border-color 0.5s ease-out,
-      padding 0.3s ease;
+    /* Sin `padding` acá: con block-size fijo ya no hay padding que anime al
+       entrar/salir .navbar--scrolled (ver esa regla, ahora sólo pintura). */
+    transition: border-color 0.5s ease-out;
   }
 
   /* El fondo con blur vive en un pseudo-elemento y se transiciona su opacity
@@ -57,19 +62,14 @@
       visibility 0s linear 0.5s;
   }
 
+  /* Con .navbar dimensionado por block-size, esta clase ya no dimensiona
+     nada: sólo pinta (fondo, borde). El alto no cambia al hacer scroll. */
   .navbar--scrolled {
     border-bottom-color: color-mix(
       in srgb,
       var(--color-text) 5%,
       transparent
     );
-    /*
-      padding-block solamente, NUNCA el shorthand `padding:`. El shorthand
-      reimpondría un padding-inline fijo y rompería la alineación con el
-      contenido justo al hacer scroll, que es cuando el navbar tiene fondo
-      y la desalineación más se nota.
-    */
-    padding-block: 0.5rem;
   }
 
   .navbar--scrolled::before {
@@ -95,7 +95,7 @@
 
   .navbar__logo {
     width: auto;
-    height: 64px;
+    height: 4rem;
     object-fit: contain;
   }
 
@@ -576,24 +576,6 @@
     */
     .nav-menu__group--nav + .nav-menu__divider {
       display: none;
-    }
-  }
-
-  @media (max-width: 360px) {
-    .navbar__brand {
-      flex: 1 1 auto;
-      min-inline-size: 0;
-    }
-
-    .navbar__logo {
-      max-inline-size: 100%;
-      height: auto;
-      max-block-size: 64px;
-    }
-
-    .navbar__links--simple {
-      flex: 0 1 auto;
-      min-inline-size: 0;
     }
   }
 }

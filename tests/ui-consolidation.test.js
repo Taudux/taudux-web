@@ -536,20 +536,42 @@ test("every page container carries its u-contenedor* class in the markup", () =>
 });
 
 test("the navbar aligns with the content, but scrolling never reimposes a fixed side padding", () => {
-  const css = read("src/app/shared/navbar/navbar.css");
+  // Sin comentarios ANTES de buscar la regla: la prosa de navbar.css nombra
+  // `.navbar--scrolled` y una captura sobre el texto crudo podría engancharla.
+  const css = sinComentariosCss(read("src/app/shared/navbar/navbar.css"));
 
   assert.match(css, /\.navbar\s*\{[^}]*padding-inline:\s*max\(2rem,\s*calc\(\(100%\s*-\s*var\(--ancho-sitio\)\)\s*\/\s*2\)\)/);
 
   /*
-    El shorthand `padding:` en .navbar--scrolled reimpondría un
-    padding-inline fijo y rompería la alineación justo al hacer scroll, que
-    es cuando el navbar tiene fondo y más se nota. Solo padding-block acá.
+    Con .navbar dimensionado por block-size, .navbar--scrolled deja de
+    dimensionar nada: pasa a ser sólo pintura (fondo, borde). La captura
+    tolera que el selector se vuelva una lista (`.navbar--scrolled,\n.navbar:not(...) {`),
+    que es lo que trae la fase siguiente — de ahí el `(?:,[^{]*)?` antes de la llave.
   */
-  const scrolledRule = css.match(/\.navbar--scrolled\s*\{([^}]*)\}/);
+  const scrolledRule = css.match(/\.navbar--scrolled\s*(?:,[^{]*)?\{([^}]*)\}/);
   assert.ok(scrolledRule, ".navbar--scrolled debe existir");
-  const sinComentarios = scrolledRule[1].replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.doesNotMatch(sinComentarios, /\bpadding:\s*/);
-  assert.match(sinComentarios, /padding-block:\s*0\.5rem/);
+  const cuerpo = scrolledRule[1];
+  assert.doesNotMatch(cuerpo, /\bpadding\b/);
+  assert.doesNotMatch(cuerpo, /\bpadding-block\b/);
+  assert.doesNotMatch(cuerpo, /\bblock-size\b/);
+  assert.doesNotMatch(cuerpo, /\bheight\b/);
+});
+
+test("the navbar declares its own height from the token", () => {
+  /*
+    El alto deja de emerger del logo y los paddings: .navbar lo declara desde
+    la perilla única. block-size (no min-block-size) porque el offset de
+    abajo tiene que ser exacto por construcción (design.md §2.1).
+  */
+  const css = read("src/app/shared/navbar/navbar.css");
+  const sinComentarios = sinComentariosCss(css);
+
+  const navbarRule = sinComentarios.match(/\.navbar\s*\{([^}]*)\}/);
+  assert.ok(navbarRule, ".navbar debe existir");
+  assert.match(navbarRule[1], /block-size:\s*var\(--navbar-height\)/);
+
+  // Ni .navbar ni ninguna otra regla del archivo fija height/block-size en px.
+  assert.doesNotMatch(sinComentarios, /(?<![\w-])(height|block-size):\s*\d+px/);
 });
 
 /*
