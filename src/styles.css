@@ -50,11 +50,10 @@
     --focus-ring-offset: 3px;
 
     /*
-      Alto del navbar en su estado más alto (sin scroll). En rem, no px: el
-      navbar se construye con padding en rem, así que ambos escalan juntos si
-      el usuario agranda la tipografía del navegador.
+      5.5rem = 4rem de logo + 1.5rem de aire. Es lo que la barra YA rinde
+      fuera del home; ahora está declarado en vez de emerger.
     */
-    --navbar-height: 6.5rem;
+    --navbar-height: 5.5rem;
 
     /*
       El escalón derivado: lo que tiene que dejar libre el <main> de una página
@@ -67,11 +66,11 @@
       saber cuáles hay que tocar. Acá el aire está a la vista, y es lo único
       que se elige.
 
-      El aire es 1.5rem porque es lo que ya rendían las páginas que estaban
-      bien: 6.5 + 1.5 = 8rem. El token unifica de dónde sale el número, no lo
-      redecora.
+      5.5 + 2.5 = 8rem, el mismo total de siempre. Lo que cambió es de dónde
+      sale: antes 1.5rem de aire sobre una barra declarada de más (6.5rem
+      para algo que medía 5.5), ahora 2.5rem sobre la barra real.
     */
-    --espacio-bajo-navbar: calc(var(--navbar-height) + 1.5rem);
+    --espacio-bajo-navbar: calc(var(--navbar-height) + 2.5rem);
 
     /*
       La perilla del sitio. Cambiar SOLO este valor reajusta todo el layout.
@@ -104,6 +103,17 @@
     --z-mobile-toggle: 1100;
     --z-dropdown: 1200;
     --z-toast: 1300;
+  }
+
+  @media (max-width: 760px) {
+    :root {
+      /*
+        4.1rem = 3.1rem del toggle (navbar.css:224) + 2 × 0.5rem de aire,
+        el padding-block que hoy tiene la barra compacta (navbar.css:72).
+        Es la altura que el sitio ya rinde a ≤760: acá sólo se declara.
+      */
+      --navbar-height: 4.1rem;
+    }
   }
 
   /*

@@ -593,6 +593,19 @@ test("--espacio-bajo-navbar derives from --navbar-height via calc(), not a resol
   assert.match(styles, /--espacio-bajo-navbar:\s*calc\(\s*var\(--navbar-height\)/);
 });
 
+test("--navbar-height has a mobile value inside styles.css", () => {
+  /*
+    A ≤760px la barra compacta ya mide ~4.1rem hoy (3.1rem del toggle +
+    2 × 0.5rem de aire); el token debe redeclararlo ahí en vez de dejar que
+    el valor emerja del padding suelto de cada componente.
+  */
+  const styles = read("src/styles.css");
+  assert.match(
+    styles,
+    /@media\s*\(max-width:\s*760px\)\s*\{\s*:root\s*\{[^}]*--navbar-height\s*:/,
+  );
+});
+
 test("every page that mounts the navbar derives its top offset from the shared token", () => {
   const esperados = [
     { file: "src/app/features/courses/cursos.css", needle: "padding: var(--espacio-bajo-navbar) 2rem 4rem;" },
