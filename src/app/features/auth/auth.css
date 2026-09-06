@@ -9,7 +9,13 @@
     align-items: center;
     justify-content: center;
     gap: 1.5rem;
-    padding: 6rem 1.5rem 3rem;
+    /*
+      top − bottom = alto del navbar: el desbalance corre el centro óptico
+      hacia abajo para compensar la barra fija, y justify-content: center
+      hace el resto. Antes citaba 6rem suelto; ahora la barra y el aire
+      quedan separados y auditables por separado.
+    */
+    padding: calc(var(--navbar-height) + 3rem) 1.5rem 3rem;
     background-color: var(--color-background);
   }
 

@@ -104,7 +104,7 @@
   .notas {
     position: relative;
     min-height: 100vh;
-    padding-block: calc(var(--navbar-height) + 2rem) 4rem;
+    padding-block: var(--espacio-bajo-navbar) 4rem;
     padding-inline: 2rem;
   }
 

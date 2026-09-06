@@ -719,6 +719,10 @@ test("every page that mounts the navbar derives its top offset from the shared t
     // token (cada rem es un rem que pierde el editor), pero con aire real:
     // +1.5rem conserva sus 112px de escritorio y da 24px en móvil, no 8.
     { file: "src/app/features/codigo/practica.css", needle: "padding-block: calc(var(--navbar-height) + 1.5rem) 2rem;" },
+    // El hub de lenguajes sí usa el aire completo del token: no es un editor,
+    // no hay rem que perder.
+    { file: "src/app/features/codigo/practica.css", needle: "padding-block: var(--espacio-bajo-navbar) 4rem;" },
+    { file: "src/app/features/notas/notas.css", needle: "padding-block: var(--espacio-bajo-navbar) 4rem;" },
     // El portal usa la altura pelada a propósito: su .portal__header ya pone
     // el aire por dentro (ver el comentario en portal.css).
     { file: "src/app/features/portal/portal.css", needle: "padding-block-start: var(--navbar-height);" },
@@ -745,24 +749,41 @@ test("no page hardcodes a top offset in rem anymore — the token owns it", () =
   }
 
   /*
-    Única excepción, deliberada: .auth no despeja el navbar, contrapesa un
-    centrado. Ver el test siguiente y el comentario en auth.css.
+    Sin excepciones: auth entró al sistema (decisión del 2026-09-05) y su
+    padding superior ahora deriva de --navbar-height en vez de citar un
+    número. Ver el test siguiente.
   */
-  assert.deepEqual(encontrados, ["app/features/auth/auth.css: padding: 6rem"]);
+  assert.deepEqual(encontrados, []);
 });
 
-test(".auth stays out of the shared token on purpose — it counterweights a centering", () => {
+test("the auth page derives its top offset from the token and keeps its centering", () => {
   /*
     .auth centra la tarjeta en el viewport (min-height: 100vh +
-    justify-content: center). Su 6rem/3rem no es un despeje: es el desbalance
-    que corre el centro óptico hacia abajo para compensar el navbar. Colgarlo
-    de --espacio-bajo-navbar rompería el centrado y movería seis páginas.
+    justify-content: center). Su padding superior ya no es un 6rem suelto:
+    deriva de --navbar-height + 3rem, y el +3rem/3rem (top − bottom = alto
+    del navbar) es el desbalance que sigue corriendo el centro óptico hacia
+    abajo para compensar la barra fija. El centrado lo pone
+    justify-content, no el padding — cambiar el número de aire no lo rompe.
   */
   const auth = read("src/app/features/auth/auth.css");
   const regla = auth.match(/\.auth\s*\{([^}]*)\}/);
   assert.ok(regla, ".auth debe existir");
   assert.match(regla[1], /justify-content:\s*center/);
-  assert.doesNotMatch(regla[1], /var\(--espacio-bajo-navbar\)/);
+  assert.match(regla[1], /calc\(var\(--navbar-height\)/);
+});
+
+test("the scrollport owns the anchor offset", () => {
+  /*
+    styles.css ya reserva el espacio de cualquier ancla para todo el
+    documento (html { scroll-padding-top }); repetir scroll-margin-top por
+    sección es la duplicación que ese token vino a evitar.
+  */
+  assert.match(
+    read("src/styles.css"),
+    /html\s*\{\s*scroll-padding-top:\s*var\(--navbar-height\);\s*\}/,
+  );
+  assert.doesNotMatch(read("src/app/features/legal/privacidad.css"), /scroll-margin-top/);
+  assert.doesNotMatch(read("src/app/features/courses/curso-detalle.css"), /scroll-margin-top/);
 });
 
 test("the extractor's <main> carries the class that clears the fixed navbar", () => {

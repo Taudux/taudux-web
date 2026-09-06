@@ -70,10 +70,13 @@
   -webkit-text-fill-color: transparent;
 }
 
-/* El navbar es fijo: sin este margen tapa el título al saltar por ancla. */
+/*
+  El despeje de ancla lo reserva el scrollport (styles.css: html {
+  scroll-padding-top }) para todo el documento: repetirlo acá era la
+  duplicación que ese token vino a evitar.
+*/
 .curso-detalle__section {
   margin-bottom: 2rem;
-  scroll-margin-top: 6rem;
   min-inline-size: 0;
 }
 
