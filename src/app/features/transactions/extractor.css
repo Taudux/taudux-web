@@ -81,7 +81,6 @@
       Al borrarla ese salto pasa a 6.5rem. Es un cambio de comportamiento
       real, y es el correcto: ahora coincide con el del resto del sitio.
     */
-    --ancho-sitio: 1200px;
     --transition-base: 0.3s ease;
   }
 

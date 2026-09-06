@@ -423,15 +423,23 @@ function archivosDeFeatures(extension) {
   return encontrados;
 }
 
+// Pela los bloques /* ... */ antes de buscar selectores: una mención de
+// .navbar dentro de un comentario —como las notas que explican por qué algo
+// ya no está— es legítima y no debe contarse como redefinición.
+const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
 test("no feature stylesheet redefines the shared navbar", () => {
   const hojas = archivosDeFeatures(".css");
   assert.ok(hojas.length > 0, "no se encontró ninguna hoja en features/");
 
   hojas.forEach((ruta) => {
-    const contenido = fs.readFileSync(ruta, "utf8");
-    // Sólo selectores en posición de regla: una mención dentro de un comentario
-    // —como las notas que explican por qué esto ya no está— es legítima.
-    const selectores = contenido.match(/^\s*\.(navbar|nav-menu)[\w-]*[^\n]*\{/gm) || [];
+    const contenido = sinComentariosCss(fs.readFileSync(ruta, "utf8"));
+    // Selector en posición de regla: la línea termina en `{`. `.navbar` o
+    // `.nav-menu` se buscan en CUALQUIER posición de la línea, no sólo al
+    // inicio — eso es lo que deja pasar compuestos como
+    // `body:has(.entorno) .navbar::before {` (practica.css), que un selector
+    // "empieza con .navbar" nunca vería.
+    const selectores = contenido.match(/^.*\.(navbar|nav-menu)[\w-]*.*\{\s*$/gm) || [];
     assert.deepEqual(
       selectores, [],
       `${path.relative(ROOT, ruta)} redefine el navbar; esos selectores son de ` +

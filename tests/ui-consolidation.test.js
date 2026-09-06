@@ -683,6 +683,19 @@ test("--navbar-height is one knob declared exactly once in the whole stylesheet 
   assert.deepEqual(declaran, ["styles.css"]);
 });
 
+test("--ancho-sitio is one knob too", () => {
+  /*
+    Mismo defecto que --navbar-height, en otra perilla: extractor.css
+    redeclaraba --ancho-sitio en el mismo valor (1200px) que styles.css. El
+    valor coincidente lo hacía invisible a simple vista, pero una perilla que
+    se puede pisar en silencio no es una perilla.
+  */
+  const declaran = hojasDeEstilo()
+    .filter((hoja) => /--ancho-sitio\s*:/.test(sinComentariosCss(read(`src/${hoja}`))));
+
+  assert.deepEqual(declaran, ["styles.css"]);
+});
+
 test("--espacio-bajo-navbar derives from --navbar-height via calc(), not a resolved value", () => {
   /*
     Igual que --ancho-medio con --ancho-sitio: si alguien "simplifica" el
@@ -802,4 +815,52 @@ test("the extractor's <main> carries the class that clears the fixed navbar", ()
     read("src/app/features/transactions/extractor.css"),
     /\.extractor\s*\{[^}]*padding-block-start:\s*var\(--espacio-bajo-navbar\)/,
   );
+});
+
+test("the migrated stylesheets only use the three documented breakpoints", () => {
+  /*
+    El set de breakpoints es cerrado (design.md §1.4): 360 (mínimo), 760
+    (móvil, corta brand/hamburguesa/token) y 900 (intermedio, densidad del
+    entorno de Código). Sólo se vigila en las hojas ya migradas al sistema de
+    tokens; las ~20 hojas de feature que quedan fuera del set son deuda
+    anotada en openspec/docs/sistema-de-layout.md, no un defecto de este test.
+
+    Alcance estricto: el preludio de `@media (...)`. `auth.css` declara
+    `max-width: 460px` en `.auth__card` y `max-width: 600px` en
+    `.auth__legal` — son anchos de tarjeta dentro de reglas normales, no
+    breakpoints, y no deben evaluarse.
+  */
+  const BREAKPOINTS_DOCUMENTADOS = [360, 760, 900];
+  const hojasMigradas = [
+    "styles.css",
+    "app/shared/navbar/navbar.css",
+    "app/features/codigo/practica.css",
+    "app/features/notas/notas.css",
+    "app/features/portal/portal.css",
+    "app/features/auth/auth.css",
+  ];
+
+  const fueraDelSet = [];
+  const minWidthEncontrados = [];
+
+  for (const hoja of hojasMigradas) {
+    const css = sinComentariosCss(read(`src/${hoja}`));
+    for (const preludio of css.matchAll(/@media\s*\(([^)]*)\)/g)) {
+      const condiciones = preludio[1];
+      for (const match of condiciones.matchAll(/max-width:\s*(\d+)px/g)) {
+        const valor = Number(match[1]);
+        if (!BREAKPOINTS_DOCUMENTADOS.includes(valor)) {
+          fueraDelSet.push(`${hoja}: max-width: ${valor}px`);
+        }
+      }
+      // min-width se tolera (no hay ninguno hoy en las hojas migradas): se
+      // reporta si aparece, no rompe el test por sí solo.
+      if (/min-width:\s*\d+px/.test(condiciones)) {
+        minWidthEncontrados.push(`${hoja}: ${condiciones.trim()}`);
+      }
+    }
+  }
+
+  assert.deepEqual(fueraDelSet, []);
+  assert.deepEqual(minWidthEncontrados, []);
 });

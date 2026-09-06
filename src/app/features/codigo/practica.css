@@ -1114,19 +1114,6 @@
 }
 
 /*
-  El navbar se aligera SOLO en esta feature, para que el mosaico se lea también
-  en la franja superior en vez de cortarse en seco contra una barra opaca.
-
-  Se limita con :has() en lugar de tocar .navbar directamente: ese componente lo
-  comparten el home, cursos, notas y el portal, y ninguno de ellos tiene un fondo
-  detrás que justifique el cambio.
-*/
-body:has(.practica) .navbar::before,
-body:has(.entorno) .navbar::before {
-  background-color: color-mix(in srgb, var(--color-background) 15%, transparent);
-}
-
-/*
   Fila del error. Va fuera de la capa por lo mismo que el resto de las reglas de
   Ace, y `position: absolute` no es decorativo: Ace posiciona los marcadores en
   una capa propia y sin eso el fondo se pintaría en la esquina del editor.
