@@ -513,6 +513,9 @@ test("every page container carries its u-contenedor* class in the markup", () =>
     { file: "src/app/features/legal/privacidad.html", needle: 'class="legal__container panel panel--spacious u-contenedor u-contenedor--lectura"' },
     { file: "src/app/features/courses/detalle-curso.html", needle: 'class="curso-detalle__container u-contenedor u-contenedor--lectura"' },
     { file: "src/index.html", needle: 'class="technology__carousels u-contenedor"' },
+    // El hub de Código alinea con el navbar (1200), como sus páginas hijas: con
+    // --medio (1080) el logo quedaba 60px afuera del eje de las tarjetas.
+    { file: "src/app/features/codigo/index.html", needle: 'class="entorno__container u-contenedor"' },
   ];
 
   for (const { file, needle } of esperados) {
