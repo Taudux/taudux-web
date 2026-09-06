@@ -114,11 +114,16 @@
 
   /*
     Padding superior mínimo sobre el navbar: cada rem acá es un rem que pierde el
-    editor, y el objetivo de esta pantalla es que quepa código.
+    editor, y el objetivo de esta pantalla es que quepa código. Por eso no usa
+    --espacio-bajo-navbar (2.5rem de aire) sino 1.5rem: en escritorio da los
+    112px que esta pantalla tenía cuando el token valía 6.5rem (al bajar el
+    token a 5.5rem, el +0.5rem de antes la había dejado en 96px sin que nadie
+    lo decidiera) y en móvil deja 24px — con +0.5rem sobre el token móvil
+    real (4.1rem) quedaban sólo 8px.
   */
   .practica {
     min-height: 100vh;
-    padding-block: calc(var(--navbar-height) + 0.5rem) 2rem;
+    padding-block: calc(var(--navbar-height) + 1.5rem) 2rem;
     padding-inline: 1.5rem;
     background-color: var(--color-background);
   }

@@ -575,13 +575,14 @@
 
 @media (max-width: 600px) {
   /*
-    En móvil el catálogo achica el aire, pero sigue colgando de la misma
-    perilla: el 7rem viejo era 6.5 de barra + 0.5 de aire, todo fundido en un
-    número que no se podía auditar. Acá se lee que lo que cambia es el aire
-    (1.5rem → 0.5rem), no la altura de la barra.
+    En móvil el catálogo conserva el MISMO aire que en escritorio y sólo
+    achica los laterales. Antes restaba aire (+0.5rem) porque el token de
+    escritorio mentía por 38px y sobraba; con el token móvil real (4.1rem,
+    styles.css) esa resta dejaba 8px entre la barra y el contenido. Medido el
+    2026-09-06.
   */
   .courses--catalog .courses__main {
-    padding: calc(var(--navbar-height) + 0.5rem) 1rem 3rem;
+    padding: var(--espacio-bajo-navbar) 1rem 3rem;
   }
 
   .courses--catalog .courses__header {

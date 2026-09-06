@@ -711,8 +711,14 @@ test("every page that mounts the navbar derives its top offset from the shared t
     { file: "src/app/features/legal/privacidad.css", needle: "padding: var(--espacio-bajo-navbar) 1.5rem 4rem;" },
     { file: "src/app/features/transactions/admin.css", needle: "padding-block-start: var(--espacio-bajo-navbar);" },
     { file: "src/app/features/transactions/extractor.css", needle: "padding-block-start: var(--espacio-bajo-navbar);" },
-    // El catálogo achica el aire en móvil, pero sigue colgando del navbar.
-    { file: "src/app/features/courses/cursos.css", needle: "padding: calc(var(--navbar-height) + 0.5rem) 1rem 3rem;" },
+    // El catálogo en móvil reserva el MISMO aire que en escritorio: con el
+    // token móvil ya real (4.1rem), sumarle 0.5rem dejaba 8px entre la barra
+    // y el contenido (medido el 2026-09-06).
+    { file: "src/app/features/courses/cursos.css", needle: "padding: var(--espacio-bajo-navbar) 1rem 3rem;" },
+    // El entorno de práctica se queda deliberadamente más apretado que el
+    // token (cada rem es un rem que pierde el editor), pero con aire real:
+    // +1.5rem conserva sus 112px de escritorio y da 24px en móvil, no 8.
+    { file: "src/app/features/codigo/practica.css", needle: "padding-block: calc(var(--navbar-height) + 1.5rem) 2rem;" },
     // El portal usa la altura pelada a propósito: su .portal__header ya pone
     // el aire por dentro (ver el comentario en portal.css).
     { file: "src/app/features/portal/portal.css", needle: "padding-block-start: var(--navbar-height);" },
