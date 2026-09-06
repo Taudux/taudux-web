@@ -63,8 +63,14 @@
   }
 
   /* Con .navbar dimensionado por block-size, esta clase ya no dimensiona
-     nada: sólo pinta (fondo, borde). El alto no cambia al hacer scroll. */
-  .navbar--scrolled {
+     nada: sólo pinta (fondo, borde). El alto no cambia al hacer scroll.
+     El reposo (sin scroll) se pinta igual: toda barra que NO declare
+     navbar--sobre-hero entra por el .navbar:not(...) de esta misma lista,
+     sin esperar a navbar.js. La transparencia sobre un hero es opt-in del
+     markup (navbar--sobre-hero, hoy sólo el home) — no se infiere de .hero,
+     porque el extractor también tiene .hero y debe arrancar con fondo. */
+  .navbar--scrolled,
+  .navbar:not(.navbar--sobre-hero) {
     border-bottom-color: color-mix(
       in srgb,
       var(--color-text) 5%,
@@ -72,7 +78,8 @@
     );
   }
 
-  .navbar--scrolled::before {
+  .navbar--scrolled::before,
+  .navbar:not(.navbar--sobre-hero)::before {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.5s ease-out, visibility 0s;
@@ -88,7 +95,8 @@
     transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
   }
 
-  .navbar--scrolled .navbar__brand {
+  .navbar--scrolled .navbar__brand,
+  .navbar:not(.navbar--sobre-hero) .navbar__brand {
     opacity: 1;
     transform: translateY(0);
   }

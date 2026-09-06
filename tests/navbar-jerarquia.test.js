@@ -231,6 +231,18 @@ test("the navbar resolves the profile once and reuses it for both role and name"
   );
 });
 
+test("the navbar is resolved by class, not by id", () => {
+  /*
+    montarNavegacionMovil() (:441) ya resolvía la barra con querySelector(".navbar");
+    la función que calcula el estado por scroll seguía usando getElementById("navbar"),
+    una contradicción dentro del mismo archivo (design.md §3.2). El id se borra
+    del markup en esta fase: esta línea era su único consumidor en todo el repo.
+  */
+  const fuente = read("src/app/shared/navbar/navbar.js");
+  assert.match(fuente, /document\.querySelector\(["']\.navbar["']\)/);
+  assert.doesNotMatch(fuente, /getElementById\(["']navbar["']\)/);
+});
+
 test("filtrarEnlacesVisibles does not mutate the shared base array", () => {
   // ENLACES_NAVEGACION_BASE es un módulo compartido: filtrarlo en una página no
   // puede dejar el menú recortado para la siguiente.

@@ -575,6 +575,81 @@ test("the navbar declares its own height from the token", () => {
 });
 
 /*
+  === El estado del navbar deja de estar hardcodeado ===
+
+  Las páginas traían `navbar--scrolled` escrito a mano en el HTML (pinta en
+  el primer frame, pero es un estado que debería derivarse, no declararse
+  por página) y el home resolvía su propio `<nav>` por `id="navbar"`. Los
+  tres tests que siguen fijan el reemplazo: reposo pintado por CSS,
+  transparencia como opt-in explícito del markup (design.md §0.1, §3).
+*/
+
+const paginasHtml = () =>
+  fs.readdirSync(path.join(ROOT, "src"), { recursive: true })
+    .filter((archivo) => /\.html$/.test(archivo))
+    .map((archivo) => archivo.split(path.sep).join("/"));
+
+test("no page hardcodes the navbar state", () => {
+  /*
+    El estado por scroll lo calcula navbar.js en tiempo de carga; que una
+    página lo traiga ya escrito en el HTML es exactamente el defecto que
+    corrige esta fase (specs/navegacion/spec.md, "Estado Del Navbar Derivado,
+    No Hardcodeado"). El id="navbar" tampoco sobrevive: navbar.js pasa a
+    resolver la barra por clase.
+  */
+  const conEstadoHardcodeado = [];
+  const conIdNavbar = [];
+  for (const pagina of paginasHtml()) {
+    const html = read(`src/${pagina}`);
+    if (/navbar--scrolled/.test(html)) conEstadoHardcodeado.push(pagina);
+    if (/id="navbar"/.test(html)) conIdNavbar.push(pagina);
+  }
+  assert.deepEqual(
+    conEstadoHardcodeado, [],
+    `páginas que todavía escriben navbar--scrolled en el markup: ${conEstadoHardcodeado.join(", ")}`
+  );
+  assert.deepEqual(
+    conIdNavbar, [],
+    `páginas que todavía declaran id="navbar": ${conIdNavbar.join(", ")}`
+  );
+});
+
+test("transparency is declared, not sniffed", () => {
+  /*
+    La transparencia sobre el hero es opt-in del markup, no inferida de
+    `.hero`: el extractor también tiene `.hero` (transactions/index.html:61)
+    y NO debe arrancar transparente (design.md §0.1). Sólo el home declara
+    navbar--sobre-hero.
+  */
+  const conClaseSobreHero = paginasHtml().filter((pagina) =>
+    /navbar--sobre-hero/.test(read(`src/${pagina}`))
+  );
+  assert.deepEqual(
+    conClaseSobreHero, ["index.html"],
+    `se esperaba que sólo src/index.html declarara navbar--sobre-hero; se encontró en: ${conClaseSobreHero.join(", ") || "ninguna página"}`
+  );
+});
+
+test("a page without JS still paints its navbar", () => {
+  /*
+    El reposo (fondo + logo) lo pinta CSS, no JS: toda barra que no declare
+    navbar--sobre-hero arranca con `::before` visible desde el primer frame,
+    sin esperar a que corra navbar.js (design.md §0.2, §3.2) — evita el
+    parpadeo que tendrían las 21 páginas si el reposo se calculara recién en
+    DOMContentLoaded.
+  */
+  const css = sinComentariosCss(read("src/app/shared/navbar/navbar.css"));
+  const selector = ".navbar:not(.navbar--sobre-hero)::before";
+  const inicioSelector = css.indexOf(selector);
+  assert.notEqual(inicioSelector, -1, `debe existir el selector ${selector} en navbar.css`);
+
+  const cierre = css.indexOf("}", inicioSelector);
+  const apertura = css.lastIndexOf("{", cierre);
+  const cuerpo = css.slice(apertura + 1, cierre);
+  assert.match(cuerpo, /opacity:\s*1/, "el reposo debe pintar con opacity: 1 sin esperar a navbar.js");
+});
+
+/*
   === El offset bajo el navbar fijo ===
 
   Mismo patrón que --ancho-sitio: una perilla (--navbar-height) y un escalón

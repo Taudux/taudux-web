@@ -147,7 +147,7 @@ window.addEventListener("taudux:operation-error", () => {
 });
 
 function actualizarEstadoVisualNavbar() {
-  const navbar = document.getElementById("navbar");
+  const navbar = document.querySelector(".navbar");
   if (!navbar) return;
 
   const desplazado = window.scrollY > 60;
