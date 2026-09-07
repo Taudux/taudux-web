@@ -348,6 +348,18 @@ function pintarResultado(datos) {
   }
 
   especialesVigentes = datos.especiales || null;
+
+  /*
+    La sección se revela ANTES de pintar cualquier gráfica, no al final.
+    `pintarIndicadores()` dibuja la de meses sin intereses y `limpiarFiltros()`
+    dispara aplicarFiltros → recalcular → pintarGraficas → dibujarPanel; las dos
+    miden `clientWidth` para fijar el `viewBox` del SVG. Con `#resultado`
+    todavía en `display:none` ese ancho da 0: caen al 720 de respaldo y el SVG
+    sale angosto o estirado, con el texto y la marca de agua fuera de tamaño.
+    Nada se pinta a medias: todo esto es síncrono y el navegador recién dibuja
+    cuando la función termina.
+  */
+  el("resultado").classList.add("resultado--visible");
   pintarIndicadores(ind);
 
   // Filtros: opciones de banco según lo que trajo el archivo.
@@ -363,7 +375,6 @@ function pintarResultado(datos) {
     : `${datos.n} movimientos`;
 
   actualizarCuota(datos.cuota);
-  el("resultado").classList.add("resultado--visible");
   el("resultado").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -872,6 +883,11 @@ function conectarTooltipMsi(meses) {
 // El margen superior deja aire para las etiquetas de valor del punto más alto:
 // con 12 px, el número del máximo se cortaba contra el borde del SVG.
 const MARGEN = { arriba: 26, derecha: 14, abajo: 30, izquierda: 62 };
+// Los dos paneles apilados le piden a la marca de agua el tamaño del más
+// chico (el de saldo): así el mismo logo sale IDÉNTICO en ambos, en vez de
+// que cada panel lo escale a su propia altura.
+const ALTO_FLUJOS = 190;
+const ALTO_SALDO = 160;
 let serieActual = [];
 
 /*
@@ -879,6 +895,12 @@ let serieActual = [];
   (logo-horizontal.png, 2048x724), sin redibujar ni recomponer. Se encaja en
   el área de datos por el lado que primero tope y preserveAspectRatio remata:
   el logo jamás se estira, sólo escala.
+
+  Se centra sobre el SVG COMPLETO, no sobre la zona de datos: los rótulos del
+  eje son parte del marco, y el ojo lee la tarjeta entera, no el hueco que dejan.
+  Y cuando dos paneles se apilan comparten un solo tamaño a través de
+  `altoReferencia` — sin eso, cada uno lo calcula de su propia altura y el
+  mismo logo sale a dos tamaños distintos en la misma tarjeta.
 */
 /* La ruta es `/assets/images/`, la del sitio, y NO `/static/`.
 
@@ -889,16 +911,25 @@ let serieActual = [];
    una mancha del fondo, no como un error. Nadie lo vio durante semanas. */
 const MARCA_URL = "/assets/images/logo-horizontal.png";
 const MARCA_ASPECTO = 2048 / 724;
+// Un sello, no un póster: la marca crece con el panel hasta MARCA_ALTO de su
+// alto de referencia y nunca pasa de MARCA_ANCHO_MAX píxeles de ancho. Sin el
+// tope, en el visor (paneles más altos y anchos) salía al doble que en la
+// tarjeta; sin la fracción, en la tarjeta quedaba chica.
+const MARCA_ALTO = 0.82;
+const MARCA_ANCHO_MAX = 480;
 
-function marcaAgua(ancho, alto, margen) {
+function marcaAgua(ancho, alto, margen, altoReferencia = alto) {
   const zonaAncho = ancho - margen.izquierda - margen.derecha;
   const zonaAlto = alto - margen.arriba - margen.abajo;
-  let w = zonaAncho * 0.72;
+  let w = Math.min(zonaAncho * 0.72, MARCA_ANCHO_MAX);
   let h = w / MARCA_ASPECTO;
-  const topeAlto = zonaAlto * 0.82;
+  // El tope sale del alto del SVG de referencia, no de su banda de datos: la
+  // caja puede asomar de la banda, pero el PNG trae ~13 % de aire transparente
+  // arriba y abajo y la tinta queda dentro (saldo: tinta 29..126, banda 26..130).
+  const topeAlto = altoReferencia * MARCA_ALTO;
   if (h > topeAlto) { h = topeAlto; w = h * MARCA_ASPECTO; }
   if (w < 60) return "";                    // sin lugar, mejor sin marca
-  const x = margen.izquierda + (zonaAncho - w) / 2;
+  const x = (ancho - w) / 2;
   const y = margen.arriba + (zonaAlto - h) / 2;
   return `<image href="${MARCA_URL}" x="${x.toFixed(1)}" y="${y.toFixed(1)}"
            width="${w.toFixed(1)}" height="${h.toFixed(1)}"
@@ -1063,7 +1094,7 @@ function dibujarPanel(contenedor, series, opciones) {
         <rect x="0" y="${MARGEN.arriba - 4}" width="${ancho}"
               height="${alto - MARGEN.arriba - MARGEN.abajo + 8}"></rect>
       </clipPath></defs>
-      ${marcaAgua(ancho, alto, MARGEN)}
+      ${marcaAgua(ancho, alto, MARGEN, opciones.altoMarca || alto)}
       ${grid}
       <line class="viz-eje" x1="${MARGEN.izquierda}" y1="${alto - MARGEN.abajo}" x2="${ancho - MARGEN.derecha}" y2="${alto - MARGEN.abajo}"></line>
       <g clip-path="url(#${idClip})">${areas}${lineas}</g>
@@ -1155,7 +1186,7 @@ function pintarGraficas(serie) {
       valores: serieActual.map((d) => d.ingresos) },
     { clave: "gastos", nombre: "Gastos", clase: "viz-linea--gasto", color: rojo,
       valores: serieActual.map((d) => d.gastos) },
-  ], { descripcion: "Ingresos y gastos por día del periodo", alto: 190 });
+  ], { descripcion: "Ingresos y gastos por día del periodo", alto: ALTO_FLUJOS, altoMarca: ALTO_SALDO });
 
   const saldos = serieActual.map((d) => d.saldo);
   if (saldos.every((v) => v !== null && v !== undefined)) {
@@ -1163,7 +1194,7 @@ function pintarGraficas(serie) {
     dibujarPanel(el("lienzoSaldo"), [
       { clave: "saldo", nombre: "Saldo", clase: "viz-linea--saldo", color: cian,
         valores: saldos, area: true },
-    ], { descripcion: "Saldo al cierre de cada día", alto: 160, desdeCero: false });
+    ], { descripcion: "Saldo al cierre de cada día", alto: ALTO_SALDO, altoMarca: ALTO_SALDO, desdeCero: false });
 
     // Un saldo NEGATIVO en débito es atípico (sobregiro o error del banco).
     // Si aparece, se dice con todas sus letras en vez de dibujarlo en

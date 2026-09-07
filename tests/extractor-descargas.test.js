@@ -423,6 +423,126 @@ test("the watermark URL points at a file that actually exists under src/", () =>
 });
 
 /*
+  LAS GRÁFICAS SE MIDEN CON LA SECCIÓN OCULTA.
+
+  `pintarResultado()` llama a `ocultarTodo()` y recién al final revela
+  `#resultado` con la clase `resultado--visible` — DESPUÉS de `limpiarFiltros()`,
+  que dispara toda la cadena de pintado (aplicarFiltros → recalcular →
+  pintarGraficas → dibujarPanel). `dibujarPanel` mide `contenedor.clientWidth`
+  para fijar el `viewBox`: con la sección en `display:none` ese ancho da 0, cae
+  al 720 de respaldo, y el CSS (`.grafica__lienzo svg { width: 100% }`) estira
+  ese SVG angosto al ancho real (~1096px en escritorio): todo el texto y la
+  marca de agua salen bastante más grandes de lo que deberían.
+*/
+test("the results section is revealed before the charts are painted", () => {
+  const js = sinComentariosJs(read(SCRIPT));
+  const m = js.match(/function pintarResultado\([\s\S]*?\n\}\n/);
+  assert.ok(m, "falta pintarResultado() en el fuente");
+  const cuerpo = m[0];
+
+  const posVisible = cuerpo.indexOf("resultado--visible");
+  const posIndicadores = cuerpo.indexOf("pintarIndicadores(");
+  const posFiltros = cuerpo.indexOf("limpiarFiltros(");
+  assert.ok(posVisible >= 0, "pintarResultado debe agregar la clase resultado--visible");
+  assert.ok(posIndicadores >= 0, "pintarResultado debe llamar a pintarIndicadores()");
+  assert.ok(posFiltros >= 0, "pintarResultado debe llamar a limpiarFiltros()");
+  // La gráfica de meses sin intereses se pinta desde pintarIndicadores() y
+  // mide igual (`lienzo.clientWidth || ... || 720`): el revelado va antes de
+  // la PRIMERA gráfica, no sólo antes de las dos de abajo.
+  assert.ok(posVisible < posIndicadores && posVisible < posFiltros,
+    "pintarResultado pinta gráficas con la sección en display:none: clientWidth "
+    + "da 0, cae en el 720 de respaldo y el SVG sale angosto o estirado");
+});
+
+/*
+  LA MARCA DE AGUA VA CENTRADA EN EL SVG, NO EN LA ZONA DE DATOS, Y A UN SOLO
+  TAMAÑO EN LOS DOS PANELES APILADOS.
+
+  `marcaAgua()` centraba el logo en la zona de datos (`margen.izquierda` hacia
+  la derecha), no en el SVG completo: con MARGEN asimétrico (62 a la izquierda,
+  14 a la derecha) el logo queda corrido hacia la derecha del centro real. Y el
+  tamaño salía de la altura de CADA panel por separado — el de flujos mide 190,
+  el de saldo 160 — así que el mismo logo se veía a dos tamaños distintos en la
+  misma tarjeta.
+*/
+test("the watermark shares one size across the compact panels and is centred on the whole SVG", () => {
+  const js = sinComentariosJs(read(SCRIPT));
+
+  const mUrl = js.match(/const MARCA_URL = .+?;/);
+  const mAsp = js.match(/const MARCA_ASPECTO = .+?;/);
+  const mMargen = js.match(/const MARGEN = \{[\s\S]*?\};/);
+  const mFn = js.match(/function marcaAgua\([\s\S]*?\n\}\n/);
+  assert.ok(mUrl, "falta la constante MARCA_URL");
+  assert.ok(mAsp, "falta la constante MARCA_ASPECTO");
+  assert.ok(mMargen, "falta la constante MARGEN");
+  assert.ok(mFn, "falta la función marcaAgua()");
+
+  // Los topes del sello (fracción de alto y ancho máximo) se suman si existen;
+  // no se exigen acá para que el aserto que falle sea el de comportamiento.
+  const topes = (js.match(/const MARCA_(?:ALTO|ANCHO_MAX) = .+?;/g) || []).join("\n");
+  const { marcaAgua, MARGEN } = new Function(
+    `${mUrl[0]}\n${mAsp[0]}\n${topes}\n${mMargen[0]}\n${mFn[0]}\nreturn { marcaAgua, MARGEN };`
+  )();
+
+  // El panel de flujos mide 190 de alto; el de saldo, 160 — el más chico de
+  // los dos es la referencia que ambos deben compartir.
+  const flujos = marcaAgua(1096, 190, MARGEN, 160);
+  const saldo = marcaAgua(1096, 160, MARGEN, 160);
+
+  const parse = (svg) => ({
+    x: Number(svg.match(/\bx="([\d.]+)"/)[1]),
+    width: Number(svg.match(/\bwidth="([\d.]+)"/)[1]),
+    height: Number(svg.match(/\bheight="([\d.]+)"/)[1]),
+  });
+  const pf = parse(flujos);
+  const ps = parse(saldo);
+
+  assert.ok(Math.abs(pf.width - ps.width) < 0.05,
+    "los dos paneles deben dibujar el logo con el mismo ancho");
+  assert.ok(Math.abs(pf.height - ps.height) < 0.05,
+    "los dos paneles deben dibujar el logo con el mismo alto");
+
+  const centro = 1096 / 2;
+  assert.ok(Math.abs((pf.x + pf.width / 2) - centro) < 0.1,
+    "el logo del panel de flujos debe quedar centrado en el SVG completo");
+  assert.ok(Math.abs((ps.x + ps.width / 2) - centro) < 0.1,
+    "el logo del panel de saldo debe quedar centrado en el SVG completo");
+
+  // Con 1096 de ancho manda el alto: la marca mide 0.82 del SVG de referencia,
+  // no de su banda de datos. La caja asoma de la banda, pero el PNG trae aire
+  // transparente arriba y abajo y la tinta queda dentro igual.
+  assert.ok(Math.abs(pf.height - 160 * 0.82) < 0.05,
+    `el alto compartido debe ser 0.82 del panel de referencia (131.2), y mide ${pf.height}`);
+
+  // En el visor los paneles son más altos y anchos; sin un tope absoluto la
+  // marca crecía con ellos hasta parecer un póster. Es un sello: 480 px máximo.
+  const visor = parse(marcaAgua(1830, 285, MARGEN));
+  assert.ok(Math.abs(visor.width - 480) < 0.05,
+    `en un panel tipo visor el ancho debe clavarse en el tope de 480, y mide ${visor.width}`);
+  assert.ok(Math.abs((visor.x + visor.width / 2) - 1830 / 2) < 0.1,
+    "el logo del visor debe quedar centrado en el SVG completo");
+
+  // En móvil manda el ancho (72 % de la zona de datos): ni la fracción ni el
+  // tope lo tocan.
+  const movil = parse(marcaAgua(285, 160, MARGEN, 160));
+  const zonaAnchoMovil = 285 - MARGEN.izquierda - MARGEN.derecha;
+  assert.ok(Math.abs(movil.width - zonaAnchoMovil * 0.72) < 0.05,
+    `en móvil el ancho sigue siendo el 72 % de la zona de datos, y mide ${movil.width}`);
+});
+
+test("pintarGraficas hands both compact panels the same watermark reference height", () => {
+  const js = sinComentariosJs(read(SCRIPT));
+  const m = js.match(/function pintarGraficas\([\s\S]*?\n\}\n/);
+  assert.ok(m, "falta pintarGraficas() en el fuente");
+
+  const refs = m[0].match(/altoMarca:\s*([\w.]+)/g) || [];
+  assert.equal(refs.length, 2,
+    "los dos paneles apilados deben pasar altoMarca a dibujarPanel");
+  assert.equal(refs[0], refs[1],
+    "ambos paneles deben compartir la MISMA referencia de alto para la marca");
+});
+
+/*
   EL VISOR NECESITA UN TOPE DE ANCHO, y su ausencia se reportó desde otra
   pantalla: "no estaba centrado, estaba un poco grande".
 
