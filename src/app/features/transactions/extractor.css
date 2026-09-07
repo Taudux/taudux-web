@@ -554,8 +554,15 @@
     los monitores 16:9 — no se veía más grande, se veía igual de chata pero más
     larga. Con el tope, cuanto más alta la pantalla más proporcionada queda:
     2,5:1 en 4K contra los 5,8:1 de antes.
+
+    El tooltip queda fuera: es una capa flotante que el JS posiciona junto al
+    cursor, no una columna de contenido. Con `> *` heredaba el 100% y salía de
+    1600px de ancho. La exclusión va en `:where()` para que la regla siga
+    pesando una sola clase: `.brush`, más abajo, declara su propio ancho con
+    una clase y le gana por orden; con `:not()` a secas perdería y la barra de
+    rango mediría 1600px.
   */
-  .visor > * {
+  .visor > :where(:not(.grafica__tooltip)) {
     inline-size: 100%;
     max-inline-size: 1600px;
     margin-inline: auto;

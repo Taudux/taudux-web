@@ -565,10 +565,23 @@ test("the expanded chart viewer caps its width instead of sweeping the screen", 
 
   /* El tope va sobre los HIJOS del visor, no sobre `.visor`: el fondo tiene
      que seguir cubriendo la pantalla entera —es lo que lo hace un modal— y lo
-     que se acota es su contenido. */
-  const marca = css.indexOf(".visor > *");
+     que se acota es su contenido.
+
+     Y NO sobre el tooltip, que también es hijo directo: es una capa flotante
+     que el JS posiciona junto al cursor. Con `.visor > *` heredaba
+     `inline-size: 100%` y salía de 1600px de ancho, con los montos pegados al
+     borde derecho de la pantalla.
+
+     La exclusión va dentro de `:where()`, que no suma especificidad. Un
+     `:not(.clase)` a secas subiría la regla a dos clases y le ganaría a
+     `.brush`, que declara su propio ancho (~560px) más abajo con una sola
+     clase y hasta hoy ganaba por orden: la barra de rango pasaría a medir
+     1600px. Lo detectó la revisión del primer intento. */
+  const marca = css.indexOf(".visor > :where(:not(.grafica__tooltip))");
   assert.notEqual(marca, -1,
-    "falta el tope sobre los hijos del visor: sin él su contenido crece sin límite");
+    "falta el tope sobre los hijos del visor, excluido el tooltip flotante y "
+    + "SIN subir la especificidad (`:where(:not(...))`): con `> *` el tooltip "
+    + "mide 1600px; con `:not()` a secas la barra de rango mide 1600px");
 
   const abre = css.indexOf("{", marca);
   assert.notEqual(abre, -1, "la regla no abre");
