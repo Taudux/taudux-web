@@ -829,6 +829,10 @@ body::before {
        horizontal en vez de apilarse debajo. */
     flex-wrap: nowrap;
     gap: 40px;
+    /* En columna, align-items rige el ANCHO. El flex-start de la regla base
+       (pensado para alinear arriba en la fila de escritorio) encogía el
+       formulario a su ancho intrínseco: 236px con 282 disponibles a 390px. */
+    align-items: stretch;
   }
 
   .contact__info,

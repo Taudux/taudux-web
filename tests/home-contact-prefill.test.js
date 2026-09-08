@@ -213,6 +213,27 @@ test("the contact panel draws light, not a box", () => {
     "el resplandor no debe robar clics al formulario");
 });
 
+test("the contact panel stretches its children once it stacks on mobile", () => {
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  /*
+    La regla base trae align-items: flex-start para la fila de escritorio. Al
+    pasar a columna en ≤760px, align-items rige el eje HORIZONTAL: flex-start
+    encoge cada hijo a su ancho intrínseco y el formulario salía de 236px con
+    282 disponibles (medido a 390px). El bloque móvil tiene que devolverlo a
+    stretch.
+  */
+  const movil = css.indexOf("@media (max-width: 760px)");
+  assert.notEqual(movil, -1, "falta el bloque móvil de 760px");
+  const inicio = css.indexOf(".contact__panel {", movil);
+  assert.notEqual(inicio, -1, "falta .contact__panel dentro del bloque de 760px");
+  const regla = css.slice(inicio, css.indexOf("}", inicio));
+  assert.match(regla, /flex-direction\s*:\s*column/,
+    "la regla que apila el panel es la que debe corregir el eje transversal");
+  assert.match(regla, /align-items\s*:\s*stretch/,
+    "en columna, align-items: stretch es lo que deja al formulario ocupar el ancho");
+});
+
 test("softening the contact fields keeps their focus and error colours alive", () => {
   const css = sinComentariosCss(read(HOME_CSS));
 
