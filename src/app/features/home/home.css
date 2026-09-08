@@ -461,6 +461,15 @@ body::before {
   padding-inline: 1.25rem;
 }
 
+/* .home__section es grid y .u-contenedor trae margin-inline: auto. Un ítem
+   de grid con márgenes auto deja de estirarse y se dimensiona a fit-content:
+   el contenedor medía lo que sus tarjetas (4 × 260 + 3 × 40 = 1160) y
+   arrancaba 20px adentro del eje del logo. El 100% lo devuelve al ancho del
+   track; el tope de 1200 sigue siendo de .u-contenedor. */
+.services__container {
+  inline-size: 100%;
+}
+
 .services__title {
   text-align: center;
   font-size: 2.5rem;
@@ -476,8 +485,11 @@ body::before {
 }
 
 .services__card {
-  flex: 0 1 260px;
-  max-width: 260px;
+  /* Crecen para repartirse la fila: cuatro a 1200 dan 270 cada una y tocan
+     el eje del logo. El tope de 320 evita que una tarjeta sola en la última
+     fila se estire a todo el ancho. */
+  flex: 1 1 260px;
+  max-width: 320px;
   background-color: #111318;
   padding: 30px 10px;
   border-radius: 15px;
