@@ -516,6 +516,10 @@ test("every page container carries its u-contenedor* class in the markup", () =>
     // El hub de Código alinea con el navbar (1200), como sus páginas hijas: con
     // --medio (1080) el logo quedaba 60px afuera del eje de las tarjetas.
     { file: "src/app/features/codigo/index.html", needle: 'class="entorno__container u-contenedor"' },
+    // Notas es una herramienta (mapa + lector), no prosa: va al ancho del
+    // sitio como Código. Sin contenedor medía 1457px a 1536 y nacía en x=32,
+    // 128px afuera del eje del logo. El relleno lateral lo pone `.notas`.
+    { file: "src/app/features/notas/index.html", needle: 'class="notas__disposicion u-contenedor"' },
   ];
 
   for (const { file, needle } of esperados) {
