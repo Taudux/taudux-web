@@ -647,6 +647,10 @@
       // el proveedor devolvió un error (cancelación incluida), o es una carga
       // normal del portal arrastrando una marca vieja. Sólo la primera merece
       // aviso; la segunda se limpia en silencio, como antes.
+      // La cancelación sólo existe en la pantalla de consentimiento de Google
+      // (primera autorización de una cuenta): el selector de cuentas no tiene
+      // cancelar, y la flecha atrás vuelve al portal sin parámetros, que es
+      // el segundo caso.
       limpiarMarcaReauthEliminar();
       const errorProveedor = parametrosErrorAuth();
       if (errorProveedor) {

@@ -40,6 +40,9 @@ async function esperarSesionOauth() {
 
 async function procesarCallbackOauth() {
   // El proveedor devuelve la cancelación/rechazo como error_code en el query.
+  // Sólo llega desde la pantalla de consentimiento de Google (la primera
+  // autorización de una cuenta): el selector de cuentas no tiene cancelar, y
+  // la flecha atrás del navegador vuelve al login sin pasar por acá.
   const errorEnlace = parametrosErrorAuth();
   if (errorEnlace) {
     const cancelado =
