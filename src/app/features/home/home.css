@@ -461,6 +461,26 @@ body::before {
   padding-inline: 1.25rem;
 }
 
+/*
+  Luz en lugar de caja, como el contacto (decisión del 2026-09-08): las
+  tarjetas dejaron de ser rectángulos sólidos sobre las estrellas y el
+  contenido se apoya en un resplandor radial detrás de toda la sección. Mismo
+  contrato que .contact::before: pseudo-elemento por debajo del contenido,
+  nunca un background de la sección (tapa el lienzo de partículas). El foco
+  cae al centro porque acá no hay una columna dominante como la del
+  formulario.
+*/
+.services::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-behind);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 45% 40% at 50% 55%, rgba(0, 180, 220, 0.08), transparent 70%),
+    radial-gradient(ellipse 65% 55% at 50% 50%, rgba(24, 82, 210, 0.16), transparent 70%);
+}
+
 /* .home__section es grid y .u-contenedor trae margin-inline: auto. Un ítem
    de grid con márgenes auto deja de estirarse y se dimensiona a fit-content:
    el contenedor medía lo que sus tarjetas (4 × 260 + 3 × 40 = 1160) y
@@ -490,20 +510,38 @@ body::before {
      fila se estire a todo el ancho. */
   flex: 1 1 260px;
   max-width: 320px;
-  background-color: #111318;
+  /* Sin fondo ni sombra: la caja se fue con la decisión de "luz, no caja".
+     El radio se queda porque le da forma al halo del hover (::after). */
   padding: 30px 10px;
   border-radius: 15px;
-  box-shadow: var(--shadow-panel);
   text-align: center;
   opacity: 0;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 0.3s ease;
   position: relative;
+}
+
+/* El halo del hover es un pseudo-elemento que sólo cambia de opacidad: los
+   degradados no interpolan, así que animar `background` saltaría en vez de
+   encenderse. Va detrás del contenido de la tarjeta y no roba el hover. */
+.services__card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-behind);
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 60% at 50% 35%, rgba(24, 82, 210, 0.22), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .services__card:hover {
   transform: translateY(-15px);
   z-index: var(--z-hover);
-  box-shadow: 0 0 25px var(--color-accent-dark);
+}
+
+.services__card:hover::after {
+  opacity: 1;
 }
 
 .services__card--visible {

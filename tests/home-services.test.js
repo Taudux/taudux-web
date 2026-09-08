@@ -46,3 +46,39 @@ test("the services cards grow to share the row instead of pinning at 260px", () 
   assert.match(tarjeta, /max-width\s*:\s*320px/,
     "con tope de 320 una tarjeta sola en la última fila no se estira a todo el ancho");
 });
+
+/*
+  Luz en lugar de caja, como el contacto (decisión del 2026-09-08). Las
+  tarjetas eran rectángulos #111318 con sombra sobre el campo de estrellas; ahora
+  el contenido se apoya en un resplandor radial detrás de la sección y el hover
+  enciende un halo propio, sin volver a dibujar la caja con una sombra.
+*/
+test("the services cards draw light, not boxes", () => {
+  const css = sinComentariosCss(read(HOME_CSS));
+
+  const tarjeta = reglaDe(css, ".services__card");
+  assert.doesNotMatch(tarjeta, /background(-color)?\s*:\s*(#|rgb|var\()/,
+    "la tarjeta no pinta un fondo sólido: las estrellas se ven a través");
+  assert.doesNotMatch(tarjeta, /box-shadow\s*:\s*(?!none)/,
+    "sin sombra de caja en reposo");
+
+  const hover = reglaDe(css, ".services__card:hover");
+  assert.match(hover, /translateY\(/, "la elevación del hover se conserva");
+  assert.doesNotMatch(hover, /box-shadow\s*:/,
+    "una sombra en hover redibuja el rectángulo que acabamos de quitar");
+
+  // El halo del hover vive en un pseudo-elemento que sólo cambia de opacidad:
+  // los degradados no interpolan, así que animar `background` saltaría.
+  const halo = reglaDe(css, ".services__card::after");
+  assert.match(halo, /radial-gradient/, "el halo es radial, como el resplandor de la sección");
+  assert.match(halo, /opacity\s*:\s*0/, "apagado en reposo");
+  assert.match(halo, /pointer-events\s*:\s*none/, "el halo no roba el hover a la tarjeta");
+  assert.match(reglaDe(css, ".services__card:hover::after"), /opacity\s*:\s*1/,
+    "encendido en hover");
+
+  // Mismo contrato que .contact::before (home-contact-prefill.test.js).
+  const bloom = reglaDe(css, ".services::before");
+  assert.match(bloom, /radial-gradient/, "el resplandor de la sección es radial");
+  assert.match(bloom, /z-index\s*:\s*var\(--z-behind\)/, "va detrás del contenido");
+  assert.match(bloom, /pointer-events\s*:\s*none/, "no intercepta clics");
+});
