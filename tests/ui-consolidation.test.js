@@ -794,9 +794,11 @@ test("the scrollport owns the anchor offset", () => {
     documento (html { scroll-padding-top }); repetir scroll-margin-top por
     sección es la duplicación que ese token vino a evitar.
   */
+  // La barra la pone el token; el 1rem es el único aire que se elige, y se
+  // elige acá para todas las anclas a la vez (decisión del 2026-09-08).
   assert.match(
     read("src/styles.css"),
-    /html\s*\{\s*scroll-padding-top:\s*var\(--navbar-height\);\s*\}/,
+    /html\s*\{\s*scroll-padding-top:\s*calc\(var\(--navbar-height\)\s*\+\s*1rem\);\s*\}/,
   );
   assert.doesNotMatch(read("src/app/features/legal/privacidad.css"), /scroll-margin-top/);
   assert.doesNotMatch(read("src/app/features/courses/curso-detalle.css"), /scroll-margin-top/);

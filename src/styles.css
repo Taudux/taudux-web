@@ -119,10 +119,11 @@
   /*
     El navbar es fixed y taparía el inicio de cualquier ancla. Reservar el
     espacio acá, en el scrollport, cubre todos los anclajes del documento en
-    una sola regla en vez de repetir scroll-margin-top por sección.
+    una sola regla en vez de repetir scroll-margin-top por sección. El 1rem
+    es aire: sin él, el título de la sección nacía pegado al borde de la barra.
   */
   html {
-    scroll-padding-top: var(--navbar-height);
+    scroll-padding-top: calc(var(--navbar-height) + 1rem);
   }
 
   body {
