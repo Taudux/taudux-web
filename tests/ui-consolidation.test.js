@@ -520,6 +520,7 @@ test("every page container carries its u-contenedor* class in the markup", () =>
     // sitio como Código. Sin contenedor medía 1457px a 1536 y nacía en x=32,
     // 128px afuera del eje del logo. El relleno lateral lo pone `.notas`.
     { file: "src/app/features/notas/index.html", needle: 'class="notas__disposicion u-contenedor"' },
+    { file: "src/app/features/transactions/index.html", needle: 'class="extractor__contenido u-contenedor"' },
   ];
 
   for (const { file, needle } of esperados) {
@@ -808,19 +809,31 @@ test("the scrollport owns the anchor offset", () => {
   assert.doesNotMatch(read("src/app/features/courses/curso-detalle.css"), /scroll-margin-top/);
 });
 
-test("the extractor's <main> carries the class that clears the fixed navbar", () => {
+test("the extractor's <main> clears the navbar and pads the sides; the container inside stays padless", () => {
   /*
     El defecto que originó todo el cambio: este <main> no tenía ningún padding
     superior y el título del hero quedaba tapado por el navbar fijo.
+
+    Segunda vuelta (2026-09-08): extractor.css redeclaraba `.u-contenedor` con
+    padding-inline sobre el MISMO elemento que era el contenedor, así que el
+    contenido medía 1152 y nacía 24px adentro del eje del logo. El patrón del
+    sitio es relleno en el padre y contenedor sin relleno (.contact/.services):
+    el <main> pone el aire y un hijo lleva el contenedor compartido.
   */
-  assert.ok(
-    read("src/app/features/transactions/index.html").includes('<main class="extractor u-contenedor">'),
-    "el <main> del extractor debe llevar la clase .extractor junto al contenedor",
-  );
-  assert.match(
-    read("src/app/features/transactions/extractor.css"),
-    /\.extractor\s*\{[^}]*padding-block-start:\s*var\(--espacio-bajo-navbar\)/,
-  );
+  const html = read("src/app/features/transactions/index.html");
+  assert.ok(html.includes('<main class="extractor">'),
+    "el <main> del extractor lleva sólo .extractor: el contenedor va en un hijo");
+  assert.ok(html.includes('<div class="extractor__contenido u-contenedor">'),
+    "el contenedor compartido vive en .extractor__contenido, dentro del <main>");
+
+  const css = read("src/app/features/transactions/extractor.css");
+  const regla = css.match(/\.extractor\s*\{([^}]*)\}/);
+  assert.ok(regla, "falta la regla .extractor");
+  assert.match(regla[1], /padding-block-start:\s*var\(--espacio-bajo-navbar\)/);
+  assert.match(regla[1], /padding-inline:\s*1\.5rem/,
+    "el relleno lateral se declara en .extractor, no en el contenedor");
+  assert.doesNotMatch(css, /\.u-contenedor\s*\{/,
+    "extractor.css no redeclara .u-contenedor: la copia con padding-inline era la deuda de §7");
 });
 
 test("the migrated stylesheets only use the three documented breakpoints", () => {
