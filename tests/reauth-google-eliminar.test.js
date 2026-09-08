@@ -414,3 +414,34 @@ test("el portal carga portal.reauth.js antes que portal.js", () => {
   assert.ok(reauth > -1 && portal > -1, "faltan los <script> esperados");
   assert.ok(reauth < portal, "portal.reauth.js debe cargar antes que portal.js");
 });
+
+/*
+  Bloque D — el `hidden` del bloque de salidas tiene que surtir efecto.
+
+  #portalStartupActions nace con `hidden` y sólo mostrarFalloReauth() lo
+  revela. Pero su clase, .auth__actions, declara `display: flex`, y una
+  declaración de autor le gana al `[hidden] { display: none }` de la hoja del
+  navegador: sin una regla explícita el atributo no hace nada y los dos
+  botones se ven SIEMPRE, encima de un portal que cargó bien. Se vio en
+  producción con sesión válida y perfil cargado. auth.css ya protege así a
+  .auth__status, .auth__form, .auth__link-button y .auth__section.
+*/
+const AUTH_CSS = read("src/app/features/auth/auth.css");
+const sinComentariosDeCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+test("the reauth actions block stays hidden until a failure reveals it", () => {
+  assert.match(
+    PORTAL_HTML,
+    /<div class="auth__actions" id="portalStartupActions" hidden>/,
+    "el bloque de salidas debe nacer oculto y con la clase auth__actions",
+  );
+
+  const css = sinComentariosDeCss(AUTH_CSS);
+  const regla = css.match(/\.auth__actions\[hidden\]\s*\{([^}]*)\}/);
+  assert.ok(
+    regla,
+    "falta .auth__actions[hidden] en auth.css: el display: flex de la clase le "
+      + "gana al [hidden] del navegador y los botones se ven siempre",
+  );
+  assert.match(regla[1], /display:\s*none/, "la regla debe apagar el display");
+});

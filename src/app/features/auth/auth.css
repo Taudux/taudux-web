@@ -208,6 +208,12 @@
     font-size: 0.9rem;
     overflow-wrap: anywhere;
   }
+  /* El `display: flex` de arriba le gana al `[hidden]` del navegador. El portal
+     nace con este bloque oculto y sólo un fallo de reauth lo revela; sin esta
+     regla los dos botones se veían siempre, encima de un portal cargado. */
+  .auth__actions[hidden] {
+    display: none;
+  }
 
   .auth__link,
   .auth__link-button {
