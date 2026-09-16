@@ -423,6 +423,27 @@
     background-color: #fff;
   }
 
+  /*
+    Gráfica interactiva de plotly. La altura mínima reserva el espacio mientras
+    baja la librería, y el fondo es el del panel: el tema de marca deja el papel
+    transparente para que la figura se apoye en el vidrio en vez de traer su
+    propio rectángulo negro.
+  */
+  .practica__plotly {
+    inline-size: 100%;
+    min-block-size: 26rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    overflow: hidden;
+    /*
+      Mismo vidrio que el editor y por el mismo motivo: sin él, las aristas del
+      mosaico cruzan el área de datos y compiten con las series. Los datos se
+      leen limpios; el fondo sigue vivo en los márgenes.
+    */
+    background-color: color-mix(in srgb, var(--color-background-deep) 84%, transparent);
+    backdrop-filter: blur(5px);
+  }
+
   /* Tablas de resultados ---------------------------------------------- */
 
   /* Una tabla ancha hace scroll dentro de su caja, nunca en el body. */

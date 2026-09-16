@@ -35,6 +35,7 @@ function crearResultadoPractica(parcial = {}) {
     imagenes: [],
     tablas: [],
     mensajes: [],
+    plotly: { version: null, figuras: [] },
     ...parcial,
   };
 }
@@ -169,6 +170,8 @@ function interpretarResultadoPython(mensaje) {
     error: mensaje.error,
     valor: mensaje.valor,
     imagenes: mensaje.imagenes || [],
+    // Figuras de plotly serializadas, con la versión de plotly.js que las dibuja.
+    plotly: mensaje.plotly || { version: null, figuras: [] },
   });
 }
 

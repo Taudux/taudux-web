@@ -149,9 +149,88 @@ function pintarImagen(fuente) {
   resultados.appendChild(imagen);
 }
 
+/* ------------------------------------------------------------------ */
+/* Gráficas de plotly                                                   */
+/* ------------------------------------------------------------------ */
+
+/*
+  plotly.js pesa unos 4 MB, así que se carga bajo demanda y solo cuando llega la
+  primera figura: la mayoría de las ejecuciones de Python no dibujan nada y no
+  tienen por qué pagarlo.
+
+  La versión no está escrita acá: viene con la figura, leída del propio paquete
+  de Python que la produjo. Así plotly.py y plotly.js no pueden discrepar aunque
+  se suba la versión pineada en el worker.
+*/
+const cargasDePlotlyJs = new Map();
+
+function cargarPlotlyJs(version) {
+  if (window.Plotly) return Promise.resolve(window.Plotly);
+
+  // La versión sale de nuestro propio worker, pero va a parar a una URL: se
+  // valida igual, porque lo que "no puede pasar" es lo que nadie revisa.
+  if (!/^\d+\.\d+\.\d+$/.test(version || "")) {
+    return Promise.reject(new Error("versión de plotly.js desconocida"));
+  }
+
+  if (!cargasDePlotlyJs.has(version)) {
+    cargasDePlotlyJs.set(
+      version,
+      new Promise((resolver, rechazar) => {
+        const script = document.createElement("script");
+        script.src = `https://cdn.jsdelivr.net/npm/plotly.js-dist-min@${version}/plotly.min.js`;
+        script.async = true;
+        script.addEventListener("load", () => resolver(window.Plotly));
+        script.addEventListener("error", () => {
+          // Se olvida el intento para que la siguiente ejecución pueda reintentar.
+          cargasDePlotlyJs.delete(version);
+          rechazar(new Error("no se pudo descargar plotly.js"));
+        });
+        document.head.appendChild(script);
+      }),
+    );
+  }
+
+  return cargasDePlotlyJs.get(version);
+}
+
+async function pintarFigurasPlotly({ version, figuras }) {
+  if (!Array.isArray(figuras) || figuras.length === 0) return;
+  const { resultados } = obtenerElementos();
+
+  /*
+    El espacio se reserva antes de que cargue la librería: si la gráfica
+    apareciera de golpe segundos después, empujaría la consola hacia abajo justo
+    cuando el alumno la está leyendo.
+  */
+  const contenedores = figuras.map(() => {
+    const contenedor = document.createElement("div");
+    contenedor.className = "practica__plotly";
+    resultados.appendChild(contenedor);
+    return contenedor;
+  });
+
+  try {
+    const Plotly = await cargarPlotlyJs(version);
+    figuras.forEach((figuraJson, indice) => {
+      const figura = JSON.parse(figuraJson);
+      Plotly.newPlot(contenedores[indice], figura.data, figura.layout, {
+        responsive: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ["lasso2d", "select2d"],
+      });
+    });
+  } catch (error) {
+    for (const contenedor of contenedores) contenedor.remove();
+    pintarFragmento({ texto: `No se pudo dibujar la gráfica: ${error.message}\n`, flujo: "stderr" });
+  }
+}
+
 function pintarResultado(resultado) {
   for (const tabla of resultado.tablas) pintarTabla(tabla);
   for (const imagen of resultado.imagenes) pintarImagen(imagen);
+  // Asíncrono a propósito: descargar plotly.js no debe retrasar el texto.
+  pintarFigurasPlotly(resultado.plotly || {});
   for (const mensaje of resultado.mensajes) pintarFragmento({ texto: `${mensaje}\n`, flujo: "aviso" });
 
   if (resultado.valor) pintarFragmento({ texto: `${resultado.valor}\n`, flujo: "valor" });
