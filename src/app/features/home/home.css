@@ -416,21 +416,38 @@ body::before {
 }
 
 /*
-  El canvas vive DENTRO de .about__content (no suelto en la sección): queda
-  acoplado al tamaño exacto de la card y recortado por su borde redondeado,
-  así ninguna partícula se ve fuera de ella.
+  Bruma en lugar de caja (decisión del 2026-09-16, sobre el lienzo de diseño
+  "Quiénes somos sin bordes"). La tarjeta era la tapa del revelado: un borde y
+  un radio alrededor del canvas de tsParticles. La tapa se queda —el revelado
+  y el hover no cambian— pero crece más allá del texto y sus bordes se funden
+  con las estrellas por una máscara radial, sin filo.
+
+  El canvas sigue DENTRO de .about__content para acoplarse a la tarjeta; el
+  inset negativo lo estira hacia afuera y `.about { overflow: hidden }` lo
+  recorta en pantallas angostas para que nunca produzca scroll horizontal.
 */
 .about__particles {
   position: absolute;
-  inset: 0;
+  inset: -4rem -6rem;
   z-index: var(--z-base);
-  border-radius: inherit;
   overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 62% 66% at 50% 50%, #000 34%, transparent 100%);
+  mask-image: radial-gradient(ellipse 62% 66% at 50% 50%, #000 34%, transparent 100%);
 }
 
+/*
+  Las clases `panel panel--spacious` siguen en el HTML (ui-consolidation.test.js
+  las exige) y panel.css no se toca; la caja se anula desde acá, en @layer
+  features, igual que .contact__panel. El relleno de panel--spacious se queda.
+*/
 .about__content {
   position: relative;
   z-index: var(--z-content);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .about__title,
