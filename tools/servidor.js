@@ -38,6 +38,41 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const RAIZ = path.resolve(__dirname, "..", "src");
+
+/*
+  CABECERAS DE PRODUCCIÓN, TAMBIÉN EN LOCAL. Vercel manda una CSP estricta que
+  el navegador aplica a scripts, workers y fetch. Sin reproducirla acá, todo
+  funciona en desarrollo y falla en producción sin un error visible: el caso que
+  motivó esto fue micropip descargando desde PyPI, que en local pasaba y bajo la
+  CSP real moría, dejando a plotly "sin instalar".
+
+  Se leen de vercel.json para que no haya dos copias que desincronizar. Las
+  semánticas son las de Vercel: aplican TODAS las reglas cuyo `source` coincide
+  y, para una misma cabecera, gana la ÚLTIMA — reemplaza el valor entero, no lo
+  mezcla (medido en producción; ver tests/cabeceras-seguridad.test.js).
+*/
+const CONFIG_VERCEL = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "vercel.json"), "utf8"));
+
+const escaparParaRegex = (texto) => texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const REGLAS_DE_CABECERAS = (CONFIG_VERCEL.headers || []).map((regla) => ({
+  /*
+    `source` usa la sintaxis de rutas de Vercel; en este repo sólo aparece el
+    comodín `(.*)`. Se parte por él y se escapa cada trozo literal: así el resto
+    del patrón nunca se interpreta como regex por accidente.
+  */
+  patron: new RegExp(`^${regla.source.split("(.*)").map(escaparParaRegex).join(".*")}$`),
+  cabeceras: regla.headers || [],
+}));
+
+function cabecerasDeProduccion(rutaUrl) {
+  const resultado = {};
+  for (const regla of REGLAS_DE_CABECERAS) {
+    if (!regla.patron.test(rutaUrl)) continue;
+    for (const { key, value } of regla.cabeceras) resultado[key.toLowerCase()] = value;
+  }
+  return resultado;
+}
 const PUERTO = Number(process.argv[2]) || 8181;
 
 /*
@@ -114,6 +149,7 @@ const servidor = http.createServer((peticion, respuesta) => {
   }
 
   respuesta.writeHead(200, {
+    ...cabecerasDeProduccion(rutaUrl),
     "content-type": TIPOS[path.extname(destino).toLowerCase()] || "application/octet-stream",
     // La razón de ser de este archivo: en desarrollo nunca se sirve algo viejo.
     "cache-control": "no-store, must-revalidate",
