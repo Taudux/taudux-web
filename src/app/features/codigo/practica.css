@@ -369,8 +369,15 @@
 
   /* Salida ------------------------------------------------------------ */
 
+  /*
+    Crece con su contenido y se topea: una línea de salida ocupa una línea, no
+    un recuadro de 22rem casi vacío empujando la gráfica hacia abajo. Pasado el
+    tope aparece el scroll, para que un programa parlanchín no se coma la página.
+  */
   .practica__consola {
-    block-size: clamp(9rem, 26vh, 22rem);
+    block-size: auto;
+    min-block-size: 0;
+    max-block-size: clamp(9rem, 32vh, 24rem);
     margin: 0;
     padding: 0.85rem 1rem;
     border-radius: var(--radius-field);
@@ -444,35 +451,20 @@
     (papel y área) están validados junto a ella con scripts/validate_palette.js
     del skill de dataviz — no se cambian a ojo.
   */
+  /*
+    El marco es solo la lámina: mismo color que el área de trazado del tema, para
+    que la gráfica llene el rectángulo sin un recuadro interior. El isotipo va
+    dentro de la figura (ver MARCA_DE_AGUA_PLOTLY en practica.js), no acá. La
+    altura mínima coincide con la del tema (440px) para que la tarjeta no salte
+    cuando plotly.js termine de cargar.
+  */
   .practica__plotly {
-    position: relative;
-    /* Crea su propio contexto de apilamiento: el isotipo con z-index negativo
-       queda sobre esta superficie y bajo los datos, sin colarse detrás del panel. */
-    isolation: isolate;
     inline-size: 100%;
-    min-block-size: 26rem;
-    border: 1px solid rgba(170, 195, 220, 0.14);
+    min-block-size: 27.5rem;
+    border: 1px solid rgba(170, 195, 220, 0.1);
     border-radius: var(--radius-field);
     overflow: hidden;
     background-color: #111925;
-  }
-
-  /*
-    Isotipo como marca de agua: abajo a la derecha, donde ninguna gráfica pone
-    datos, al 10% de opacidad. Bajo las series y sobre la pizarra, como el sello
-    de una lámina.
-  */
-  .practica__plotly::after {
-    content: "";
-    position: absolute;
-    right: 1.1rem;
-    bottom: 1.1rem;
-    z-index: -1;
-    inline-size: 4.5rem;
-    block-size: 4.5rem;
-    background: url("/assets/images/isotipo.png") center / contain no-repeat;
-    opacity: 0.1;
-    pointer-events: none;
   }
 
   /* El atributo hidden tiene que ganar aunque .practica__consola fije display. */

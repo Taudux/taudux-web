@@ -172,6 +172,30 @@ function pintarImagen(fuente) {
 */
 const cargasDePlotlyJs = new Map();
 
+/*
+  Isotipo como marca de agua DENTRO del área de datos: centrado, bajo las series
+  y casi invisible, como el sello al fondo de una lámina. Va como imagen del
+  layout de plotly y no como CSS del contenedor, porque así queda dentro del
+  rectángulo de trazado —que es lo que se pidió— y no en la esquina del marco.
+
+  "paper" es el área de datos: (0.5, 0.5) es su centro exacto. sizing="contain"
+  conserva la proporción del logo dentro de la caja de 45% x 45%.
+*/
+const MARCA_DE_AGUA_PLOTLY = Object.freeze({
+  source: "/assets/images/isotipo.png",
+  xref: "paper",
+  yref: "paper",
+  x: 0.5,
+  y: 0.5,
+  xanchor: "center",
+  yanchor: "middle",
+  sizex: 0.45,
+  sizey: 0.45,
+  sizing: "contain",
+  opacity: 0.06,
+  layer: "below",
+});
+
 function cargarPlotlyJs(version) {
   if (window.Plotly) return Promise.resolve(window.Plotly);
 
@@ -222,7 +246,12 @@ async function pintarFigurasPlotly({ version, figuras }) {
     const Plotly = await cargarPlotlyJs(version);
     figuras.forEach((figuraJson, indice) => {
       const figura = JSON.parse(figuraJson);
-      Plotly.newPlot(contenedores[indice], figura.data, figura.layout, {
+      const layout = {
+        ...figura.layout,
+        // Se agrega a las imágenes que la figura ya traiga, nunca las reemplaza.
+        images: [...(figura.layout?.images || []), MARCA_DE_AGUA_PLOTLY],
+      };
+      Plotly.newPlot(contenedores[indice], figura.data, layout, {
         responsive: true,
         displaylogo: false,
         modeBarButtonsToRemove: ["lasso2d", "select2d"],

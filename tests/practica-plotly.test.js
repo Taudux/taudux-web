@@ -103,7 +103,7 @@ test("el tema de las gráficas comparte tipografía y acento con el sitio", () =
 
 /*
   La paleta de las series se validó con scripts/validate_palette.js del skill de
-  dataviz contra la superficie #172130: banda de luminosidad oscura, contraste
+  dataviz contra la superficie #111925: banda de luminosidad oscura, contraste
   >= 3:1 y separación bajo daltonismo (peor par adyacente dE 12.5, objetivo >= 8).
   Este test es el recordatorio de que cambiar un color exige volver a correrlo:
   la paleta anterior, elegida a ojo, deslumbraba y confundía ámbar con verde.
@@ -119,22 +119,57 @@ test("la paleta de las gráficas es exactamente la validada contra la pizarra", 
   assert.deepEqual(declarada, validada);
 
   // Y la superficie contra la que se validó es la que usa el área de trazado.
-  assert.match(WORKER, /plot_bgcolor="#172130"/);
+  assert.match(WORKER, /plot_bgcolor="#111925"/);
 });
 
-test("la gráfica se apoya en la pizarra con el isotipo como marca de agua", () => {
+test("la gráfica es una sola lámina: papel y área de trazado del mismo color", () => {
   const css = read("src/app/features/codigo/practica.css");
   const bloque = css.match(/\.practica__plotly\s*\{([\s\S]*?)\n  \}/);
   assert.ok(bloque, ".practica__plotly debe existir");
   assert.match(bloque[1], /background-color: #111925/);
   assert.doesNotMatch(bloque[1], /backdrop-filter/, "opaca: el mosaico no compite con las series");
 
-  const marca = css.match(/\.practica__plotly::after\s*\{([\s\S]*?)\n  \}/);
-  assert.ok(marca, "la marca de agua debe existir");
-  assert.match(marca[1], /isotipo\.png/);
-  assert.match(marca[1], /opacity: 0\.1;/, "90% de transparencia");
-  assert.match(marca[1], /z-index: -1/, "bajo los datos, sobre la pizarra");
-  assert.match(marca[1], /pointer-events: none/);
+  // Sin rectángulo interior: el área de trazado usa el mismo color que el marco.
+  assert.match(WORKER, /plot_bgcolor="#111925"/);
+  // Y sin la marca de agua de CSS: vive dentro de la figura.
+  assert.doesNotMatch(css, /\.practica__plotly::after/);
+});
+
+/*
+  El isotipo va DENTRO del área de datos, centrado, bajo las series y casi
+  invisible: como imagen del layout, no como CSS del marco. Si se pintara encima
+  de los datos o con opacidad notoria, dejaría de ser marca de agua.
+*/
+test("el isotipo es una marca de agua dentro de la figura, bajo los datos", () => {
+  const bloque = JS.match(/const MARCA_DE_AGUA_PLOTLY = Object\.freeze\(\{([\s\S]*?)\}\);/);
+  assert.ok(bloque, "MARCA_DE_AGUA_PLOTLY debe existir");
+  const marca = bloque[1];
+
+  assert.match(marca, /source: "\/assets\/images\/isotipo\.png"/);
+  assert.match(marca, /xref: "paper"/);
+  assert.match(marca, /x: 0\.5/);
+  assert.match(marca, /y: 0\.5/);
+  assert.match(marca, /layer: "below"/, "bajo las series");
+
+  const opacidad = Number(marca.match(/opacity: ([\d.]+)/)[1]);
+  assert.ok(opacidad > 0 && opacidad <= 0.1, `demasiado visible para una marca de agua: ${opacidad}`);
+
+  // Se suma a las imágenes de la figura, nunca las pisa.
+  assert.match(JS, /images: \[\.\.\.\(figura\.layout\?\.images \|\| \[\]\), MARCA_DE_AGUA_PLOTLY\]/);
+});
+
+/*
+  La leyenda flota dentro del área como una tarjeta en vez de reservar una
+  columna a la derecha: así la gráfica ocupa todo el ancho del marco.
+*/
+test("la leyenda flota dentro del área de datos", () => {
+  // Hasta el campo siguiente del tema: un ")" dentro de "rgba(...)" cortaría
+  // antes de tiempo una captura que buscara el primer paréntesis de cierre.
+  const leyenda = WORKER.match(/legend=dict\(([\s\S]*?)hoverlabel=dict\(/);
+  assert.ok(leyenda, "el tema debe configurar la leyenda");
+  assert.match(leyenda[1], /xanchor="right"/);
+  assert.match(leyenda[1], /yanchor="top"/);
+  assert.match(leyenda[1], /bgcolor="rgba\(17,25,37,0\.86\)"/, "semiopaca para separarse de las series");
 });
 
 /*

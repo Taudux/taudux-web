@@ -146,30 +146,50 @@ if not hasattr(_taudux_bd.BaseFigure, "_taudux_figuras"):
     _taudux_tema = _taudux_go.layout.Template(
         _taudux_pio.templates["plotly_dark"].to_plotly_json()
     )
+    # UNA SOLA SUPERFICIE. El área de trazado es del mismo color que el papel:
+    # sin el rectángulo interior, la grilla flota sobre una lámina uniforme y la
+    # gráfica llena el marco en vez de quedar encajonada en su centro. Los
+    # márgenes son los mínimos para los rótulos de eje; la leyenda ya no reserva
+    # una columna a la derecha porque flota dentro del área como una tarjeta.
     _taudux_tema.layout.update(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#172130",
+        plot_bgcolor="#111925",
         font=dict(family="Space Grotesk, sans-serif", color="#d4dbe4", size=13),
-        title=dict(font=dict(family="Orbitron, sans-serif", size=16, color="#ffffff")),
+        title=dict(
+            font=dict(family="Orbitron, sans-serif", size=16, color="#ffffff"),
+            x=0.02, xanchor="left",
+        ),
         colorway=[
             "#1ba0b6", "#c95f1c", "#8272e8", "#177a4a",
             "#b98e1a", "#d84f88", "#a26ddc", "#c4423c",
         ],
         xaxis=dict(
-            gridcolor="rgba(170,195,220,0.10)",
-            zerolinecolor="rgba(170,195,220,0.24)",
-            linecolor="rgba(170,195,220,0.28)",
+            gridcolor="rgba(170,195,220,0.09)",
+            zerolinecolor="rgba(170,195,220,0.22)",
+            showline=False,
+            ticks="",
+            title=dict(standoff=10),
         ),
         yaxis=dict(
-            gridcolor="rgba(170,195,220,0.10)",
-            zerolinecolor="rgba(170,195,220,0.24)",
-            linecolor="rgba(170,195,220,0.28)",
+            gridcolor="rgba(170,195,220,0.09)",
+            zerolinecolor="rgba(170,195,220,0.22)",
+            showline=False,
+            ticks="",
+            title=dict(standoff=10),
         ),
-        legend=dict(bgcolor="rgba(0,0,0,0)"),
+        # Tarjeta flotante arriba a la derecha, dentro del área de datos. El
+        # fondo semiopaco la separa de las series que pasen por debajo.
+        legend=dict(
+            x=0.99, y=0.98, xanchor="right", yanchor="top",
+            bgcolor="rgba(17,25,37,0.86)",
+            bordercolor="rgba(170,195,220,0.18)", borderwidth=1,
+            font=dict(size=12),
+        ),
         hoverlabel=dict(
             bgcolor="#1e2836", bordercolor="#00e1ff", font=dict(color="#ffffff")
         ),
-        margin=dict(l=56, r=24, t=56, b=52),
+        margin=dict(l=54, r=18, t=36, b=46),
+        height=440,
     )
     _taudux_pio.templates["taudux"] = _taudux_tema
     _taudux_pio.templates.default = "taudux"
