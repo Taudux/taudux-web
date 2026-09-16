@@ -74,14 +74,22 @@ function obtenerElementos() {
   };
 }
 
+/*
+  La consola existe solo cuando hay texto que mostrar. Un programa que únicamente
+  dibuja una gráfica no tiene por qué dejar un recuadro vacío encima que obligue
+  a hacer scroll para verla: se oculta al arrancar cada corrida y reaparece con
+  el primer fragmento que llega, sea print, traceback o aviso.
+*/
 function limpiarSalida() {
   const { consola, resultados } = obtenerElementos();
   consola.textContent = "";
+  consola.hidden = true;
   resultados.replaceChildren();
 }
 
 function pintarFragmento({ texto, flujo }) {
   const { consola } = obtenerElementos();
+  consola.hidden = false;
 
   const trozo = document.createElement("span");
   trozo.className = `practica__salida practica__salida--${flujo}`;

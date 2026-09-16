@@ -429,19 +429,55 @@
     transparente para que la figura se apoye en el vidrio en vez de traer su
     propio rectángulo negro.
   */
+  /*
+    La gráfica se apoya en una pizarra azulada, no en el negro del sitio. Sobre
+    negro puro, las series saturadas deslumbran —es la queja literal de "forzar
+    la vista"— y una figura de datos se lee mejor sobre un gris frío, que es la
+    superficie de todo dataviz académico en modo oscuro. El azul la emparenta con
+    el acento cian y el mosaico, así que no desentona: se lee como una lámina
+    dentro del mismo sistema.
+
+    Es opaca a propósito: el mosaico compitiendo con las series era ruido, no
+    diseño. El fondo sigue vivo en los márgenes de la página.
+
+    La paleta de las series vive en python.worker.js; los dos colores de acá
+    (papel y área) están validados junto a ella con scripts/validate_palette.js
+    del skill de dataviz — no se cambian a ojo.
+  */
   .practica__plotly {
+    position: relative;
+    /* Crea su propio contexto de apilamiento: el isotipo con z-index negativo
+       queda sobre esta superficie y bajo los datos, sin colarse detrás del panel. */
+    isolation: isolate;
     inline-size: 100%;
     min-block-size: 26rem;
-    border: var(--border-subtle);
+    border: 1px solid rgba(170, 195, 220, 0.14);
     border-radius: var(--radius-field);
     overflow: hidden;
-    /*
-      Mismo vidrio que el editor y por el mismo motivo: sin él, las aristas del
-      mosaico cruzan el área de datos y compiten con las series. Los datos se
-      leen limpios; el fondo sigue vivo en los márgenes.
-    */
-    background-color: color-mix(in srgb, var(--color-background-deep) 84%, transparent);
-    backdrop-filter: blur(5px);
+    background-color: #111925;
+  }
+
+  /*
+    Isotipo como marca de agua: abajo a la derecha, donde ninguna gráfica pone
+    datos, al 10% de opacidad. Bajo las series y sobre la pizarra, como el sello
+    de una lámina.
+  */
+  .practica__plotly::after {
+    content: "";
+    position: absolute;
+    right: 1.1rem;
+    bottom: 1.1rem;
+    z-index: -1;
+    inline-size: 4.5rem;
+    block-size: 4.5rem;
+    background: url("/assets/images/isotipo.png") center / contain no-repeat;
+    opacity: 0.1;
+    pointer-events: none;
+  }
+
+  /* El atributo hidden tiene que ganar aunque .practica__consola fije display. */
+  .practica__consola[hidden] {
+    display: none;
   }
 
   /* Tablas de resultados ---------------------------------------------- */

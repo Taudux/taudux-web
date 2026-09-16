@@ -130,34 +130,44 @@ if not hasattr(_taudux_bd.BaseFigure, "_taudux_figuras"):
 
     _taudux_bd.BaseFigure.show = _taudux_show
 
-    # Tema de marca: parte del oscuro de plotly y toma la paleta del sitio. Con
-    # el papel transparente la figura se apoya en el panel de vidrio en vez de
-    # traer su propio rectángulo negro.
+    # Tema de marca: parte del oscuro de plotly. El papel es transparente para
+    # apoyarse en la pizarra del contenedor (ver .practica__plotly en el CSS);
+    # el área de trazado es la misma pizarra un tono más clara.
+    #
+    # LA PALETA NO SE ELIGIÓ A OJO. Son los matices del sitio (cian, naranja,
+    # violeta, verde, ámbar, magenta, púrpura, rojo) escalonados para fondo
+    # oscuro y validados con scripts/validate_palette.js del skill de dataviz
+    # contra la superficie #172130: luminosidad dentro de la banda oscura,
+    # contraste >= 3:1, y separación entre vecinos bajo daltonismo con un peor
+    # par de dE 12.5 (objetivo >= 8). La versión anterior, más brillante,
+    # deslumbraba sobre negro y confundía ámbar con verde para un daltónico.
+    # El orden alterna claro/oscuro a propósito: el daltonismo confunde matiz,
+    # no luminosidad. Cambiar un color exige volver a correr el validador.
     _taudux_tema = _taudux_go.layout.Template(
         _taudux_pio.templates["plotly_dark"].to_plotly_json()
     )
     _taudux_tema.layout.update(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(11,13,15,0.55)",
-        font=dict(family="Space Grotesk, sans-serif", color="#cfd3d8", size=13),
+        plot_bgcolor="#172130",
+        font=dict(family="Space Grotesk, sans-serif", color="#d4dbe4", size=13),
         title=dict(font=dict(family="Orbitron, sans-serif", size=16, color="#ffffff")),
         colorway=[
-            "#00e1ff", "#8b7cff", "#25d366", "#e5a848",
-            "#ff5c8a", "#4fc3f7", "#c084fc", "#f97316",
+            "#1ba0b6", "#c95f1c", "#8272e8", "#177a4a",
+            "#b98e1a", "#d84f88", "#a26ddc", "#c4423c",
         ],
         xaxis=dict(
-            gridcolor="rgba(255,255,255,0.07)",
-            zerolinecolor="rgba(255,255,255,0.14)",
-            linecolor="rgba(255,255,255,0.18)",
+            gridcolor="rgba(170,195,220,0.10)",
+            zerolinecolor="rgba(170,195,220,0.24)",
+            linecolor="rgba(170,195,220,0.28)",
         ),
         yaxis=dict(
-            gridcolor="rgba(255,255,255,0.07)",
-            zerolinecolor="rgba(255,255,255,0.14)",
-            linecolor="rgba(255,255,255,0.18)",
+            gridcolor="rgba(170,195,220,0.10)",
+            zerolinecolor="rgba(170,195,220,0.24)",
+            linecolor="rgba(170,195,220,0.28)",
         ),
         legend=dict(bgcolor="rgba(0,0,0,0)"),
         hoverlabel=dict(
-            bgcolor="#1e1e1e", bordercolor="#00e1ff", font=dict(color="#ffffff")
+            bgcolor="#1e2836", bordercolor="#00e1ff", font=dict(color="#ffffff")
         ),
         margin=dict(l=56, r=24, t=56, b=52),
     )
