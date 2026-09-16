@@ -133,10 +133,15 @@ function cargarParticulasAbout() {
     },
     background: {
       color: { value: "#0d0f11" },
+      // El lockup completo (isotipo + TAUDUX + eslogan), la misma imagen del
+      // hero. `contain` y no `cover`: con `cover` la imagen de 1530×900
+      // escalaba a 898×528 en un panel de 898×483 y perdía 22px arriba y
+      // abajo —el isotipo salía con la punta cortada y el eslogan, mutilado.
+      // Estas opciones van directo al background-* CSS del canvas.
       image: "url('/assets/images/01.png')",
       position: "50% 50%",
       repeat: "no-repeat",
-      size: "cover",
+      size: "contain",
       opacity: 1,
     },
     backgroundMask: {

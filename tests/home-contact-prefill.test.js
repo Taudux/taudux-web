@@ -273,6 +273,30 @@ test("the backdrop loader points at the global container, not the old hero one",
     "y el revelado debe seguir cargándose aparte");
 });
 
+test("the about reveal fits the whole lockup, centred, without cropping", () => {
+  /*
+    El fondo del canvas de `particles-quienes` es `01.png`, el lockup completo
+    (isotipo, TAUDUX y eslogan). Con `cover` la imagen de 1530×900 escalaba a
+    898×528 en el panel de 898×483 y perdía 22 px arriba y abajo: el isotipo
+    salía con la punta cortada y el eslogan, mutilado. Decisión de Jorge
+    (2026-09-16): se queda el lockup entero, pero ajustado al panel, no
+    recortado. `contain` lo escala al alto disponible y lo centra.
+  */
+  const js = read(HOME_JS);
+  const inicio = js.indexOf('tsParticles.load("particles-quienes"');
+  assert.notEqual(inicio, -1, "falta la carga del revelado");
+  const revelado = js.slice(inicio, js.indexOf("backgroundMask", inicio));
+
+  assert.match(revelado, /image:\s*"url\('\/assets\/images\/01\.png'\)"/,
+    "el revelado destapa el lockup completo, la misma imagen del hero");
+  assert.match(revelado, /size:\s*"contain"/,
+    "contain entra completo en el panel; cover recortaba arriba y abajo");
+  assert.match(revelado, /position:\s*"50% 50%"/, "centrado en los dos ejes");
+
+  assert.match(read(INDEX), /src="\/assets\/images\/01\.png"[^>]*class="hero__logo"/,
+    "01.png sigue en el hero");
+});
+
 test("the starfield floor is one number: the animation never undercuts value.min", () => {
   /*
     tsParticles tiene DOS mínimos por propiedad animada: `value.min`, con el
