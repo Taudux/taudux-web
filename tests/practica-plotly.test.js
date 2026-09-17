@@ -192,3 +192,29 @@ test("la consola arranca oculta y solo aparece cuando hay texto", () => {
   const css = read("src/app/features/codigo/practica.css");
   assert.match(css, /\.practica__consola\[hidden\]\s*\{\s*display: none;/);
 });
+
+/*
+  Una corrida que dibuja y después falla tiene que entregar su gráfica junto con
+  el traceback, como hace Jupyter. Antes el catch mandaba `figuras: []` sin correr
+  la captura, y como la captura es la que vacía `_taudux_figuras`, la figura
+  quedaba viva en el intérprete, se acumulaba con cada corrida fallida y aparecía
+  bajo la siguiente corrida exitosa aunque no graficara nada (o, en pestaña
+  nueva, como "versión de plotly.js desconocida"). Mismo patrón para matplotlib.
+*/
+test("una corrida que falla entrega sus figuras junto con el error, no las filtra a la siguiente", () => {
+  const ejecutar = WORKER.match(/async function ejecutar\(codigo\) \{([\s\S]*?)\n\}/);
+  assert.ok(ejecutar, "falta ejecutar() en el worker");
+  const catchDeEjecucion = ejecutar[1].match(/\} catch \(error\) \{([\s\S]*)$/);
+  assert.ok(catchDeEjecucion, "falta el catch de la ejecución del código del alumno");
+  const rama = catchDeEjecucion[1];
+
+  assert.doesNotMatch(rama, /imagenes:\s*\[\]/, "el catch no debe vaciar las imágenes de matplotlib a mano");
+  assert.doesNotMatch(rama, /figuras:\s*\[\]/, "el catch no debe vaciar las figuras de plotly a mano");
+
+  // Las dos ramas capturan por el mismo camino: si el éxito y el error divergen,
+  // el bug vuelve por una de las dos.
+  const capturas = ejecutar[1].match(/capturarSalidaGrafica\(\)/g) || [];
+  assert.equal(capturas.length, 2, "éxito y error deben llamar a capturarSalidaGrafica()");
+  assert.match(WORKER, /async function capturarSalidaGrafica\(\) \{[\s\S]*CAPTURAR_FIGURAS[\s\S]*CAPTURAR_PLOTLY[\s\S]*\n\}/,
+    "capturarSalidaGrafica() cubre matplotlib y plotly");
+});

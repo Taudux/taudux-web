@@ -8,13 +8,15 @@
   La URL nunca está escrita acá: llega en el mensaje de carga desde el hilo
   principal, que la lee de practica.lenguajes.js. Una sola fuente de verdad.
 
-  Protocolo de mensajes (idéntico al de sql.worker.js):
+  Protocolo de mensajes (el de sql.worker.js, más el campo `plotly`):
     recibe { tipo: "cargar", runtime: { url, indexURL } }
     recibe { tipo: "ejecutar", codigo }
     emite  { tipo: "progreso", etapa }
            { tipo: "listo" }
            { tipo: "salida", texto, flujo }
-           { tipo: "resultado", ok, valor, imagenes, error }
+           { tipo: "resultado", ok, valor, imagenes, plotly: { version, figuras }, error }
+  `imagenes` y `plotly.figuras` viajan también cuando ok es false: lo que el
+  código dibujó antes de fallar se muestra junto con el traceback.
 */
 
 let pyodide = null;
@@ -293,8 +295,7 @@ async function ejecutar(codigo) {
 
   try {
     const valor = await pyodide.runPythonAsync(codigo);
-    const imagenes = await capturarLista(CAPTURAR_FIGURAS);
-    const figurasPlotly = await capturarLista(CAPTURAR_PLOTLY);
+    const { imagenes, figurasPlotly } = await capturarSalidaGrafica();
 
     self.postMessage({
       tipo: "resultado",
@@ -306,18 +307,37 @@ async function ejecutar(codigo) {
     });
   } catch (error) {
     /*
+      Las figuras se capturan también acá, por dos razones. La visible: lo que el
+      código dibujó antes de reventar se muestra encima del traceback, como en
+      Jupyter. La invisible: la captura es la que vacía las listas del intérprete;
+      sin ella la figura sobrevivía a la corrida fallida, se acumulaba con cada
+      error y aparecía bajo la siguiente corrida exitosa aunque no graficara nada.
+
       El message de un PythonError ya trae el traceback completo y formateado, que
       es exactamente lo que el alumno necesita leer.
     */
+    const { imagenes, figurasPlotly } = await capturarSalidaGrafica();
+
     self.postMessage({
       tipo: "resultado",
       ok: false,
       valor: null,
-      imagenes: [],
-      plotly: { version: versionPlotlyJs, figuras: [] },
+      imagenes,
+      plotly: { version: versionPlotlyJs, figuras: figurasPlotly },
       error: error?.message || String(error),
     });
   }
+}
+
+/*
+  Recoge lo que la corrida dejó dibujado, en matplotlib y en plotly, y de paso
+  deja limpias las dos listas para la corrida siguiente. Un solo camino para el
+  éxito y para el error: si divergen, el bug del zombi vuelve por uno de los dos.
+*/
+async function capturarSalidaGrafica() {
+  const imagenes = await capturarLista(CAPTURAR_FIGURAS);
+  const figurasPlotly = await capturarLista(CAPTURAR_PLOTLY);
+  return { imagenes, figurasPlotly };
 }
 
 /*
