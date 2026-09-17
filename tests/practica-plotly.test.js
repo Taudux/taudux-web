@@ -1,0 +1,220 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const ROOT = path.resolve(__dirname, "..");
+const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "utf8");
+
+/*
+  Soporte de plotly en el entorno de Python. El worker es un módulo ES que Node
+  no puede requerir como los módulos puros, así que estas pruebas leen la fuente:
+  lo que se fija son invariantes de texto que, si se rompen, rompen producción sin
+  que ningún otro test lo note.
+*/
+
+const WORKER = read("src/app/features/codigo/workers/python.worker.js");
+const JS = read("src/app/features/codigo/practica.js");
+
+function constante(nombre) {
+  const encontrada = WORKER.match(new RegExp(`const ${nombre} = ([^;]+);`));
+  assert.ok(encontrada, `no se encontró la constante ${nombre}`);
+  return encontrada[1].trim();
+}
+
+/*
+  micropip resuelve "lo último de PyPI". Sin pinear, un salto mayor de plotly.py
+  cambia el plotly.js que necesita y puede romper el dibujo un día cualquiera sin
+  un commit de por medio — el mismo motivo por el que las URLs de los runtimes
+  van pineadas.
+*/
+test("la versión de plotly.py está pineada a una versión exacta", () => {
+  const version = constante("VERSION_PLOTLY_PY").replace(/"/g, "");
+  assert.match(version, /^\d+\.\d+\.\d+$/, `versión flotante: ${version}`);
+  assert.match(WORKER, /micropip\.install\("plotly==\$\{VERSION_PLOTLY_PY\}"\)/);
+});
+
+/*
+  Instalar plotly cuesta unos 15 MB. Solo un import real debe dispararlo: la
+  palabra en un comentario o en un string no es motivo para pagar la descarga.
+*/
+test("solo un import real de plotly dispara su preparación", () => {
+  const fuente = constante("IMPORTA_PLOTLY");
+  const partes = fuente.match(/^\/(.*)\/([a-z]*)$/);
+  assert.ok(partes, "IMPORTA_PLOTLY debe ser un literal de regex");
+  const regex = new RegExp(partes[1], partes[2]);
+
+  assert.equal(regex.test("import plotly.express as px"), true);
+  assert.equal(regex.test("from plotly import graph_objects"), true);
+  assert.equal(regex.test("x = 1\n  import plotly"), true);
+
+  assert.equal(regex.test("# algún día usaré plotly"), false);
+  assert.equal(regex.test("print('plotly')"), false);
+  assert.equal(regex.test("import plotlyx"), false);
+});
+
+/*
+  plotly.express exige pandas y numpy, pero `import plotly.express` no los
+  menciona y loadPackagesFromImports no los trae. Sin cargarlos a mano, el import
+  falla pidiendo `pip install "plotly[express]"` — que acá no existe.
+*/
+test("preparar plotly carga pandas y numpy antes", () => {
+  assert.match(WORKER, /loadPackage\(\["micropip", "numpy", "pandas"\]/);
+});
+
+/*
+  `fig.show()` fuera de un notebook intenta abrir un servidor local y en WASM
+  revienta con OSError. El parche debe reemplazarlo y guardar la figura
+  serializada, no dejarlo pasar.
+*/
+test("show() queda reemplazado por la captura de la figura", () => {
+  assert.match(WORKER, /_taudux_bd\.BaseFigure\.show = _taudux_show/);
+  assert.match(WORKER, /_taudux_figuras\.append\(self\.to_json\(\)\)/);
+});
+
+/*
+  La versión de plotly.js que carga el navegador sale del propio paquete de
+  Python, no de una constante: así plotly.py y plotly.js no pueden discrepar.
+*/
+test("la versión de plotly.js viaja con la figura y se valida antes de ir a la URL", () => {
+  assert.match(WORKER, /get_plotlyjs_version\(\)/);
+  assert.match(JS, /\/\^\\d\+\\\.\\d\+\\\.\\d\+\$\/\.test\(version/);
+  assert.match(JS, /plotly\.js-dist-min@\$\{version\}\/plotly\.min\.js/);
+});
+
+test("plotly.js se carga bajo demanda y no en el arranque de la página", () => {
+  for (const pagina of ["python", "r", "sql"]) {
+    const html = read(`src/app/features/codigo/${pagina}/index.html`);
+    assert.doesNotMatch(html, /plotly/, `${pagina} no debe cargar plotly.js de entrada`);
+  }
+});
+
+/*
+  El tema de marca usa las mismas familias tipográficas y el mismo acento que el
+  resto del sitio. Si alguien cambia la paleta del sitio, este test recuerda que
+  las gráficas tienen la suya escrita a mano.
+*/
+test("el tema de las gráficas comparte tipografía y acento con el sitio", () => {
+  assert.match(WORKER, /Space Grotesk/);
+  assert.match(WORKER, /Orbitron/);
+  assert.match(WORKER, /"#00e1ff"/);
+  assert.match(WORKER, /paper_bgcolor="rgba\(0,0,0,0\)"/);
+});
+
+/*
+  La paleta de las series se validó con scripts/validate_palette.js del skill de
+  dataviz contra la superficie #111925: banda de luminosidad oscura, contraste
+  >= 3:1 y separación bajo daltonismo (peor par adyacente dE 12.5, objetivo >= 8).
+  Este test es el recordatorio de que cambiar un color exige volver a correrlo:
+  la paleta anterior, elegida a ojo, deslumbraba y confundía ámbar con verde.
+*/
+test("la paleta de las gráficas es exactamente la validada contra la pizarra", () => {
+  const validada = [
+    "#1ba0b6", "#c95f1c", "#8272e8", "#177a4a",
+    "#b98e1a", "#d84f88", "#a26ddc", "#c4423c",
+  ];
+  const bloque = WORKER.match(/colorway=\[([\s\S]*?)\]/);
+  assert.ok(bloque, "el tema debe declarar colorway");
+  const declarada = bloque[1].match(/#[0-9a-f]{6}/g);
+  assert.deepEqual(declarada, validada);
+
+  // Y la superficie contra la que se validó es la que usa el área de trazado.
+  assert.match(WORKER, /plot_bgcolor="#111925"/);
+});
+
+test("la gráfica es una sola lámina: papel y área de trazado del mismo color", () => {
+  const css = read("src/app/features/codigo/practica.css");
+  const bloque = css.match(/\.practica__plotly\s*\{([\s\S]*?)\n  \}/);
+  assert.ok(bloque, ".practica__plotly debe existir");
+  assert.match(bloque[1], /background-color: #111925/);
+  assert.doesNotMatch(bloque[1], /backdrop-filter/, "opaca: el mosaico no compite con las series");
+
+  // Sin rectángulo interior: el área de trazado usa el mismo color que el marco.
+  assert.match(WORKER, /plot_bgcolor="#111925"/);
+  // Y sin la marca de agua de CSS: vive dentro de la figura.
+  assert.doesNotMatch(css, /\.practica__plotly::after/);
+});
+
+/*
+  El isotipo va DENTRO del área de datos, centrado, bajo las series y casi
+  invisible: como imagen del layout, no como CSS del marco. Si se pintara encima
+  de los datos o con opacidad notoria, dejaría de ser marca de agua.
+*/
+test("el isotipo es una marca de agua dentro de la figura, bajo los datos", () => {
+  const bloque = JS.match(/const MARCA_DE_AGUA_PLOTLY = Object\.freeze\(\{([\s\S]*?)\}\);/);
+  assert.ok(bloque, "MARCA_DE_AGUA_PLOTLY debe existir");
+  const marca = bloque[1];
+
+  assert.match(marca, /source: "\/assets\/images\/isotipo\.png"/);
+  assert.match(marca, /xref: "paper"/);
+  assert.match(marca, /x: 0\.5/);
+  assert.match(marca, /y: 0\.5/);
+  assert.match(marca, /layer: "below"/, "bajo las series");
+
+  const opacidad = Number(marca.match(/opacity: ([\d.]+)/)[1]);
+  assert.ok(opacidad > 0 && opacidad <= 0.1, `demasiado visible para una marca de agua: ${opacidad}`);
+
+  // Se suma a las imágenes de la figura, nunca las pisa.
+  assert.match(JS, /images: \[\.\.\.\(figura\.layout\?\.images \|\| \[\]\), MARCA_DE_AGUA_PLOTLY\]/);
+});
+
+/*
+  La leyenda flota dentro del área como una tarjeta en vez de reservar una
+  columna a la derecha: así la gráfica ocupa todo el ancho del marco.
+*/
+test("la leyenda flota dentro del área de datos", () => {
+  // Hasta el campo siguiente del tema: un ")" dentro de "rgba(...)" cortaría
+  // antes de tiempo una captura que buscara el primer paréntesis de cierre.
+  const leyenda = WORKER.match(/legend=dict\(([\s\S]*?)hoverlabel=dict\(/);
+  assert.ok(leyenda, "el tema debe configurar la leyenda");
+  assert.match(leyenda[1], /xanchor="right"/);
+  assert.match(leyenda[1], /yanchor="top"/);
+  assert.match(leyenda[1], /bgcolor="rgba\(17,25,37,0\.86\)"/, "semiopaca para separarse de las series");
+});
+
+/*
+  Un programa que solo dibuja no debe dejar un recuadro de consola vacío encima
+  de la gráfica: obliga a hacer scroll para verla. La consola arranca oculta y
+  aparece con el primer fragmento que llega.
+*/
+test("la consola arranca oculta y solo aparece cuando hay texto", () => {
+  for (const pagina of ["python", "r", "sql"]) {
+    const html = read(`src/app/features/codigo/${pagina}/index.html`);
+    assert.match(html, /id="practicaConsola"[^>]*\shidden>/, `${pagina}: la consola debe arrancar oculta`);
+  }
+
+  const limpiar = JS.match(/function limpiarSalida\(\) \{([\s\S]*?)\n\}/);
+  assert.match(limpiar[1], /consola\.hidden = true/);
+
+  const pintar = JS.match(/function pintarFragmento\(\{ texto, flujo \}\) \{([\s\S]*?)\n\}/);
+  assert.match(pintar[1], /consola\.hidden = false/);
+
+  const css = read("src/app/features/codigo/practica.css");
+  assert.match(css, /\.practica__consola\[hidden\]\s*\{\s*display: none;/);
+});
+
+/*
+  Una corrida que dibuja y después falla tiene que entregar su gráfica junto con
+  el traceback, como hace Jupyter. Antes el catch mandaba `figuras: []` sin correr
+  la captura, y como la captura es la que vacía `_taudux_figuras`, la figura
+  quedaba viva en el intérprete, se acumulaba con cada corrida fallida y aparecía
+  bajo la siguiente corrida exitosa aunque no graficara nada (o, en pestaña
+  nueva, como "versión de plotly.js desconocida"). Mismo patrón para matplotlib.
+*/
+test("una corrida que falla entrega sus figuras junto con el error, no las filtra a la siguiente", () => {
+  const ejecutar = WORKER.match(/async function ejecutar\(codigo\) \{([\s\S]*?)\n\}/);
+  assert.ok(ejecutar, "falta ejecutar() en el worker");
+  const catchDeEjecucion = ejecutar[1].match(/\} catch \(error\) \{([\s\S]*)$/);
+  assert.ok(catchDeEjecucion, "falta el catch de la ejecución del código del alumno");
+  const rama = catchDeEjecucion[1];
+
+  assert.doesNotMatch(rama, /imagenes:\s*\[\]/, "el catch no debe vaciar las imágenes de matplotlib a mano");
+  assert.doesNotMatch(rama, /figuras:\s*\[\]/, "el catch no debe vaciar las figuras de plotly a mano");
+
+  // Las dos ramas capturan por el mismo camino: si el éxito y el error divergen,
+  // el bug vuelve por una de las dos.
+  const capturas = ejecutar[1].match(/capturarSalidaGrafica\(\)/g) || [];
+  assert.equal(capturas.length, 2, "éxito y error deben llamar a capturarSalidaGrafica()");
+  assert.match(WORKER, /async function capturarSalidaGrafica\(\) \{[\s\S]*CAPTURAR_FIGURAS[\s\S]*CAPTURAR_PLOTLY[\s\S]*\n\}/,
+    "capturarSalidaGrafica() cubre matplotlib y plotly");
+});

@@ -169,6 +169,27 @@ test("connect-src covers Supabase and Cloud Run — the two backends", () => {
     "sin esto el extractor no puede procesar un solo PDF");
 });
 
+test("connect-src covers PyPI — micropip installs from there, and it fails silently in local", () => {
+  /*
+    El entorno de Python instala paquetes con micropip: `import plotly` lo
+    dispara solo, y la pista de `pip install` le dice al alumno que lo use. Los
+    metadatos salen de pypi.org y las ruedas de files.pythonhosted.org.
+
+    Es el mismo tipo de fallo traicionero que el de GA4: el servidor local no
+    manda CSP, así que TODO funciona en desarrollo, y en producción el fetch
+    del worker muere con un error de CSP que el alumno ve como "plotly no
+    existe". Los paquetes de la distribución de Pyodide (numpy, pandas) vienen
+    de jsDelivr y no se ven afectados: por eso el fallo sólo aparece con lo
+    que se instala desde PyPI.
+  */
+  const conectar = directiva("connect-src");
+
+  ["https://pypi.org", "https://files.pythonhosted.org"].forEach((host) => {
+    assert.ok(conectar.includes(host),
+      `falta ${host}: micropip no puede instalar nada y plotly deja de funcionar en producción`);
+  });
+});
+
 test("img-src is limited to Supabase Storage, plus data: and blob:", () => {
   /*
     Decisión tomada: las portadas salen de Supabase Storage. `esUrlSegura()`

@@ -74,14 +74,22 @@ function obtenerElementos() {
   };
 }
 
+/*
+  La consola existe solo cuando hay texto que mostrar. Un programa que únicamente
+  dibuja una gráfica no tiene por qué dejar un recuadro vacío encima que obligue
+  a hacer scroll para verla: se oculta al arrancar cada corrida y reaparece con
+  el primer fragmento que llega, sea print, traceback o aviso.
+*/
 function limpiarSalida() {
   const { consola, resultados } = obtenerElementos();
   consola.textContent = "";
+  consola.hidden = true;
   resultados.replaceChildren();
 }
 
 function pintarFragmento({ texto, flujo }) {
   const { consola } = obtenerElementos();
+  consola.hidden = false;
 
   const trozo = document.createElement("span");
   trozo.className = `practica__salida practica__salida--${flujo}`;
@@ -149,9 +157,117 @@ function pintarImagen(fuente) {
   resultados.appendChild(imagen);
 }
 
+/* ------------------------------------------------------------------ */
+/* Gráficas de plotly                                                   */
+/* ------------------------------------------------------------------ */
+
+/*
+  plotly.js pesa unos 4 MB, así que se carga bajo demanda y solo cuando llega la
+  primera figura: la mayoría de las ejecuciones de Python no dibujan nada y no
+  tienen por qué pagarlo.
+
+  La versión no está escrita acá: viene con la figura, leída del propio paquete
+  de Python que la produjo. Así plotly.py y plotly.js no pueden discrepar aunque
+  se suba la versión pineada en el worker.
+*/
+const cargasDePlotlyJs = new Map();
+
+/*
+  Isotipo como marca de agua DENTRO del área de datos: centrado, bajo las series
+  y casi invisible, como el sello al fondo de una lámina. Va como imagen del
+  layout de plotly y no como CSS del contenedor, porque así queda dentro del
+  rectángulo de trazado —que es lo que se pidió— y no en la esquina del marco.
+
+  "paper" es el área de datos: (0.5, 0.5) es su centro exacto. sizing="contain"
+  conserva la proporción del logo dentro de la caja de 45% x 45%.
+*/
+const MARCA_DE_AGUA_PLOTLY = Object.freeze({
+  source: "/assets/images/isotipo.png",
+  xref: "paper",
+  yref: "paper",
+  x: 0.5,
+  y: 0.5,
+  xanchor: "center",
+  yanchor: "middle",
+  sizex: 0.45,
+  sizey: 0.45,
+  sizing: "contain",
+  opacity: 0.06,
+  layer: "below",
+});
+
+function cargarPlotlyJs(version) {
+  if (window.Plotly) return Promise.resolve(window.Plotly);
+
+  // La versión sale de nuestro propio worker, pero va a parar a una URL: se
+  // valida igual, porque lo que "no puede pasar" es lo que nadie revisa.
+  if (!/^\d+\.\d+\.\d+$/.test(version || "")) {
+    return Promise.reject(new Error("versión de plotly.js desconocida"));
+  }
+
+  if (!cargasDePlotlyJs.has(version)) {
+    cargasDePlotlyJs.set(
+      version,
+      new Promise((resolver, rechazar) => {
+        const script = document.createElement("script");
+        script.src = `https://cdn.jsdelivr.net/npm/plotly.js-dist-min@${version}/plotly.min.js`;
+        script.async = true;
+        script.addEventListener("load", () => resolver(window.Plotly));
+        script.addEventListener("error", () => {
+          // Se olvida el intento para que la siguiente ejecución pueda reintentar.
+          cargasDePlotlyJs.delete(version);
+          rechazar(new Error("no se pudo descargar plotly.js"));
+        });
+        document.head.appendChild(script);
+      }),
+    );
+  }
+
+  return cargasDePlotlyJs.get(version);
+}
+
+async function pintarFigurasPlotly({ version, figuras }) {
+  if (!Array.isArray(figuras) || figuras.length === 0) return;
+  const { resultados } = obtenerElementos();
+
+  /*
+    El espacio se reserva antes de que cargue la librería: si la gráfica
+    apareciera de golpe segundos después, empujaría la consola hacia abajo justo
+    cuando el alumno la está leyendo.
+  */
+  const contenedores = figuras.map(() => {
+    const contenedor = document.createElement("div");
+    contenedor.className = "practica__plotly";
+    resultados.appendChild(contenedor);
+    return contenedor;
+  });
+
+  try {
+    const Plotly = await cargarPlotlyJs(version);
+    figuras.forEach((figuraJson, indice) => {
+      const figura = JSON.parse(figuraJson);
+      const layout = {
+        ...figura.layout,
+        // Se agrega a las imágenes que la figura ya traiga, nunca las reemplaza.
+        images: [...(figura.layout?.images || []), MARCA_DE_AGUA_PLOTLY],
+      };
+      Plotly.newPlot(contenedores[indice], figura.data, layout, {
+        responsive: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ["lasso2d", "select2d"],
+      });
+    });
+  } catch (error) {
+    for (const contenedor of contenedores) contenedor.remove();
+    pintarFragmento({ texto: `No se pudo dibujar la gráfica: ${error.message}\n`, flujo: "stderr" });
+  }
+}
+
 function pintarResultado(resultado) {
   for (const tabla of resultado.tablas) pintarTabla(tabla);
   for (const imagen of resultado.imagenes) pintarImagen(imagen);
+  // Asíncrono a propósito: descargar plotly.js no debe retrasar el texto.
+  pintarFigurasPlotly(resultado.plotly || {});
   for (const mensaje of resultado.mensajes) pintarFragmento({ texto: `${mensaje}\n`, flujo: "aviso" });
 
   if (resultado.valor) pintarFragmento({ texto: `${resultado.valor}\n`, flujo: "valor" });
