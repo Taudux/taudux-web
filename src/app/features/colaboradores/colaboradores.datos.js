@@ -18,8 +18,9 @@
 const ETIQUETAS_ATRIBUTOS = ["DATOS", "SOFTWARE", "IA", "NUBE", "DOCENCIA"];
 const DISPONIBILIDADES = ["Disponible", "Parcial"];
 
-// La grilla del roster tiene cuatro columnas en todos los anchos; las flechas
-// arriba/abajo saltan de a una fila, o sea de a COLUMNAS_ROSTER fichas.
+// La grilla del roster tiene cuatro columnas en todos los anchos; en
+// moverSeleccion, arriba/abajo saltan de a una fila, o sea de a
+// COLUMNAS_ROSTER fichas.
 const COLUMNAS_ROSTER = 4;
 
 // Todo lo que la vista de perfil escribe como texto: si falta uno, quedaría un
@@ -64,6 +65,8 @@ function indicePorSlug(lista, slug) {
   Flechas sobre la grilla. No da la vuelta: en el borde se queda donde está, que
   es lo que espera quien navega una grilla con el teclado. Con la última fila
   incompleta, bajar desde una columna sin ficha debajo tampoco se mueve.
+  OJO: es lógica pura, todavía SIN conectar. colaboradores.js no escucha
+  keydown; la navegación con flechas quedó para después.
 */
 function moverSeleccion(indice, tecla, total, columnas = COLUMNAS_ROSTER) {
   const desplazamientos = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -columnas, ArrowDown: columnas };

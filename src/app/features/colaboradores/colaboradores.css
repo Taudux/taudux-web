@@ -362,10 +362,11 @@
   }
 
   /*
-    CUATRO columnas en TODOS los anchos, sin excepción por breakpoint: las
-    flechas del teclado saltan de a COLUMNAS_ROSTER fichas (moverSeleccion en
-    colaboradores.datos.js). Si un breakpoint cambia este número, ↑/↓ dejan de
-    caer en la ficha de arriba/abajo. Hay un test que lo fija.
+    CUATRO columnas en TODOS los anchos, sin excepción por breakpoint:
+    moverSeleccion (colaboradores.datos.js) salta de a COLUMNAS_ROSTER fichas.
+    Las flechas del teclado TODAVÍA no están conectadas en colaboradores.js;
+    cuando lo estén, un breakpoint con otro número haría que ↑/↓ no caigan en
+    la ficha de arriba/abajo. Hay un test que fija las columnas.
   */
   .colaboradores__grilla {
     flex: 1 1 auto;

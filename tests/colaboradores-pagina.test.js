@@ -172,12 +172,13 @@ test("the top offset derives from the navbar token and the side padding lives on
   );
 });
 
-test("the tile grid keeps the four columns the keyboard logic assumes", () => {
+test("the tile grid keeps the four columns moverSeleccion() assumes", () => {
   const { COLUMNAS_ROSTER } = require("../src/app/features/colaboradores/colaboradores.datos.js");
   const reglas = [...sinComentariosCss(CSS).matchAll(/\.colaboradores__grilla\s*[,{]([^}]*)\}/g)];
   // Las COLUMNAS se declaran una sola vez, fuera de todo breakpoint:
   // moverSeleccion() salta de a COLUMNAS_ROSTER y un ancho con otra cantidad de
-  // columnas rompería ↑/↓. Un breakpoint sí puede tocar las FILAS (en móvil
+  // columnas rompería ↑/↓ el día que se conecten las flechas (hoy la página no
+  // escucha keydown). Un breakpoint sí puede tocar las FILAS (en móvil
   // dejan de repartirse el alto de la ventana), pero nunca las columnas.
   const conColumnas = reglas.filter(([, cuerpo]) => /grid-template-columns/.test(cuerpo));
   assert.equal(conColumnas.length, 1, "las columnas de la grilla se declaran una vez y ningún breakpoint las toca");
