@@ -73,6 +73,10 @@ const ENLACES_NAVEGACION_BASE = [
       { texto: "Código", href: "/app/features/codigo/", habilitado: true },
     ],
   },
+  // Entrada propia y no un hijo de Academy: es el equipo, no material de
+  // estudio. Va pegada al grupo para quedar justo debajo de "Código" con el
+  // acordeón abierto, y entre Academy y Noticias con el acordeón cerrado.
+  { texto: "Colaboradores", href: "/app/features/colaboradores/", habilitado: true },
   { texto: "Noticias", habilitado: false },
   {
     texto: "Tools",
