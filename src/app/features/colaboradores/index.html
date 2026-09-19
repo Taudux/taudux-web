@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="Conoce a las personas que colaboran con Taudux: su rol, sus especialidades y cómo trabajar con cada una." />
+  <!-- noindex A PROPÓSITO: las doce fichas son de muestra (personas inventadas
+       que vienen del prototipo de diseño, ver colaboradores.datos.js). No deben
+       llegar a un buscador con nombres y trayectorias que no son de nadie.
+       Quitar esta etiqueta —y su aserción en tests/colaboradores-pagina.test.js—
+       cuando el equipo real reemplace el roster. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Colaboradores | Taudux</title>
+  <!-- Orbitron 900 sólo acá: los nombres y las iniciales fantasma del roster lo
+       usan, y el resto del sitio no tiene por qué descargarlo. -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/features/colaboradores/colaboradores.css">
+</head>
+
+<body class="colaboradores-page">
+  <!-- El mismo fondo de estrellas del inicio: fijo a la ventana y fuera del
+       contenido, para que acompañe el scroll en vez de cortarse con una vista. -->
+  <div id="particles-fondo" aria-hidden="true"></div>
+
+  <nav class="navbar" aria-label="Navegación principal">
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <!-- navbar.js reemplaza este botón por el menú de cuenta. El href real es
+           el respaldo si el script no llega a correr; acá no va un "#". -->
+      <a href="/app/features/auth/login/" id="accessBtn" class="navbar__link button button--access">Acceder</a>
+    </div>
+  </nav>
+
+  <main class="colaboradores">
+    <div class="colaboradores__contenido u-contenedor">
+
+      <section class="colaboradores__roster" id="colaboradoresRoster" aria-labelledby="colaboradoresTitulo">
+        <div class="colaboradores__previa">
+          <div class="colaboradores__retrato" aria-hidden="true">
+            <span class="colaboradores__inicial" id="previaInicial">?</span>
+          </div>
+          <div class="colaboradores__identidad" aria-live="polite" aria-atomic="true">
+            <p class="colaboradores__clase" id="previaClase">Sin selección</p>
+            <p class="colaboradores__nombre" id="previaNombre">¿Quién?</p>
+            <p class="colaboradores__rol" id="previaRol">Pasa el cursor o elige una ficha</p>
+          </div>
+        </div>
+
+        <div class="colaboradores__seleccion">
+          <h1 class="colaboradores__titulo heading--gradient" id="colaboradoresTitulo">Colaboradores</h1>
+
+          <div class="colaboradores__marco">
+            <ul class="colaboradores__grilla" id="colaboradoresGrilla" aria-label="Fichas del equipo"></ul>
+          </div>
+
+          <div class="colaboradores__resumen panel">
+            <div class="colaboradores__resumen-texto">
+              <h2 class="colaboradores__etiqueta">Perfil</h2>
+              <p class="colaboradores__bio colaboradores__bio--vacia" id="previaBio" aria-live="polite">Elige una ficha del roster para ver su perfil, especialidades y cómo trabajar con esa persona.</p>
+              <div class="colaboradores__acciones" id="previaAcciones">
+                <a class="colaboradores__contactar button button--glow" href="/#contacto">Contactar</a>
+                <ul class="colaboradores__enlaces" id="previaEnlaces" hidden></ul>
+              </div>
+            </div>
+            <div class="colaboradores__atributos" id="previaAtributos" role="list" aria-label="Atributos"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="colaboradores__perfil" id="colaboradoresPerfil" aria-labelledby="perfilNombre" hidden>
+        <!-- Sin botón de volver: el perfil vive en el hash y al roster se
+             vuelve con el atrás del navegador. -->
+        <div class="colaboradores__barra">
+          <p class="colaboradores__numero" id="perfilNumero"></p>
+        </div>
+
+        <div class="colaboradores__figura">
+          <div class="colaboradores__retrato colaboradores__retrato--perfil" aria-hidden="true">
+            <span class="colaboradores__silueta colaboradores__silueta--cabeza"></span>
+            <span class="colaboradores__silueta colaboradores__silueta--torso"></span>
+            <span class="colaboradores__inicial" id="perfilInicial"></span>
+          </div>
+          <ul class="colaboradores__enlaces" id="perfilEnlaces" hidden></ul>
+        </div>
+
+        <div class="colaboradores__ficha-tecnica">
+          <div class="colaboradores__cabecera">
+            <!-- tabindex="-1": recibe el foco al abrir un perfil (la ficha que
+                 lo tenía se oculta con el roster), sin entrar al orden del Tab. -->
+            <h1 class="colaboradores__perfil-nombre" id="perfilNombre" tabindex="-1" aria-live="polite"></h1>
+            <a class="colaboradores__contactar button button--glow" href="/#contacto">Contactar</a>
+          </div>
+
+          <dl class="colaboradores__datos panel">
+            <div class="colaboradores__dato">
+              <dt class="colaboradores__dato-etiqueta">Rol</dt>
+              <dd class="colaboradores__dato-valor" id="perfilRol"></dd>
+            </div>
+            <div class="colaboradores__dato">
+              <dt class="colaboradores__dato-etiqueta">Especialidad</dt>
+              <dd class="colaboradores__dato-valor" id="perfilEspecialidad"></dd>
+            </div>
+            <div class="colaboradores__dato">
+              <dt class="colaboradores__dato-etiqueta">Proyectos</dt>
+              <dd class="colaboradores__dato-valor colaboradores__dato-valor--cifra" id="perfilProyectos"></dd>
+            </div>
+            <div class="colaboradores__dato">
+              <dt class="colaboradores__dato-etiqueta">Ubicación</dt>
+              <dd class="colaboradores__dato-valor" id="perfilUbicacion"></dd>
+            </div>
+            <div class="colaboradores__dato">
+              <dt class="colaboradores__dato-etiqueta">Experiencia</dt>
+              <dd class="colaboradores__dato-valor" id="perfilExperiencia"></dd>
+            </div>
+            <div class="colaboradores__dato">
+              <dt class="colaboradores__dato-etiqueta">Disponibilidad</dt>
+              <dd class="colaboradores__dato-valor colaboradores__disponibilidad">
+                <span class="colaboradores__punto" id="perfilPunto" aria-hidden="true"></span>
+                <span id="perfilDisponibilidad"></span>
+              </dd>
+            </div>
+            <div class="colaboradores__dato colaboradores__dato--ancho">
+              <dt class="colaboradores__dato-etiqueta">Stack</dt>
+              <dd class="colaboradores__dato-valor colaboradores__dato-valor--ligero" id="perfilStack"></dd>
+            </div>
+          </dl>
+
+          <div class="colaboradores__detalle panel">
+            <div class="colaboradores__detalle-columna">
+              <h2 class="colaboradores__etiqueta">Perfil</h2>
+              <p class="colaboradores__bio" id="perfilBio"></p>
+              <button type="button" class="colaboradores__colega" id="perfilColega" hidden>
+                <span class="colaboradores__colega-inicial" id="perfilColegaInicial" aria-hidden="true"></span>
+                <span class="colaboradores__colega-texto">
+                  <span class="colaboradores__colega-etiqueta">Suele trabajar con</span>
+                  <span class="colaboradores__colega-nombre" id="perfilColegaNombre"></span>
+                </span>
+              </button>
+            </div>
+            <div class="colaboradores__detalle-columna">
+              <h2 class="colaboradores__etiqueta">Atributos</h2>
+              <div class="colaboradores__atributos colaboradores__atributos--perfil" id="perfilAtributos" role="list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script src="/app/features/colaboradores/colaboradores.datos.js"></script>
+  <script src="/app/features/colaboradores/colaboradores.fondo.js"></script>
+  <script src="/app/features/colaboradores/colaboradores.js"></script>
+</body>
+
+</html>

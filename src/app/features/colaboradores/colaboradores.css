@@ -1,0 +1,755 @@
+/* Roster de colaboradores: pantalla de selección de personaje + ficha de perfil. */
+
+@layer features {
+  /*
+    EL FONDO. Mismo orden de capas que el inicio (ver home.css):
+
+        body (color plano)  <  degradado  <  #particles-fondo  <  contenido
+
+    Va acotado a `.colaboradores-page` para que nada de esto se filtre a otra
+    página que cargue esta hoja por error. Las dos capas van en PAREJA y
+    comparten alto (`100lvh`): anclar una sola deja una costura visible cuando
+    la barra del navegador móvil aparece o se va.
+
+    Los dos radiales son la atmósfera del prototipo; viven en la misma capa que
+    el degradado para no sumar otro elemento fijo a pantalla completa.
+  */
+  body.colaboradores-page::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-behind);
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 40% 55% at 22% 60%, rgba(0, 180, 220, 0.14), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 72% 50%, rgba(24, 82, 210, 0.14), transparent 70%),
+      linear-gradient(180deg, #020408 0%, #050a11 62%, #06131b 100%);
+  }
+
+  .colaboradores-page #particles-fondo {
+    position: fixed;
+    inset: 0 0 auto 0;
+    /* `lvh` y no el viewport dinámico: tsParticles reconstruye su canvas cada
+       vez que la caja cambia de tamaño, y en móvil eso pasaba justo al empezar
+       a deslizar. El `vh` es el respaldo para navegadores sin `lvh`. */
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-base);
+    pointer-events: none;
+  }
+
+  /* El glow lo dibuja tsParticles por partícula; un filter sobre el canvas se
+     re-aplicaría al lienzo completo en cada frame. */
+  .colaboradores-page #particles-fondo canvas {
+    opacity: 0.88;
+  }
+
+  /*
+    La página FLUYE y scrollea como el resto del sitio. El prototipo era una
+    app de `100dvh` con zonas de scroll internas; acá eso sólo habría escondido
+    fichas detrás de una barra de scroll dentro de otra.
+
+    El relleno lateral va en el padre y el contenedor compartido queda sin
+    relleno, igual que .extractor / .contact.
+  */
+  .colaboradores {
+    /* El aire de abajo es un token propio porque el roster lo resta para
+       calcular su alto: escrito dos veces, tarde o temprano se desfasa. */
+    --colaboradores-aire-inferior: 1.5rem;
+
+    position: relative;
+    z-index: var(--z-content);
+    padding-block: var(--espacio-bajo-navbar) var(--colaboradores-aire-inferior);
+    padding-inline: 2rem;
+  }
+
+  /* `hidden` pierde contra cualquier `display` de autor; las dos vistas y
+     varios bloques opcionales dependen de él. */
+  .colaboradores [hidden] {
+    display: none;
+  }
+
+  /* ---------- Piezas compartidas por las dos vistas ---------- */
+
+  .colaboradores__etiqueta {
+    margin-block-end: 0.5rem;
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #5ad7ff;
+  }
+
+  .colaboradores__bio {
+    /* Tres renglones reservados: la bio cambia con cada ficha y sin este piso
+       el panel —y todo lo que tiene debajo— saltaría al pasar el cursor. */
+    min-block-size: 4.5em;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__bio--vacia {
+    color: var(--color-text-subtle);
+  }
+
+  /*
+    El marco rayado que hace de "retrato" mientras no haya fotos. Se disuelve
+    hacia abajo para que el nombre, que se le monta encima, no pelee con un
+    borde duro.
+  */
+  .colaboradores__retrato {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-panel);
+    background: repeating-linear-gradient(135deg, rgba(0, 225, 255, 0.06) 0 6px, transparent 6px 22px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+    mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  }
+
+  .colaboradores__inicial {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font: 900 clamp(200px, 24vw, 300px) / 1 var(--font-display);
+    color: rgba(0, 225, 255, 0.07);
+  }
+
+  .colaboradores__silueta {
+    position: absolute;
+  }
+
+  .colaboradores__silueta--cabeza {
+    inset: 12% 30% auto;
+    block-size: 26%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .colaboradores__silueta--torso {
+    inset: 40% 10% 0;
+    border-radius: 45% 45% 0 0 / 60% 60% 0 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  }
+
+  .colaboradores__contactar {
+    flex: none;
+    padding: 0.5625rem 1.125rem;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.35);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  /* Píldoras de contacto. Sólo existen las que enlacesDisponibles() devuelve. */
+  .colaboradores__enlaces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    list-style: none;
+  }
+
+  .colaboradores__enlace {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5625rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-pill);
+    color: var(--color-text-muted);
+    font: 500 0.8125rem var(--font-body);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+  }
+
+  .colaboradores__enlace:hover {
+    border-color: var(--color-accent);
+    color: var(--color-text);
+  }
+
+  /* El nombre del perfil está acá porque recibe el foco al abrir una ficha:
+     con teclado, el anillo tiene que ser el mismo que el del resto. */
+  .colaboradores__enlace:focus-visible,
+  .colaboradores__perfil-nombre:focus-visible,
+  .colaboradores__colega:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .colaboradores__enlace-sigla {
+    font: 700 0.8125rem var(--font-display);
+    color: var(--color-text);
+  }
+
+  /* Barras de atributos: cinco segmentos, los encendidos en cian. */
+  .colaboradores__atributos {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.4375rem;
+    min-inline-size: 0;
+  }
+
+  .colaboradores__atributo {
+    /* Ancla del valor oculto (.u-visually-hidden es absoluto): sin esto se
+       posiciona contra la página y puede estirar su ancho. */
+    position: relative;
+    display: grid;
+    grid-template-columns: 82px minmax(0, 1fr);
+    align-items: center;
+    gap: 0.625rem;
+  }
+
+  .colaboradores__atributos--perfil .colaboradores__atributo {
+    grid-template-columns: 76px minmax(0, 1fr) 26px;
+    gap: 0.5rem;
+  }
+
+  .colaboradores__atributo-nombre {
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 1px;
+    color: var(--color-text-subtle);
+  }
+
+  .colaboradores__atributo-valor {
+    font: 500 0.625rem var(--font-mono);
+    color: #5ad7ff;
+    text-align: end;
+  }
+
+  .colaboradores__barra-segmentos {
+    display: flex;
+    gap: 4px;
+  }
+
+  .colaboradores__segmento {
+    flex: 1;
+    block-size: 6px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .colaboradores__segmento--lleno {
+    background: var(--color-accent);
+    box-shadow: 0 0 8px rgba(0, 225, 255, 0.5);
+  }
+
+  /* ---------- Vista roster ---------- */
+
+  /*
+    Una pantalla de selección, no una página larga: en escritorio el roster
+    entra ENTERO en el alto de la ventana, sin scroll. El alto es la ventana
+    menos lo que ya reserva `.colaboradores` arriba (el despeje del navbar) y
+    abajo (el aire inferior); adentro, la previa y la grilla de fichas son las
+    piezas elásticas y absorben lo que sobre o falte.
+
+    El piso evita aplastar las fichas en una ventana muy baja: por debajo de él
+    la página scrollea, que es preferible a fichas ilegibles. En ≤760px todo
+    esto se desactiva (ver el bloque del final).
+  */
+  .colaboradores__roster {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: clamp(24px, 3vw, 40px);
+    block-size: calc(100dvh - var(--espacio-bajo-navbar) - var(--colaboradores-aire-inferior));
+    /* 480 deja entrar sin scroll una laptop de 1366×768, cuya ventana útil ronda
+       los 650px de alto: 650 − despeje del navbar − aire inferior ≈ 498. */
+    min-block-size: 480px;
+  }
+
+  .colaboradores__previa {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: hidden;
+  }
+
+  /* El retrato ocupa todo menos la franja del nombre, que se le monta encima. */
+  .colaboradores__previa .colaboradores__retrato {
+    position: absolute;
+    inset: 0 0 120px;
+  }
+
+  .colaboradores__identidad {
+    position: relative;
+    padding: 0 6px 8px;
+  }
+
+  .colaboradores__clase {
+    margin-block-end: 6px;
+    font: 500 0.75rem var(--font-mono);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  .colaboradores__nombre {
+    font: 900 clamp(32px, 3.4vw, 44px) / 1 var(--font-display);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__rol {
+    margin-block-start: 8px;
+    font: 500 1.0625rem var(--font-body);
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__seleccion {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .colaboradores__titulo {
+    font-size: clamp(22px, 2.4vw, 30px);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  /* El marco de las fichas es lo único elástico de la columna: el título y la
+     tarjeta de perfil miden lo que mide su contenido, y él se queda el resto. */
+  .colaboradores__marco {
+    flex: 1 1 0;
+    display: flex;
+    min-block-size: 0;
+    padding: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  /*
+    CUATRO columnas en TODOS los anchos, sin excepción por breakpoint: las
+    flechas del teclado saltan de a COLUMNAS_ROSTER fichas (moverSeleccion en
+    colaboradores.datos.js). Si un breakpoint cambia este número, ↑/↓ dejan de
+    caer en la ficha de arriba/abajo. Hay un test que lo fija.
+  */
+  .colaboradores__grilla {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* Las filas se reparten el alto del marco por igual, sean las que sean:
+       con 12 fichas son tres, con 16 serían cuatro más bajas. */
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 3px;
+    min-block-size: 0;
+    list-style: none;
+  }
+
+  .colaboradores__celda {
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .colaboradores__ficha {
+    --ficha-cielo: #1a1f26;
+
+    position: relative;
+    z-index: var(--z-content);
+    display: block;
+    inline-size: 100%;
+    /* Llena su celda en vez de ser cuadrada: el alto lo dicta la ventana. Su
+       interior ya está medido en porcentajes, así que escala sin deformarse. */
+    block-size: 100%;
+    overflow: hidden;
+    border: 0;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    background: linear-gradient(180deg, var(--ficha-cielo) 0%, #07090c 100%);
+    color: #d8dde3;
+    cursor: pointer;
+    transition: outline-color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  /* Seleccionada: es la ficha a la que vuelve la vista previa al soltar el
+     cursor. Más tenue que la activa para que no compitan. */
+  .colaboradores__ficha--seleccionada {
+    --ficha-cielo: rgba(0, 80, 110, 0.35);
+
+    outline-color: rgba(0, 225, 255, 0.5);
+  }
+
+  /* Activa: la que está mostrando la vista previa ahora (cursor o foco). Sube
+     de nivel para que su resplandor no quede debajo de las vecinas. */
+  .colaboradores__ficha--activa {
+    --ficha-cielo: rgba(0, 120, 150, 0.55);
+
+    z-index: var(--z-elevated);
+    outline-color: var(--color-accent);
+    box-shadow: 0 0 22px rgba(0, 225, 255, 0.45), inset 0 0 30px rgba(0, 225, 255, 0.18);
+    color: var(--color-text);
+  }
+
+  /* El anillo va hacia ADENTRO: las fichas están a 3px una de otra y un anillo
+     hacia afuera quedaría tapado por las vecinas. */
+  .colaboradores__ficha:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: -3px;
+  }
+
+  .colaboradores__ficha-cabeza {
+    position: absolute;
+    inset: 12% auto auto 50%;
+    /* Redonda por proporción, y medida por el ALTO: la ficha ya no es cuadrada
+       (llena una celda cuyo alto dicta la ventana). Con ancho y alto en % por
+       separado salía un óvalo; y el alto es el recurso escaso, así que manda
+       él y el ancho lo sigue. */
+    block-size: 34%;
+    aspect-ratio: 1 / 1;
+    translate: -50% 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .colaboradores__ficha-torso {
+    position: absolute;
+    inset: 46% 16% 24%;
+    border-radius: 45% 45% 0 0 / 100% 100% 0 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  }
+
+  .colaboradores__ficha-inicial {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding-block-end: 22%;
+    font: 900 clamp(1.1rem, 5vw, 2.125rem) var(--font-display);
+    color: rgba(0, 225, 255, 0.16);
+    pointer-events: none;
+  }
+
+  .colaboradores__ficha-nombre {
+    position: absolute;
+    inset: auto 0 0;
+    display: grid;
+    place-items: center;
+    block-size: 27%;
+    padding-inline: 6px;
+    background: linear-gradient(to top, #04060a 60%, rgba(4, 6, 10, 0));
+    /* El piso en vw es para 360px: ahí una ficha mide ~78px y "SEBASTIÁN" a
+       12px fijos se salía de su caja. */
+    font: 700 clamp(0.5rem, 2.4vw, 0.75rem) / 1.15 var(--font-display);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    text-align: center;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__resumen {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 180px);
+    gap: 22px;
+    padding: 18px 22px;
+  }
+
+  .colaboradores__resumen-texto {
+    min-inline-size: 0;
+  }
+
+  .colaboradores__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.625rem;
+    margin-block-start: 0.875rem;
+    transition: opacity var(--transition-fast);
+  }
+
+  /* Sin ficha a la vista no hay a quién contactar. El JS suma `inert` para que
+     tampoco se llegue con el teclado; esto es sólo lo que se ve. */
+  .colaboradores__acciones--inactivas {
+    opacity: 0.25;
+    pointer-events: none;
+  }
+
+  /* ---------- Vista perfil ---------- */
+
+  .colaboradores__perfil {
+    display: grid;
+    grid-template-columns: minmax(280px, 4fr) minmax(0, 6fr);
+    gap: 20px clamp(24px, 3vw, 48px);
+  }
+
+  .colaboradores__barra {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .colaboradores__numero {
+    font: 500 0.75rem var(--font-mono);
+    letter-spacing: 2px;
+    color: #5ad7ff;
+  }
+
+  /* Columna en flex y no retrato absoluto: cuando no hay píldoras de contacto
+     (hoy, ninguna ficha de muestra las tiene) el retrato ocupa todo el alto. */
+  .colaboradores__figura {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-inline-size: 0;
+    min-block-size: 360px;
+  }
+
+  .colaboradores__retrato--perfil {
+    flex: 1 1 auto;
+    border-color: rgba(0, 225, 255, 0.25);
+    box-shadow: inset 0 0 60px rgba(0, 225, 255, 0.08);
+    -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+    mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  }
+
+  .colaboradores__retrato--perfil .colaboradores__inicial {
+    font-size: clamp(160px, 20vw, 260px);
+  }
+
+  .colaboradores__ficha-tecnica {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-inline-size: 0;
+  }
+
+  .colaboradores__cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .colaboradores__perfil-nombre {
+    min-inline-size: 0;
+    font: 900 clamp(28px, 4.6vw, 68px) / 1 var(--font-display);
+    letter-spacing: -1px;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+    background: linear-gradient(90deg, #c8f7ff, var(--color-text) 45%, #5ad7ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .colaboradores__datos {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 20px;
+    padding: 14px 20px;
+  }
+
+  .colaboradores__dato {
+    min-inline-size: 0;
+  }
+
+  .colaboradores__dato--ancho {
+    grid-column: 1 / -1;
+  }
+
+  .colaboradores__dato-etiqueta {
+    margin-block-end: 3px;
+    font: 500 0.625rem var(--font-mono);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+  }
+
+  .colaboradores__dato-valor {
+    font: 700 0.875rem var(--font-body);
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__dato-valor--ligero {
+    font-weight: 500;
+  }
+
+  .colaboradores__dato-valor--cifra {
+    font: 900 1.375rem / 1 var(--font-display);
+    color: var(--color-accent);
+    text-shadow: 0 0 14px rgba(0, 225, 255, 0.45);
+  }
+
+  .colaboradores__disponibilidad {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Apagado por defecto ("Parcial"); sólo "Disponible" lo enciende en verde. */
+  .colaboradores__punto {
+    flex: none;
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--color-text-subtle);
+  }
+
+  .colaboradores__punto--disponible {
+    background: var(--color-success);
+    box-shadow: 0 0 8px var(--color-success);
+  }
+
+  .colaboradores__detalle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-content: start;
+    gap: 14px 28px;
+    padding: 14px 20px;
+  }
+
+  .colaboradores__detalle-columna {
+    min-inline-size: 0;
+  }
+
+  .colaboradores__detalle .colaboradores__bio {
+    min-block-size: 0;
+    margin-block-end: 0.75rem;
+  }
+
+  .colaboradores__colega {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-inline-size: 100%;
+    border: 0;
+    border-radius: var(--radius-field);
+    background: none;
+    color: var(--color-text);
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .colaboradores__colega-inicial {
+    flex: none;
+    display: grid;
+    place-items: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border: 1px solid rgba(0, 225, 255, 0.4);
+    border-radius: 50%;
+    background: rgba(0, 225, 255, 0.08);
+    font: 700 0.75rem var(--font-display);
+    color: #5ad7ff;
+    transition: background-color var(--transition-fast);
+  }
+
+  .colaboradores__colega:hover .colaboradores__colega-inicial {
+    background: rgba(0, 225, 255, 0.2);
+  }
+
+  .colaboradores__colega-texto {
+    display: block;
+    min-inline-size: 0;
+  }
+
+  .colaboradores__colega-etiqueta {
+    display: block;
+    margin-block-end: 2px;
+    font: 500 0.5625rem var(--font-mono);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+  }
+
+  .colaboradores__colega-nombre {
+    display: block;
+    font: 700 0.8125rem var(--font-body);
+    letter-spacing: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 760px) {
+    .colaboradores {
+      padding-inline: 1rem;
+    }
+
+    /* Una sola columna en las dos vistas. La grilla de fichas NO cambia: sigue
+       en cuatro columnas (ver el comentario de .colaboradores__grilla). */
+    .colaboradores__roster,
+    .colaboradores__perfil,
+    .colaboradores__resumen,
+    .colaboradores__detalle {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* En una pantalla de teléfono no caben la previa, doce fichas y la tarjeta:
+       el roster deja de medirse contra la ventana y la página vuelve a fluir. */
+    .colaboradores__roster {
+      grid-template-rows: none;
+      block-size: auto;
+      min-block-size: 0;
+    }
+
+    .colaboradores__marco {
+      flex: none;
+    }
+
+    .colaboradores__grilla {
+      grid-auto-rows: auto;
+    }
+
+    .colaboradores__ficha {
+      block-size: auto;
+      aspect-ratio: 1 / 1;
+    }
+
+    .colaboradores__previa {
+      min-block-size: 240px;
+    }
+
+    .colaboradores__previa .colaboradores__retrato {
+      inset-block-end: 96px;
+    }
+
+    .colaboradores__figura {
+      min-block-size: 280px;
+    }
+
+    .colaboradores__datos {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 360px) {
+    .colaboradores__resumen,
+    .colaboradores__datos,
+    .colaboradores__detalle {
+      padding-inline: 14px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .colaboradores__ficha,
+    .colaboradores__segmento,
+    .colaboradores__acciones,
+    .colaboradores__enlace,
+    .colaboradores__colega-inicial {
+      transition: none;
+    }
+  }
+}
