@@ -82,6 +82,54 @@ test("the roster profile card starts hidden", () => {
 });
 
 /*
+  El enlace a "Mi ficha" vive en la FICHA de quien mira, dentro del roster: no
+  está en el markup estático ni cuelga de los rótulos "Perfil", que vuelven a
+  estar solos. Lo crea colaboradores.js con la lista, una vez por celda.
+*/
+test("the Perfil headings stand alone and the edit link is built by the script", () => {
+  const html = sinComentariosHtml(HTML);
+  assert.doesNotMatch(html, /colaboradores__editar|colaboradores__fila-etiqueta|resumenEditar|perfilEditar/,
+    "el enlace lo monta el script en la ficha, no el HTML");
+  assert.equal(
+    (html.match(/<h2 class="colaboradores__etiqueta">Perfil<\/h2>/g) || []).length,
+    2,
+    "los dos rótulos quedan solos, como el resto de las etiquetas",
+  );
+
+  const js = sinComentariosJs(JS);
+  assert.match(js, /createElement\("a"\)/);
+  assert.match(js, /"\/app\/features\/colaboradores\/mi-ficha\/"/, "la ruta a Mi ficha, literal");
+  assert.match(js, /"Editar mi ficha"/, '"Editar" a secas no dice de quién: el nombre accesible sí');
+});
+
+/*
+  El enlace se apila SOBRE la ficha —que es un <button>, y un <a> adentro sería
+  HTML inválido—, así que vive en la celda y se ancla en ella. Va arriba porque
+  el pie de la ficha es la franja del nombre.
+*/
+test("the tile edit link is pinned to the top corner above the tile", () => {
+  const css = sinComentariosCss(CSS);
+
+  const celda = css.match(/\.colaboradores__celda\s*\{([^}]*)\}/);
+  assert.ok(celda, "falta la regla de la celda");
+  assert.match(celda[1], /position:\s*relative/, "la celda es el ancla del enlace");
+
+  const enlace = css.match(/\.colaboradores__editar\s*\{([^}]*)\}/);
+  assert.ok(enlace, "falta la regla del enlace de editar");
+  assert.match(enlace[1], /position:\s*absolute/);
+  assert.match(enlace[1], /inset:\s*\S+\s+\S+\s+auto/,
+    "anclado arriba: abajo está la franja del nombre de la ficha");
+  assert.match(enlace[1], /z-index:\s*var\(--z-highlight\)/,
+    "por encima de la ficha, que sube a --z-elevated cuando está activa");
+  assert.match(enlace[1], /var\(--font-mono\)/);
+  assert.match(enlace[1], /white-space:\s*nowrap/, "a 360px la ficha mide ~78px: el texto no se parte");
+
+  assert.match(css, /\.colaboradores__editar:focus-visible/,
+    "con teclado, el anillo es el mismo que el del resto de los enlaces");
+  assert.doesNotMatch(css, /\.colaboradores__fila-etiqueta/, "la fila del rótulo ya no existe");
+});
+
+/*
   Carga, error y lista vacía comparten una región: un aviso cortés (`status`,
   no `alert`, porque también anuncia "Cargando…") que puede recibir el foco
   cuando un reintento falla, y el botón de reintentar, oculto hasta un error.
@@ -356,7 +404,9 @@ test("scripts load in dependency order", () => {
   const fondo = posicion("/app/features/colaboradores/colaboradores.fondo.js");
   const pagina = posicion("/app/features/colaboradores/colaboradores.js");
 
-  assert.ok(posicion("/app/core/auth/auth.service.js") < navbar);
+  const auth = posicion("/app/core/auth/auth.service.js");
+  assert.ok(auth < navbar);
+  assert.ok(auth < pagina, "la página le pregunta a auth quién está mirando");
   assert.ok(cliente < servicio, "el servicio usa supabaseClient");
   assert.ok(servicio < pagina, "la página le pide la lista al servicio");
   assert.ok(particulas < fondo, "tsParticles va antes del fondo que lo usa");

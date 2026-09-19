@@ -89,6 +89,23 @@ function diferido() {
   return { promesa, resolver };
 }
 
+/* ---------- Identidad de quien mira ---------- */
+
+// Lo que la página consulta, después de cargar la lista, para saber si quien
+// mira es alguien del roster: los dos globales de auth.service.js.
+const SESION = Object.freeze({ user: { id: "u-1" } });
+const perfilDe = (slug) => ({ nombre: "Quien mira", es_colaborador: true, slug });
+
+const comoFuncion = (valor) => (typeof valor === "function" ? valor : async () => valor);
+
+/*
+  La identidad se resuelve DESPUÉS de la lista y sin bloquearla, así que no la
+  cubre la promesa de la primera carga. Un salto a la cola de macrotareas deja
+  correr todas las microtareas pendientes (las promesas de los dobles de auth)
+  antes de mirar el DOM.
+*/
+const esperarIdentidad = () => new Promise((resolve) => setImmediate(resolve));
+
 function muestraConRetoques(retoques) {
   const lista = structuredClone(MUESTRA);
   for (const [indice, campos] of Object.entries(retoques)) Object.assign(lista[indice], campos);
@@ -322,6 +339,11 @@ function crearNavegador(hashInicial) {
     sinDatos     no carga colaboradores.datos.js.
     sinServicio  no hay listarColaboradores (su script no llegó).
     hash         el hash con el que se abre la página (un enlace compartido).
+    auth         con qué resuelve la página quién está mirando: { sesion,
+                 perfil }. Cada uno puede ser el valor que devuelven o una
+                 función (para fallar, demorar o contar llamadas). Por
+                 defecto, visitante anónimo.
+    sinAuth      no hay obtenerSesion ni obtenerPerfil (su script no llegó).
 */
 function abrirPagina({
   sinIds = [],
@@ -330,6 +352,8 @@ function abrirPagina({
   sinDatos = false,
   sinServicio = false,
   hash = "",
+  auth = {},
+  sinAuth = false,
 } = {}) {
   const alCargar = [];
   const documento = {
@@ -358,6 +382,10 @@ function abrirPagina({
   // Como en el navegador, `window` es el propio global.
   contexto.window = contexto;
   if (!sinServicio) contexto.listarColaboradores = servicio ?? conLista(muestraConRetoques(retoques));
+  if (!sinAuth) {
+    contexto.obtenerSesion = comoFuncion(auth.sesion ?? null);
+    contexto.obtenerPerfil = comoFuncion(auth.perfil ?? null);
+  }
   if (!sinDatos) vm.runInContext(leer("colaboradores.datos.js"), contexto);
   vm.runInContext(leer("colaboradores.js"), contexto);
   // El manejador devuelve la promesa de la primera carga; el navegador la
@@ -388,6 +416,13 @@ function abrirPagina({
 async function cargarPagina(opciones) {
   const pagina = abrirPagina(opciones);
   await pagina.iniciada;
+  return pagina;
+}
+
+// Lo mismo, pero esperando también a que se resuelva quién está mirando.
+async function cargarPaginaConIdentidad(opciones) {
+  const pagina = await cargarPagina(opciones);
+  await esperarIdentidad();
   return pagina;
 }
 
@@ -494,7 +529,10 @@ test("renders one tile button per collaborator, named with full name and role", 
   assert.equal(celdas.length, MUESTRA.length);
   celdas.forEach((celda, indice) => {
     assert.equal(celda.tagName, "LI");
-    assert.equal(celda.children.length, 1);
+    // La ficha y, detrás, su enlace a "Mi ficha": oculto salvo en la ficha de
+    // quien mira, y acá el visitante es anónimo.
+    assert.deepEqual(celda.children.map((hijo) => hijo.tagName), ["BUTTON", "A"]);
+    assert.equal(celda.children[1].hidden, true);
     const boton = celda.children[0];
     assert.equal(boton.tagName, "BUTTON");
     assert.equal(boton.type, "button");
@@ -1138,4 +1176,214 @@ test("rows from the service: a collaborator whose card fields are null only gets
   assertPerfilDe(pagina, 1, [SAMAEL, conFicha]);
   assert.equal(conFicha.disponibilidad, "No disponible", "premisa: cubre el punto apagado");
   assert.ok(!pagina.raiz.textContent.includes("442"), "el teléfono no llega a la página");
+});
+/* ---------- "Editar" en la ficha propia ---------- */
+
+/*
+  El enlace a "Mi ficha" no está en ningún menú: vive en la esquina de UNA
+  ficha del roster, la de quien mira, y ahí se queda. No depende del cursor,
+  del foco ni de la selección, y la vista de perfil no lo tiene.
+*/
+const RUTA_MI_FICHA = "/app/features/colaboradores/mi-ficha/";
+
+// Otra persona sin ficha, para un roster donde NADIE llenó la suya.
+const ANA = Object.freeze({ nombre: "Ana Paredes", corto: "Ana", slug: "ana", ...FICHA_EN_NULL });
+
+// Los enlaces de edición de la grilla, en el orden de las fichas: uno por
+// celda, montados junto con la lista.
+const enlacesDeEdicion = (pagina) => porClase(pagina.porId("colaboradoresGrilla"), "colaboradores__editar");
+
+// Los índices de las fichas que muestran su enlace.
+const fichasConEditar = (pagina) =>
+  enlacesDeEdicion(pagina).flatMap((enlace, indice) => (enlace.hidden ? [] : [indice]));
+
+test("an anonymous visitor gets no edit link, and their profile is never asked for", async () => {
+  let sesiones = 0;
+  let perfiles = 0;
+  const pagina = await cargarPaginaConIdentidad({
+    auth: {
+      sesion: async () => { sesiones += 1; return null; },
+      perfil: async () => { perfiles += 1; return perfilDe(MUESTRA[0].slug); },
+    },
+  });
+
+  assert.equal(sesiones, 1, "la sesión se consulta una vez, al cargar la lista");
+  assert.equal(perfiles, 0, "sin sesión no hay perfil que pedir");
+  assert.deepEqual(fichasConEditar(pagina), []);
+
+  pagina.fichas()[0].disparar("mouseenter");
+  assert.deepEqual(fichasConEditar(pagina), [], "el cursor no lo hace aparecer");
+});
+
+// Con sesión pero sin cuenta colaboradora —o sin un slug con el que comparar—
+// no hay ficha propia que editar. Sólo el `true` de la columna cuenta.
+test("a signed-in visitor who does not collaborate gets no edit link", async () => {
+  const slug = MUESTRA[0].slug;
+  for (const perfil of [
+    null,
+    { nombre: "X", es_colaborador: false, slug },
+    { nombre: "X", es_colaborador: "true", slug },
+    { nombre: "X", es_colaborador: true, slug: null },
+    { nombre: "X", es_colaborador: true, slug: "   " },
+  ]) {
+    const pagina = await cargarPaginaConIdentidad({ auth: { sesion: SESION, perfil } });
+
+    pagina.fichas()[0].disparar("mouseenter");
+    assert.deepEqual(fichasConEditar(pagina), [], JSON.stringify(perfil));
+  }
+});
+
+/*
+  El enlace va en la CELDA y no dentro del botón: un <a> dentro de un <button>
+  es HTML inválido. Queda detrás de él en el orden de tabulación —la ficha es
+  la acción principal de la celda— y la hoja lo apila en la esquina.
+*/
+test("the edit link sits in the collaborator's own tile and stays put", async () => {
+  const yo = 3;
+  const pagina = await cargarPaginaConIdentidad({ auth: { sesion: SESION, perfil: perfilDe(MUESTRA[yo].slug) } });
+  const fichas = pagina.fichas();
+
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
+
+  const enlace = enlacesDeEdicion(pagina)[yo];
+  assert.equal(enlace.href, RUTA_MI_FICHA);
+  assert.equal(enlace.textContent, "Editar");
+  assert.equal(enlace.getAttribute("aria-label"), "Editar mi ficha");
+
+  const celda = pagina.porId("colaboradoresGrilla").children[yo];
+  assert.deepEqual(celda.children.map((hijo) => hijo.tagName), ["BUTTON", "A"]);
+  assert.ok(enlace.parent === celda, "el enlace cuelga de la celda, nunca del botón");
+
+  // Ni el cursor, ni el foco, ni la selección lo mueven de ahí.
+  fichas[7].disparar("mouseenter");
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
+  fichas[7].disparar("mouseleave");
+  fichas[7].focus();
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
+  fichas[yo].disparar("mouseenter");
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
+});
+
+// El enlace se suma a la ficha sin quitarle nada: el clic sigue abriendo el
+// perfil, que no tiene enlace propio.
+test("clicking the tile still opens the profile, which has no edit link of its own", async () => {
+  const yo = 3;
+  const pagina = await cargarPaginaConIdentidad({ auth: { sesion: SESION, perfil: perfilDe(MUESTRA[yo].slug) } });
+
+  pagina.fichas()[yo].disparar("click");
+
+  assert.equal(pagina.hash(), rutaDe(yo));
+  assertPerfilDe(pagina, yo);
+  assert.equal(
+    porClase(pagina.porId("colaboradoresPerfil"), "colaboradores__editar").length,
+    0,
+    "el perfil no tiene enlace de editar",
+  );
+
+  pagina.atras();
+  assertRosterConSeleccion(pagina, yo);
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
+});
+
+/*
+  El caso que importa: el PRIMER colaborador que entra a llenar su ficha. Nadie
+  del roster tiene ficha —él tampoco—, así que no hay perfil que abrir ni
+  tarjeta de resumen que mostrar; el enlace en su ficha es su única puerta.
+*/
+test("a collaborator with no card yet gets the edit link in their own tile", async () => {
+  const pagina = await cargarPaginaConIdentidad({
+    servicio: conLista([SAMAEL, ANA]),
+    auth: { sesion: SESION, perfil: perfilDe(SAMAEL.slug) },
+  });
+  const [mia] = pagina.fichas();
+
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, true, "nadie tiene ficha: no hay tarjeta");
+  assert.deepEqual(fichasConEditar(pagina), [0]);
+
+  mia.disparar("click");
+  assert.equal(pagina.porId("colaboradoresPerfil").hidden, true, "sin ficha no hay perfil que abrir");
+  assertVistaPreviaSoloNombre(pagina, SAMAEL);
+  assert.deepEqual(fichasConEditar(pagina), [0]);
+});
+
+// El enlace es un extra: nada de lo que pase al averiguar quién mira puede
+// tumbar la página ni dejarla a medio pintar.
+test("a failing identity lookup leaves the page working with no edit link", async () => {
+  const caer = async () => { throw new Error("sin red"); };
+
+  for (const auth of [
+    { sesion: caer },
+    { sesion: SESION, perfil: caer },
+  ]) {
+    const pagina = await cargarPaginaConIdentidad({ auth });
+
+    assert.equal(pagina.fichas().length, MUESTRA.length);
+    assertSinAviso(pagina);
+    pagina.fichas()[0].disparar("mouseenter");
+    assertVistaPreviaDe(pagina, 0);
+    assert.deepEqual(fichasConEditar(pagina), []);
+  }
+
+  // Y si el script de auth no llegó, llamarlo lanza ReferenceError: lo mismo.
+  const pagina = await cargarPaginaConIdentidad({ sinAuth: true });
+  assert.equal(pagina.fichas().length, MUESTRA.length);
+  pagina.fichas()[1].disparar("click");
+  assertPerfilDe(pagina, 1);
+  assert.deepEqual(fichasConEditar(pagina), []);
+});
+
+// La lista NO espera a la identidad: el roster se pinta con lo que ya tiene y
+// el enlace se suma a su ficha cuando se sabe quién mira.
+test("the roster paints without waiting for the identity and the link appears when it arrives", async () => {
+  const yo = 4;
+  const identidad = diferido();
+  const pagina = await cargarPagina({
+    auth: { sesion: SESION, perfil: () => identidad.promesa },
+  });
+
+  assert.equal(pagina.fichas().length, MUESTRA.length);
+  assertSinAviso(pagina);
+  pagina.fichas()[yo].disparar("mouseenter");
+  assertVistaPreviaDe(pagina, yo);
+  assert.deepEqual(fichasConEditar(pagina), [], "mientras no se sepa quién mira, no es la ficha de nadie");
+
+  identidad.resolver(perfilDe(MUESTRA[yo].slug));
+  await esperarIdentidad();
+
+  // Aparece sola, sin mover la vista previa ni la selección.
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
+  assertVistaPreviaDe(pagina, yo);
+});
+
+/*
+  Un enlace compartido (#/<mi-slug>) abre el PERFIL: la identidad se resuelve
+  con el roster oculto. El enlace tiene que quedar puesto igual — si el pintado
+  de la identidad diera por sentado que el roster está a la vista, o capturara
+  la vista al salir a preguntar, esto se rompería en silencio.
+*/
+test("an identity resolved while a shared profile is open still lands the link in the tile", async () => {
+  const yo = 6;
+  const identidad = diferido();
+  const pagina = await cargarPagina({
+    hash: rutaDe(yo),
+    auth: { sesion: SESION, perfil: () => identidad.promesa },
+  });
+
+  assertPerfilDe(pagina, yo);
+  assert.deepEqual(fichasConEditar(pagina), []);
+
+  identidad.resolver(perfilDe(MUESTRA[yo].slug));
+  await esperarIdentidad();
+
+  // Nada se movió: el mismo perfil abierto, sin tocar el hash ni el foco.
+  assertPerfilDe(pagina, yo);
+  assert.equal(pagina.hash(), rutaDe(yo));
+  assert.equal(pagina.historial(), 1);
+  assert.equal(pagina.documento.activeElement, null);
+  // Y el enlace ya espera en su ficha, debajo del perfil.
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
+
+  pagina.irA("#");
+  assertRosterConSeleccion(pagina, yo);
+  assert.deepEqual(fichasConEditar(pagina), [yo]);
 });

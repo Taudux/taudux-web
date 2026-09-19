@@ -22,6 +22,10 @@
 (function () {
   const SIGLAS_DE_ENLACE = { linkedin: "in", github: "gh", correo: "@" };
 
+  // "Mi ficha": el formulario donde cada colaborador llena la suya. El enlace
+  // no está en ningún menú; cuelga de la ficha de quien mira.
+  const RUTA_MI_FICHA = "/app/features/colaboradores/mi-ficha/";
+
   // Un estado del punto por disponibilidad (verde, ámbar, apagado). Los
   // colores viven en colaboradores.css; el valor accesible es el texto de al
   // lado, el punto es decorado.
@@ -100,11 +104,22 @@
     */
     const resaltado = { cursor: null, foco: null };
 
-    // La lista cargada y sus botones: se reemplazan juntos, en montarRoster().
+    // La lista cargada, sus botones y el enlace a "Mi ficha" de cada celda: se
+    // reemplazan juntos, en montarRoster().
     let colaboradores = [];
     let fichas = [];
+    let enlacesDeEdicion = [];
     // El hash se conecta UNA vez, con la primera lista que llega.
     let conectada = false;
+
+    /*
+      El slug de quien está mirando, si es alguien del roster; null en
+      cualquier otro caso (visitante anónimo, cuenta que no colabora, o algo
+      que falló). Arranca en null y se resuelve DESPUÉS de la primera lista:
+      es lo único que decide si se ve el enlace a "Mi ficha", y mientras no se
+      sepa, ese enlace no es de nadie.
+    */
+    let miSlug = null;
 
     el.reintentar.addEventListener("click", reintentarCarga);
 
@@ -152,6 +167,10 @@
       if (!conectada) {
         conectada = true;
         window.addEventListener("hashchange", () => aplicarHash({ moverFoco: true }));
+        // Sin await: el roster ya está pintado y no tiene por qué esperar a
+        // dos consultas más. Cuando se sepa quién mira, el enlace de "Mi
+        // ficha" se suma a su ficha.
+        resolverIdentidad();
       }
 
       // Un enlace compartido (#/mariana) abre directo ese perfil, también si
@@ -187,11 +206,68 @@
       escribir(el.avisoMensaje, "");
     }
 
+    /* ---------- Quién está mirando ---------- */
+
+    /*
+      Lo único que depende de quién mira es el enlace de "Mi ficha": por eso
+      acá no se repinta la pantalla, se decide otra vez qué ficha lo lleva. La
+      vista abierta da igual — si es el perfil, el enlace ya queda puesto en el
+      roster que hay debajo.
+    */
+    async function resolverIdentidad() {
+      miSlug = await consultarMiSlug();
+      decidirEnlacesDeEdicion();
+    }
+
+    /*
+      El slug de quien mira, o null. Sólo el `true` de la columna cuenta, igual
+      que en "Mi ficha", y el slug tiene que ser un texto con algo adentro:
+      comparar contra "" o null haría propia la ficha de cualquiera que venga
+      sin slug.
+
+      No lanza NUNCA: sin sesión, con la red caída o con el script de auth sin
+      cargar (ReferenceError), el enlace de editar simplemente no aparece. Es
+      un extra de la página, no puede tumbarla.
+    */
+    async function consultarMiSlug() {
+      try {
+        const sesion = await obtenerSesion();
+        if (!sesion) return null;
+
+        const perfil = await obtenerPerfil(sesion);
+        if (perfil?.es_colaborador !== true) return null;
+
+        const slug = typeof perfil.slug === "string" ? perfil.slug.trim() : "";
+        return slug || null;
+      } catch {
+        return null;
+      }
+    }
+
+    // Con la identidad sin resolver (miSlug en null) la ficha no es de nadie:
+    // sin ese guard, cualquier persona sin slug pasaría por propia.
+    function esMiFicha(persona) {
+      return miSlug !== null && persona?.slug === miSlug;
+    }
+
+    /*
+      Los enlaces existen en todas las celdas y se muestran en una sola, la de
+      quien mira. Se decide DOS veces —al montar la lista y al resolverse la
+      identidad— y nunca al pintar: el enlace no sigue al cursor ni al foco, se
+      queda en su ficha.
+    */
+    function decidirEnlacesDeEdicion() {
+      enlacesDeEdicion.forEach((enlace, indice) => {
+        enlace.hidden = !esMiFicha(colaboradores[indice]);
+      });
+    }
+
     /* ---------- Construcción (una vez por lista) ---------- */
 
     function montarRoster(lista) {
       colaboradores = lista;
       fichas = colaboradores.map(crearFicha);
+      enlacesDeEdicion = colaboradores.map(crearEnlaceDeEdicion);
       el.grilla.replaceChildren(...fichas.map(envolverEnCelda));
       // Sin fichas, el marco sería una caja vacía debajo del aviso.
       el.marco.hidden = fichas.length === 0;
@@ -199,6 +275,7 @@
       // vez por lista y no por ficha: prenderla y apagarla al pasar el cursor
       // cambiaría el alto del marco y haría saltar la grilla entera.
       el.resumen.hidden = !colaboradores.some(tienePerfil);
+      decidirEnlacesDeEdicion();
       pintar();
     }
 
@@ -246,10 +323,34 @@
       return nodo;
     }
 
-    function envolverEnCelda(boton) {
+    /*
+      El enlace a "Mi ficha" de una celda. Se crea para todas y se muestra en
+      una: decidirEnlacesDeEdicion() lo decide cuando se sabe quién mira, que
+      es después de que la lista ya está en pantalla.
+
+      "Editar" a secas no dice de quién, así que el nombre accesible lo aclara;
+      el texto visible sigue corto porque la ficha mide ~78px de ancho.
+    */
+    function crearEnlaceDeEdicion() {
+      const enlace = document.createElement("a");
+      enlace.className = "colaboradores__editar";
+      enlace.href = RUTA_MI_FICHA;
+      enlace.setAttribute("aria-label", "Editar mi ficha");
+      enlace.textContent = "Editar";
+      enlace.hidden = true;
+      return enlace;
+    }
+
+    /*
+      El enlace va en la CELDA y no dentro del botón: un <a> dentro de un
+      <button> es HTML inválido. Va DESPUÉS de él —la ficha es la acción
+      principal de la celda, el enlace su extra— y la hoja lo apila en la
+      esquina de arriba, lejos de la franja del nombre.
+    */
+    function envolverEnCelda(boton, indice) {
       const celda = document.createElement("li");
       celda.className = "colaboradores__celda";
-      celda.append(boton);
+      celda.append(boton, enlacesDeEdicion[indice]);
       return celda;
     }
 

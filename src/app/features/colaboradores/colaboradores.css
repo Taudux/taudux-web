@@ -167,6 +167,7 @@
   /* El nombre del perfil está acá porque recibe el foco al abrir una ficha:
      con teclado, el anillo tiene que ser el mismo que el del resto. */
   .colaboradores__enlace:focus-visible,
+  .colaboradores__editar:focus-visible,
   .colaboradores__perfil-nombre:focus-visible,
   .colaboradores__aviso:focus-visible {
     outline: var(--focus-ring);
@@ -312,9 +313,45 @@
     list-style: none;
   }
 
+  /* Relativa para anclar el enlace de "Mi ficha", que se apila sobre la ficha.
+     SIN z-index propio: con uno, la celda crearía un contexto de apilamiento y
+     encerraría a la ficha activa, cuyo resplandor volvería a quedar debajo de
+     las vecinas. */
   .colaboradores__celda {
+    position: relative;
     min-inline-size: 0;
     min-block-size: 0;
+  }
+
+  /*
+    "EDITAR" en la esquina de la ficha propia. Vive en la CELDA y no dentro del
+    <button> (un <a> ahí sería HTML inválido), así que se apila encima con
+    posición absoluta.
+
+    Arriba a la derecha: el pie de la ficha es la franja del nombre (27% del
+    alto) y el enlace no debe taparlo. A 360px la ficha mide ~78px y el texto
+    entra en ~48px, pegado a la esquina y sin partirse.
+  */
+  .colaboradores__editar {
+    position: absolute;
+    inset: 4px 4px auto auto;
+    /* Por encima de la ficha, que sube a --z-elevated cuando está activa. */
+    z-index: var(--z-highlight);
+    padding: 2px 5px;
+    border-radius: var(--radius-pill);
+    background: rgba(4, 6, 10, 0.85);
+    font: 500 0.5625rem var(--font-mono);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .colaboradores__editar:hover {
+    background: rgba(4, 6, 10, 0.95);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .colaboradores__ficha {
