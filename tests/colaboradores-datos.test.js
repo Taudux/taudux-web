@@ -4,63 +4,106 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 
+const DATOS = require(path.join(ROOT, "src/app/features/colaboradores/colaboradores.datos.js"));
 const {
-  COLABORADORES,
   ETIQUETAS_ATRIBUTOS,
   COLUMNAS_ROSTER,
-  DISPONIBILIDADES,
-  slugDeColaborador,
+  tienePerfil,
   indicePorSlug,
   moverSeleccion,
   colegaSugerido,
   numeroDeFicha,
   etiquetaDeAtributo,
   enlacesDisponibles,
-} = require(path.join(ROOT, "src/app/features/colaboradores/colaboradores.datos.js"));
+} = DATOS;
+const { COLABORADORES_MUESTRA: MUESTRA } = require("./fixtures/colaboradores.muestra.js");
+
+// Mismo formato que el check `perfiles_slug_formato` de la migración 0038.
+const FORMATO_DE_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /*
-  El roster es UN arreglo de fichas completas. El prototipo lo traía partido en
-  dos arreglos paralelos emparejados por índice (ROSTER y EXTRA): borrar o
-  reordenar una persona en uno solo desfasaba a todas las demás sin que nada
-  fallara. Acá cada ficha lleva todos sus campos.
+  La lista sale de la base (listarColaboradores): el archivo de datos de la
+  página es sólo lógica. Las doce personas inventadas del prototipo viven en
+  tests/fixtures y nunca deben volver a viajar a producción.
 */
-test("every collaborator card is complete and well-formed", () => {
-  assert.ok(COLABORADORES.length > 0, "el roster no puede estar vacío");
+test("the page data module ships no sample people and no slug generator of its own", () => {
+  assert.equal(DATOS.COLABORADORES, undefined, "las fichas de muestra no van en el código de la página");
+  assert.equal(DATOS.slugDeColaborador, undefined, "el slug lo genera la base, no el front");
+});
+
+/*
+  Cada ficha de muestra lleva la ficha de perfil completa: es lo que usan los
+  tests de la vista de perfil. El prototipo traía los campos en dos arreglos
+  paralelos emparejados por índice; acá cada persona lleva todo lo suyo.
+*/
+test("every sample person carries the full profile the profile view paints", () => {
+  assert.ok(MUESTRA.length > 0, "la muestra no puede estar vacía");
   assert.equal(ETIQUETAS_ATRIBUTOS.length, 5);
+  for (const persona of MUESTRA) {
+    assert.equal(tienePerfil(persona), true, `${persona.nombre}: ficha incompleta`);
+  }
+});
 
-  for (const ficha of COLABORADORES) {
-    for (const campo of ["nombre", "corto", "rol", "clase", "bio", "ciudad", "anios", "esp", "stack", "disp"]) {
-      assert.equal(typeof ficha[campo], "string", `${ficha.nombre}: falta ${campo}`);
-      assert.notEqual(ficha[campo].trim(), "", `${ficha.nombre}: ${campo} vacío`);
-    }
-    assert.ok(Number.isInteger(ficha.proyectos) && ficha.proyectos >= 0, `${ficha.nombre}: proyectos`);
-    assert.ok(DISPONIBILIDADES.includes(ficha.disp), `${ficha.nombre}: disponibilidad desconocida "${ficha.disp}"`);
+// Dos personas con el mismo slug abrirían siempre la primera.
+test("sample slugs are unique and follow the database slug format", () => {
+  const slugs = MUESTRA.map((persona) => persona.slug);
+  assert.equal(new Set(slugs).size, slugs.length, "slugs repetidos");
+  for (const slug of slugs) assert.match(slug, FORMATO_DE_SLUG);
+});
 
-    // Una barra por etiqueta, de 1 a 5: la interfaz pinta cinco segmentos.
-    assert.equal(ficha.stats.length, ETIQUETAS_ATRIBUTOS.length, `${ficha.nombre}: un valor por atributo`);
-    for (const valor of ficha.stats) {
-      assert.ok(Number.isInteger(valor) && valor >= 1 && valor <= 5, `${ficha.nombre}: atributo fuera de 1-5`);
-    }
+/*
+  Hoy la base entrega sólo nombre, corto y slug: "Mi ficha" todavía no existe.
+  Esa persona sale en el roster, pero no tiene perfil que abrir.
+*/
+test("a public record with only name and slug has no profile yet", () => {
+  assert.equal(tienePerfil({ nombre: "Samael Flores", corto: "Samael", slug: "samael" }), false);
+  assert.equal(tienePerfil(null), false);
+  assert.equal(tienePerfil(undefined), false);
+});
+
+test("a single missing or out-of-range field is enough to have no profile", () => {
+  const base = MUESTRA[0];
+  assert.equal(tienePerfil(structuredClone(base)), true, "premisa: la base sí tiene ficha");
+
+  const casos = {
+    "sin rol": { rol: undefined },
+    "rol en blanco": { rol: "   " },
+    "bio vacía": { bio: "" },
+    "sin atributos": { stats: undefined },
+    "un atributo de menos": { stats: [5, 3, 4, 4] },
+    "atributo en cero": { stats: [0, 3, 4, 4, 3] },
+    "atributo sobre el máximo": { stats: [6, 3, 4, 4, 3] },
+    "atributo no entero": { stats: [2.5, 3, 4, 4, 3] },
+    "disponibilidad desconocida": { disp: "Ocupado" },
+    "proyectos negativos": { proyectos: -1 },
+    "proyectos como texto": { proyectos: "24" },
+  };
+  for (const [caso, cambios] of Object.entries(casos)) {
+    assert.equal(tienePerfil({ ...structuredClone(base), ...cambios }), false, caso);
   }
 });
 
 /*
   El perfil vive en el hash (#/valeria) para que el botón atrás del navegador
-  vuelva al roster. El slug sale del nombre corto, sin acentos ni mayúsculas, y
-  tiene que ser único: dos fichas con el mismo slug abrirían siempre la primera.
+  vuelva al roster. El slug es el de la base: se busca tal cual en la lista
+  cargada, sin volver a derivarlo del nombre.
 */
-test("slugs are url-safe, accent-free and unique, and resolve back to their card", () => {
-  const slugs = COLABORADORES.map(slugDeColaborador);
-  assert.equal(new Set(slugs).size, slugs.length, "slugs repetidos");
-  for (const slug of slugs) assert.match(slug, /^[a-z0-9-]+$/);
+test("a profile slug resolves to its position in the loaded list", () => {
+  MUESTRA.forEach((persona, indice) => assert.equal(indicePorSlug(MUESTRA, persona.slug), indice));
+  assert.equal(indicePorSlug(MUESTRA, "no-existe"), -1);
+  assert.equal(indicePorSlug(MUESTRA, ""), -1);
+  assert.equal(indicePorSlug(MUESTRA, "VALERIA"), 0, "el hash puede llegar en mayúsculas");
 
-  assert.equal(slugDeColaborador({ corto: "Sebastián" }), "sebastian");
-  assert.equal(slugDeColaborador({ corto: "María José" }), "maria-jose");
+  // Una persona sin ficha de perfil también se encuentra: el slug es de la cuenta.
+  assert.equal(indicePorSlug([{ nombre: "Samael", corto: "Samael", slug: "samael" }], "samael"), 0);
+  assert.equal(
+    indicePorSlug([{ nombre: "Sebastián Lara", corto: "Sebastián", slug: "sebas-lara" }], "sebastian"),
+    -1,
+    "el slug es el de la base, no uno derivado del nombre",
+  );
 
-  slugs.forEach((slug, indice) => assert.equal(indicePorSlug(slug), indice));
-  assert.equal(indicePorSlug("no-existe"), -1);
-  assert.equal(indicePorSlug(""), -1);
-  assert.equal(indicePorSlug("VALERIA"), indicePorSlug("valeria"), "el hash puede llegar en mayúsculas");
+  assert.equal(indicePorSlug([], "valeria"), -1);
+  assert.equal(indicePorSlug(undefined, "valeria"), -1, "sin lista cargada no hay a quién abrir");
 });
 
 /*

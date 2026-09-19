@@ -1,7 +1,8 @@
 /*
-  La página de colaboradores: pinta el roster y la ficha de perfil a partir de
-  colaboradores.datos.js, que es quien tiene las fichas y toda la lógica pura
-  (slugs, colega sugerido, numeración, enlaces seguros). Acá sólo hay DOM.
+  La página de colaboradores: pinta el roster y la ficha de perfil. La lista la
+  pide a listarColaboradores() (colaboradores.service.js) y la lógica pura
+  (colega sugerido, numeración, enlaces seguros, quién tiene perfil) sale de
+  colaboradores.datos.js. Acá sólo hay DOM.
 
   Un único estado y una única función que deriva la pantalla de él. Los
   manejadores de eventos NO tocan el DOM: cambian el estado y llaman a pintar().
@@ -9,9 +10,13 @@
   vista; la navegación con flechas, que llega después, entra como una fuente
   más de cambio de estado sin tocar el pintado.
 
-  Todo el texto entra por textContent. Las fichas hoy son de muestra, pero van a
-  ser datos escritos a mano por varias personas: nada de lo que venga de ahí se
-  interpreta como markup.
+  Hoy la base entrega sólo nombre y slug: la ficha de perfil llega con "Mi
+  ficha". Quien no la tiene aparece en el roster, pero no abre perfil: su
+  ficha sólo se elige y la vista previa muestra su nombre.
+
+  Todo el texto entra por textContent. Los nombres vienen de la base y las
+  fichas van a ser escritas a mano por cada persona: nada de lo que venga de
+  ahí se interpreta como markup.
 */
 (function () {
   const SIGLAS_DE_ENLACE = { linkedin: "in", github: "gh", correo: "@" };
@@ -24,16 +29,27 @@
     bio: "Elige una ficha del roster para ver su perfil, especialidades y cómo trabajar con esa persona.",
   };
 
+  const AVISOS = {
+    cargando: "Cargando colaboradores…",
+    error: "No se pudo cargar la lista de colaboradores. Reintenta cuando tengas conexión.",
+    vacio: "Aún no hay colaboradores para mostrar.",
+  };
+
   function iniciar() {
-    // Sin los datos no hay nada que pintar; el HTML estático ya muestra el
-    // estado vacío, que es mejor que un error a mitad de render.
-    if (typeof COLABORADORES === "undefined" || !Array.isArray(COLABORADORES)) return;
+    // Sin la lógica del roster no hay nada que pintar; el HTML estático ya
+    // muestra el estado vacío, que es mejor que un error a mitad de render.
+    if (typeof tienePerfil !== "function") return undefined;
 
     const porId = (id) => document.getElementById(id);
     const el = {
       roster: porId("colaboradoresRoster"),
       perfil: porId("colaboradoresPerfil"),
+      aviso: porId("colaboradoresAviso"),
+      avisoMensaje: porId("colaboradoresAvisoMensaje"),
+      reintentar: porId("colaboradoresReintentar"),
+      marco: porId("colaboradoresMarco"),
       grilla: porId("colaboradoresGrilla"),
+      resumen: porId("colaboradoresResumen"),
       previaInicial: porId("previaInicial"),
       previaClase: porId("previaClase"),
       previaNombre: porId("previaNombre"),
@@ -63,7 +79,7 @@
 
     // Todo o nada: con media página sin montar, pintar() reventaría en el
     // primer null y dejaría la otra mitad a medio actualizar.
-    if (Object.values(el).some((nodo) => !nodo)) return;
+    if (Object.values(el).some((nodo) => !nodo)) return undefined;
 
     const estado = { seleccion: null, vista: "roster" };
 
@@ -80,34 +96,125 @@
     */
     const resaltado = { cursor: null, foco: null };
 
-    const fichas = COLABORADORES.map(crearFicha);
-    el.grilla.replaceChildren(...fichas.map(envolverEnCelda));
+    // La lista cargada y sus botones: se reemplazan juntos, en montarRoster().
+    let colaboradores = [];
+    let fichas = [];
+    // El colega y el hash se conectan UNA vez, con la primera lista que llega.
+    let conectada = false;
 
     const atributosPrevia = crearAtributos(el.previaAtributos, { valorVisible: false });
     const atributosPerfil = crearAtributos(el.perfilAtributos, { valorVisible: true });
 
-    el.perfilColega.addEventListener("click", verColega);
-    window.addEventListener("hashchange", () => aplicarHash({ moverFoco: true }));
+    el.reintentar.addEventListener("click", reintentarCarga);
 
-    // Un enlace compartido (#/mariana) abre directo ese perfil. En la carga el
-    // foco no se toca: nadie lo tenía todavía.
-    aplicarHash({ moverFoco: false });
+    // Devuelve la promesa de la primera carga: el navegador la ignora, y así
+    // quien dispara DOMContentLoaded (los tests) puede esperarla.
+    return cargarRoster();
 
-    /* ---------- Construcción (una sola vez) ---------- */
+    /* ---------- Carga de la lista ---------- */
 
-    function crearFicha(ficha, indice) {
+    /*
+      Devuelve true si llegó una lista (aunque venga vacía) y false si falló.
+      Mientras carga, el botón de reintentar se queda donde estaba —oculto en
+      la primera carga, visible tras un error— pero apagado: un segundo clic no
+      dispara otra consulta en paralelo.
+    */
+    async function cargarRoster() {
+      el.reintentar.disabled = true;
+      el.grilla.setAttribute("aria-busy", "true");
+      mostrarAviso(AVISOS.cargando, { error: false });
+
+      let resultado = null;
+      try {
+        resultado = await listarColaboradores();
+      } catch {
+        // El servicio nunca lanza: esto es su script que no llegó a cargar
+        // (ReferenceError). Para quien mira, es un fallo de carga más.
+      } finally {
+        el.grilla.setAttribute("aria-busy", "false");
+        el.reintentar.disabled = false;
+      }
+
+      const lista = resultado?.ok && Array.isArray(resultado.data) ? resultado.data : null;
+      montarRoster(lista ?? []);
+
+      if (lista === null) {
+        mostrarAviso(AVISOS.error, { error: true });
+        el.reintentar.hidden = false;
+        return false;
+      }
+
+      el.reintentar.hidden = true;
+      if (lista.length === 0) mostrarAviso(AVISOS.vacio, { error: false });
+      else ocultarAviso();
+
+      if (!conectada) {
+        conectada = true;
+        el.perfilColega.addEventListener("click", verColega);
+        window.addEventListener("hashchange", () => aplicarHash({ moverFoco: true }));
+      }
+
+      // Un enlace compartido (#/mariana) abre directo ese perfil, también si
+      // llegó mientras la lista cargaba: antes de tenerla, cualquier slug
+      // parecería desconocido y se habría limpiado. El foco no se toca.
+      aplicarHash({ moverFoco: false });
+      return true;
+    }
+
+    /*
+      Tras un reintento, el botón que tenía el foco se oculta con el aviso (o
+      sigue ahí si volvió a fallar). En ningún caso el foco queda en el <body>:
+      va a lo primero que hay que leer de lo que quedó a la vista.
+    */
+    async function reintentarCarga() {
+      const cargada = await cargarRoster();
+      if (!cargada || fichas.length === 0) el.aviso.focus();
+      else if (estado.vista === "perfil") el.perfilNombre.focus();
+      // A la ficha elegida (un #/slug sin perfil ya la eligió), no a la primera:
+      // el foco manda sobre la vista previa y Enter activaría a otra persona.
+      else fichas[estado.seleccion ?? 0].focus();
+    }
+
+    function mostrarAviso(mensaje, { error }) {
+      el.aviso.hidden = false;
+      el.aviso.classList.toggle("colaboradores__aviso--error", error);
+      escribir(el.avisoMensaje, mensaje);
+    }
+
+    function ocultarAviso() {
+      el.aviso.hidden = true;
+      el.aviso.classList.remove("colaboradores__aviso--error");
+      escribir(el.avisoMensaje, "");
+    }
+
+    /* ---------- Construcción (una vez por lista) ---------- */
+
+    function montarRoster(lista) {
+      colaboradores = lista;
+      fichas = colaboradores.map(crearFicha);
+      el.grilla.replaceChildren(...fichas.map(envolverEnCelda));
+      // Sin fichas, el marco sería una caja vacía debajo del aviso.
+      el.marco.hidden = fichas.length === 0;
+      // La tarjeta de abajo existe para mostrar fichas de perfil. Se decide una
+      // vez por lista y no por ficha: prenderla y apagarla al pasar el cursor
+      // cambiaría el alto del marco y haría saltar la grilla entera.
+      el.resumen.hidden = !colaboradores.some(tienePerfil);
+      pintar();
+    }
+
+    function crearFicha(persona, indice) {
       const boton = document.createElement("button");
       boton.type = "button";
       boton.className = "colaboradores__ficha";
       // El nombre corto de la ficha no alcanza para saber a quién se abre: el
-      // nombre accesible lleva nombre completo y rol.
-      boton.setAttribute("aria-label", `${ficha.nombre}, ${ficha.rol}`);
+      // nombre accesible lleva nombre completo y, si lo hay, el rol.
+      boton.setAttribute("aria-label", persona.rol ? `${persona.nombre}, ${persona.rol}` : persona.nombre);
 
-      const nombre = crearDecorado("colaboradores__ficha-nombre", ficha.corto);
+      const nombre = crearDecorado("colaboradores__ficha-nombre", persona.corto);
       boton.append(
         crearDecorado("colaboradores__ficha-cabeza"),
         crearDecorado("colaboradores__ficha-torso"),
-        crearDecorado("colaboradores__ficha-inicial", inicialDe(ficha)),
+        crearDecorado("colaboradores__ficha-inicial", inicialDe(persona)),
         nombre,
       );
 
@@ -124,7 +231,7 @@
       boton.addEventListener("mouseleave", soltar("cursor"));
       boton.addEventListener("focus", resaltar("foco"));
       boton.addEventListener("blur", soltar("foco"));
-      boton.addEventListener("click", () => abrirPerfil(indice));
+      boton.addEventListener("click", () => elegirFicha(indice));
 
       return boton;
     }
@@ -186,6 +293,17 @@
 
     /* ---------- Transiciones de estado ---------- */
 
+    // Sin ficha de perfil no hay perfil que abrir: el clic sólo la deja
+    // elegida, y el hash (el historial) no se toca.
+    function elegirFicha(indice) {
+      if (tienePerfil(colaboradores[indice])) {
+        abrirPerfil(indice);
+        return;
+      }
+      estado.seleccion = indice;
+      pintar();
+    }
+
     /*
       Abrir un perfil sólo escribe el hash: la entrada de historial que crea es
       la que el botón atrás del navegador deshace para volver al roster. Quien
@@ -196,7 +314,7 @@
     }
 
     function verColega() {
-      const colega = colegaSugerido(estado.seleccion, COLABORADORES.length);
+      const colega = colegaSugerido(estado.seleccion, colaboradores.length);
       if (colega === null) return;
       // replace y no location.hash: saltar entre colegas reemplaza la entrada
       // del perfil en vez de apilar una, así atrás desde cualquier perfil deja
@@ -206,34 +324,37 @@
     }
 
     function rutaDePerfil(indice) {
-      return `#/${slugDeColaborador(COLABORADORES[indice])}`;
+      return `#/${colaboradores[indice].slug}`;
     }
 
     /*
-      El hash es la fuente de verdad de la vista: #/<slug> de una ficha que
-      existe es su perfil; cualquier otra cosa, el roster. Por acá pasan el
+      El hash es la fuente de verdad de la vista: #/<slug> de alguien con ficha
+      de perfil es su perfil; cualquier otra cosa, el roster. Por acá pasan el
       clic en una ficha, el colega, atrás y adelante, y un enlace compartido.
     */
     function aplicarHash({ moverFoco }) {
       const hash = window.location.hash;
       const esRutaDePerfil = hash.startsWith("#/");
-      const indice = esRutaDePerfil ? indicePorSlug(hash.slice(2)) : -1;
+      const indice = esRutaDePerfil ? indicePorSlug(colaboradores, hash.slice(2)) : -1;
       const vistaAnterior = estado.vista;
 
-      if (indice === -1) {
-        estado.vista = "roster";
-        // Un #/<slug> que no es de nadie no se deja en la barra: replaceState
-        // corrige la URL sin crear otra entrada ni volver a emitir hashchange.
-        // Sólo los #/: otro hash puede ser de otro script (el cliente de
-        // Supabase lee de ahí los tokens de sesión y los limpia él).
-        if (esRutaDePerfil) {
-          window.history.replaceState(null, "", window.location.pathname + window.location.search);
-        }
-      } else {
+      if (indice !== -1 && tienePerfil(colaboradores[indice])) {
         estado.seleccion = indice;
         estado.vista = "perfil";
         resaltado.cursor = null;
         resaltado.foco = null;
+      } else {
+        estado.vista = "roster";
+        // Alguien que existe pero todavía no tiene ficha: queda elegido en el
+        // roster, igual que si hubieran hecho clic en su ficha.
+        if (indice !== -1) estado.seleccion = indice;
+        // Un #/<slug> que no abre un perfil no se deja en la barra:
+        // replaceState corrige la URL sin crear otra entrada ni volver a
+        // emitir hashchange. Sólo los #/: otro hash puede ser de otro script
+        // (el cliente de Supabase lee de ahí los tokens de sesión y los limpia él).
+        if (esRutaDePerfil) {
+          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        }
       }
 
       pintar();
@@ -256,8 +377,9 @@
     /* ---------- Pintado ---------- */
 
     function pintar() {
-      // Un perfil sin ficha no existe: cualquier estado incoherente cae al roster.
-      const hayPerfil = estado.vista === "perfil" && COLABORADORES[estado.seleccion] !== undefined;
+      // Un perfil sin ficha completa no existe: cualquier estado incoherente
+      // cae al roster.
+      const hayPerfil = estado.vista === "perfil" && tienePerfil(colaboradores[estado.seleccion]);
 
       el.roster.hidden = hayPerfil;
       el.perfil.hidden = !hayPerfil;
@@ -268,7 +390,10 @@
 
     function pintarRoster() {
       const mostrada = resaltado.cursor ?? resaltado.foco ?? estado.seleccion;
-      const ficha = COLABORADORES[mostrada] ?? null;
+      const persona = colaboradores[mostrada] ?? null;
+      // Sin ficha de perfil, de la persona sólo se muestra el nombre.
+      const ficha = persona && tienePerfil(persona) ? persona : null;
+      const soloNombre = persona !== null && ficha === null;
 
       fichas.forEach((boton, indice) => {
         boton.classList.toggle("colaboradores__ficha--activa", indice === mostrada);
@@ -279,11 +404,19 @@
 
       // Cada escritura se salta si el texto no cambió: las regiones aria-live
       // vuelven a anunciarse al reescribirlas, aunque sea con lo mismo.
-      escribir(el.previaInicial, ficha ? inicialDe(ficha) : VACIA.inicial);
-      escribir(el.previaClase, ficha ? ficha.clase : VACIA.clase);
-      escribir(el.previaNombre, ficha ? ficha.nombre : VACIA.nombre);
-      escribir(el.previaRol, ficha ? ficha.rol : VACIA.rol);
-      escribir(el.previaBio, ficha ? ficha.bio : VACIA.bio);
+      escribir(el.previaInicial, persona ? inicialDe(persona) : VACIA.inicial);
+      escribir(el.previaNombre, persona ? persona.nombre : VACIA.nombre);
+
+      // Clase y rol se ocultan en vez de quedar vacíos: un <p> vacío igual
+      // conserva sus márgenes.
+      el.previaClase.hidden = soloNombre;
+      el.previaRol.hidden = soloNombre;
+      escribir(el.previaClase, textoDePrevia(ficha, soloNombre, "clase"));
+      escribir(el.previaRol, textoDePrevia(ficha, soloNombre, "rol"));
+
+      // La bio NO se oculta: vive en la tarjeta de abajo, y ocultarla cambiaría
+      // su alto con cada ficha bajo el cursor. Queda vacía, con su piso.
+      escribir(el.previaBio, textoDePrevia(ficha, soloNombre, "bio"));
       el.previaBio.classList.toggle("colaboradores__bio--vacia", !ficha);
 
       // `inert` además de la clase: la clase sólo lo atenúa a la vista, y un
@@ -295,8 +428,14 @@
       pintarAtributos(atributosPrevia, ficha ? ficha.stats : null);
     }
 
+    // Con ficha, su campo; sin ficha, nada; sin nadie a la vista, la invitación.
+    function textoDePrevia(ficha, soloNombre, campo) {
+      if (ficha) return ficha[campo];
+      return soloNombre ? "" : VACIA[campo];
+    }
+
     function pintarPerfil(indice) {
-      const ficha = COLABORADORES[indice];
+      const ficha = colaboradores[indice];
 
       escribir(el.perfilNumero, `${numeroDeFicha(indice)} · ${ficha.clase}`);
       escribir(el.perfilInicial, inicialDe(ficha));
@@ -314,11 +453,11 @@
       // es la lectura prudente si mañana aparece un tercer estado.
       el.perfilPunto.classList.toggle("colaboradores__punto--disponible", ficha.disp === "Disponible");
 
-      const colega = colegaSugerido(indice, COLABORADORES.length);
+      const colega = colegaSugerido(indice, colaboradores.length);
       el.perfilColega.hidden = colega === null;
       if (colega !== null) {
-        escribir(el.perfilColegaInicial, inicialDe(COLABORADORES[colega]));
-        escribir(el.perfilColegaNombre, COLABORADORES[colega].nombre);
+        escribir(el.perfilColegaInicial, inicialDe(colaboradores[colega]));
+        escribir(el.perfilColegaNombre, colaboradores[colega].nombre);
       }
 
       pintarEnlaces(el.perfilEnlaces, ficha);

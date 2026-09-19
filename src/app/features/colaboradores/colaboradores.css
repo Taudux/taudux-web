@@ -176,7 +176,8 @@
      con teclado, el anillo tiene que ser el mismo que el del resto. */
   .colaboradores__enlace:focus-visible,
   .colaboradores__perfil-nombre:focus-visible,
-  .colaboradores__colega:focus-visible {
+  .colaboradores__colega:focus-visible,
+  .colaboradores__aviso:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
   }
@@ -324,6 +325,31 @@
     overflow-wrap: anywhere;
   }
 
+  /* Aviso de carga, error o lista vacía. Mismo patrón que el estado de datos
+     del catálogo de cursos (.courses__data-status); el botón de reintentar
+     sólo aparece con el error. */
+  .colaboradores__aviso {
+    display: grid;
+    justify-items: start;
+    gap: 1rem;
+    padding: 1rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+  }
+
+  .colaboradores__aviso--error {
+    border-color: color-mix(in srgb, var(--color-error) 38%, transparent);
+  }
+
+  .colaboradores__aviso-mensaje {
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .colaboradores__aviso--error .colaboradores__aviso-mensaje {
+    color: var(--color-error);
+  }
+
   /* El marco de las fichas es lo único elástico de la columna: el título y la
      tarjeta de perfil miden lo que mide su contenido, y él se queda el resto. */
   .colaboradores__marco {
@@ -345,8 +371,11 @@
     flex: 1 1 auto;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    /* Las filas se reparten el alto del marco por igual, sean las que sean:
-       con 12 fichas son tres, con 16 serían cuatro más bajas. */
+    /* Tres filas fijas se reparten el alto del marco aunque haya pocas fichas:
+       con una sola, ésta ocupa su celda y no se estira al alto entero de la
+       grilla. Con más de doce, las filas extra entran por grid-auto-rows y se
+       reparten el mismo alto (con 16 serían cuatro filas más bajas). */
+    grid-template-rows: repeat(3, minmax(0, 1fr));
     grid-auto-rows: minmax(0, 1fr);
     gap: 3px;
     min-block-size: 0;
@@ -505,7 +534,7 @@
   }
 
   /* Columna en flex y no retrato absoluto: cuando no hay píldoras de contacto
-     (hoy, ninguna ficha de muestra las tiene) el retrato ocupa todo el alto. */
+     (hoy, nadie las tiene) el retrato ocupa todo el alto. */
   .colaboradores__figura {
     display: flex;
     flex-direction: column;
@@ -709,7 +738,10 @@
       flex: none;
     }
 
+    /* Sin alto que repartir, las tres filas `fr` quedarían como filas
+       cuadradas vacías debajo de la última ficha. */
     .colaboradores__grilla {
+      grid-template-rows: none;
       grid-auto-rows: auto;
     }
 

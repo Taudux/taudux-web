@@ -5,12 +5,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
-    content="Conoce a las personas que colaboran con Taudux: su rol, sus especialidades y cómo trabajar con cada una." />
-  <!-- noindex A PROPÓSITO: las doce fichas son de muestra (personas inventadas
-       que vienen del prototipo de diseño, ver colaboradores.datos.js). No deben
-       llegar a un buscador con nombres y trayectorias que no son de nadie.
-       Quitar esta etiqueta —y su aserción en tests/colaboradores-pagina.test.js—
-       cuando el equipo real reemplace el roster. -->
+    content="Conoce a las personas que colaboran con Taudux." />
+  <!-- noindex A PROPÓSITO: la página está incompleta. La lista ya sale de la
+       base, pero las fichas de perfil (rol, especialidades, bio) todavía no
+       existen: hasta que llegue "Mi ficha", cada persona muestra sólo su
+       nombre. Quitar esta etiqueta —y su aserción en
+       tests/colaboradores-pagina.test.js— cuando las fichas reales estén
+       cargadas. -->
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/png" href="/assets/images/1.png">
   <title>Colaboradores | Taudux</title>
@@ -60,11 +61,21 @@
         <div class="colaboradores__seleccion">
           <h1 class="colaboradores__titulo heading--gradient" id="colaboradoresTitulo">Colaboradores</h1>
 
-          <div class="colaboradores__marco">
+          <!-- Carga, error y lista vacía. `status` y no `alert`: también anuncia
+               "Cargando…", y eso no amerita interrumpir. tabindex="-1": recibe
+               el foco si un reintento falla, sin entrar al orden del Tab. -->
+          <div class="colaboradores__aviso" id="colaboradoresAviso" role="status" tabindex="-1" hidden>
+            <p class="colaboradores__aviso-mensaje" id="colaboradoresAvisoMensaje"></p>
+            <button class="button button--outline" type="button" id="colaboradoresReintentar" hidden>Reintentar carga</button>
+          </div>
+
+          <div class="colaboradores__marco" id="colaboradoresMarco">
             <ul class="colaboradores__grilla" id="colaboradoresGrilla" aria-label="Fichas del equipo"></ul>
           </div>
 
-          <div class="colaboradores__resumen panel">
+          <!-- Oculta hasta saber que alguien de la lista tiene ficha de perfil:
+               la decide colaboradores.js una vez por carga, no por ficha. -->
+          <div class="colaboradores__resumen panel" id="colaboradoresResumen" hidden>
             <div class="colaboradores__resumen-texto">
               <h2 class="colaboradores__etiqueta">Perfil</h2>
               <p class="colaboradores__bio colaboradores__bio--vacia" id="previaBio" aria-live="polite">Elige una ficha del roster para ver su perfil, especialidades y cómo trabajar con esa persona.</p>
@@ -162,6 +173,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app/core/supabase/supabase-client.js"></script>
   <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/core/colaboradores/colaboradores.service.js"></script>
   <script src="/app/shared/navbar/navbar.js"></script>
   <script src="/app/shared/toast/toast.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>

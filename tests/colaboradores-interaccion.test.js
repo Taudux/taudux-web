@@ -4,6 +4,9 @@
   colaboradores.datos.js + colaboradores.js dentro de un vm, contra un DOM falso
   armado a partir del index.html real. Toda aserción es sobre estado observable
   del DOM (texto, hidden, atributos, foco), nunca sobre el texto del script.
+
+  La lista la da un listarColaboradores() falso que se inyecta en el vm: por
+  defecto, las doce fichas de muestra con perfil completo.
 */
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -15,18 +18,54 @@ const ROOT = path.resolve(__dirname, "..");
 const CARPETA = "src/app/features/colaboradores";
 const leer = (archivo) => fs.readFileSync(path.join(ROOT, CARPETA, archivo), "utf8");
 
-// Los datos de referencia salen del mismo archivo que corre en el vm: es el
-// lado "esperado" de cada comparación.
+// La lógica sale del mismo archivo que corre en el vm y las fichas, de la
+// muestra que le sirve el servicio falso: es el lado "esperado" de cada
+// comparación.
 const {
-  COLABORADORES,
   ETIQUETAS_ATRIBUTOS,
   colegaSugerido,
   numeroDeFicha,
-  slugDeColaborador,
   indicePorSlug,
 } = require(path.join(ROOT, CARPETA, "colaboradores.datos.js"));
+const { COLABORADORES_MUESTRA: MUESTRA } = require("./fixtures/colaboradores.muestra.js");
 
-const rutaDe = (indice) => `#/${slugDeColaborador(COLABORADORES[indice])}`;
+const rutaDe = (indice) => `#/${MUESTRA[indice].slug}`;
+
+// Lo que hoy entrega la base: nombre, corto y slug, sin ficha de perfil.
+const SAMAEL = Object.freeze({ nombre: "Samael Flores", corto: "Samael", slug: "samael" });
+
+const CARGANDO = "Cargando colaboradores…";
+const ERROR_DE_CARGA = "No se pudo cargar la lista de colaboradores. Reintenta cuando tengas conexión.";
+const VACIO = "Aún no hay colaboradores para mostrar.";
+
+/* ---------- listarColaboradores() falsos ---------- */
+
+// Mismo contrato que el servicio real: nunca lanza, devuelve { ok, ... }.
+const FALLO = Object.freeze({ ok: false, mensaje: "No se pudo cargar la lista de colaboradores." });
+const exito = (lista) => ({ ok: true, data: structuredClone(lista) });
+
+// Cada llamada entrega su propia copia: la página nunca comparte objetos con
+// el test ni con la llamada anterior.
+const conLista = (lista) => async () => exito(lista);
+
+// Una respuesta por llamada, en orden: la carga inicial y cada reintento.
+function enSecuencia(...respuestas) {
+  let llamada = 0;
+  return async () => structuredClone(respuestas[Math.min(llamada++, respuestas.length - 1)]);
+}
+
+// Una respuesta que el test entrega cuando quiere, para ver el "Cargando…".
+function diferido() {
+  let resolver;
+  const promesa = new Promise((resolve) => { resolver = resolve; });
+  return { promesa, resolver };
+}
+
+function muestraConRetoques(retoques) {
+  const lista = structuredClone(MUESTRA);
+  for (const [indice, campos] of Object.entries(retoques)) Object.assign(lista[indice], campos);
+  return lista;
+}
 
 /* ---------- DOM falso: sólo lo que colaboradores.js usa ---------- */
 
@@ -90,9 +129,10 @@ class Nodo {
     (this.listeners[tipo] ||= []).push(manejador);
   }
 
-  // Lo que el test usa para simular al usuario.
+  // Lo que el test usa para simular al usuario. Devuelve lo que devolvió cada
+  // manejador, para poder esperar a los asíncronos (el reintento de carga).
   disparar(tipo) {
-    (this.listeners[tipo] || []).forEach((manejador) => manejador({ type: tipo, target: this }));
+    return (this.listeners[tipo] || []).map((manejador) => manejador({ type: tipo, target: this }));
   }
 
   // Un nodo dentro de algo `hidden` o `inert` no es enfocable: así un focus()
@@ -229,14 +269,25 @@ function crearNavegador(hashInicial) {
 }
 
 /*
-  Carga la página en un contexto NUEVO y dispara DOMContentLoaded.
-    sinIds    ids que getElementById no encuentra (página a medio montar).
-    retoques  { indice: campos } que se mezclan en COLABORADORES dentro del vm,
-              sin tocar el archivo de datos.
-    sinDatos  no carga colaboradores.datos.js.
-    hash      el hash con el que se abre la página (un enlace compartido).
+  Abre la página en un contexto NUEVO y dispara DOMContentLoaded, SIN esperar
+  a que la lista cargue: `iniciada` es la promesa de esa primera carga.
+    sinIds       ids que getElementById no encuentra (página a medio montar).
+    servicio     el listarColaboradores() que ve la página. Por defecto, la
+                 muestra completa.
+    retoques     { indice: campos } que se mezclan en una copia de la muestra
+                 antes de servirla (sólo sin `servicio`).
+    sinDatos     no carga colaboradores.datos.js.
+    sinServicio  no hay listarColaboradores (su script no llegó).
+    hash         el hash con el que se abre la página (un enlace compartido).
 */
-function cargarPagina({ sinIds = [], retoques = {}, sinDatos = false, hash = "" } = {}) {
+function abrirPagina({
+  sinIds = [],
+  servicio,
+  retoques = {},
+  sinDatos = false,
+  sinServicio = false,
+  hash = "",
+} = {}) {
   const alCargar = [];
   const documento = {
     activeElement: null,
@@ -263,20 +314,18 @@ function cargarPagina({ sinIds = [], retoques = {}, sinDatos = false, hash = "" 
   });
   // Como en el navegador, `window` es el propio global.
   contexto.window = contexto;
-  if (!sinDatos) {
-    vm.runInContext(leer("colaboradores.datos.js"), contexto);
-    vm.runInContext(
-      `for (const [i, campos] of Object.entries(${JSON.stringify(retoques)})) Object.assign(COLABORADORES[i], campos);`,
-      contexto,
-    );
-  }
+  if (!sinServicio) contexto.listarColaboradores = servicio ?? conLista(muestraConRetoques(retoques));
+  if (!sinDatos) vm.runInContext(leer("colaboradores.datos.js"), contexto);
   vm.runInContext(leer("colaboradores.js"), contexto);
-  alCargar.forEach((manejador) => manejador());
+  // El manejador devuelve la promesa de la primera carga; el navegador la
+  // ignora, el test la espera.
+  const iniciada = Promise.all(alCargar.map((manejador) => manejador()));
 
   const porId = (id) => ids.get(id);
   return {
     documento,
     porId,
+    iniciada,
     fichas: () => porClase(porId("colaboradoresGrilla"), "colaboradores__ficha"),
     texto: (id) => porId(id).textContent,
     hash: () => navegador.location.hash,
@@ -286,7 +335,16 @@ function cargarPagina({ sinIds = [], retoques = {}, sinDatos = false, hash = "" 
     atras: navegador.atras,
     // Quien escribe otro hash en la barra de direcciones.
     irA: (nuevo) => { navegador.location.hash = nuevo; },
+    // Clic en "Reintentar carga"; la promesa se cumple cuando termina la carga.
+    reintentar: () => Promise.all(porId("colaboradoresReintentar").disparar("click")),
   };
+}
+
+// Abre la página y espera a que la primera carga termine.
+async function cargarPagina(opciones) {
+  const pagina = abrirPagina(opciones);
+  await pagina.iniciada;
+  return pagina;
 }
 
 // Por cada fila de atributos: cuántos segmentos llenos y qué valor declara.
@@ -312,6 +370,8 @@ function assertFocoEn(pagina, esperado) {
 function assertVistaPreviaVacia(pagina) {
   assert.equal(pagina.texto("previaNombre"), "¿Quién?");
   assert.equal(pagina.texto("previaClase"), "Sin selección");
+  assert.equal(pagina.porId("previaClase").hidden, false);
+  assert.equal(pagina.porId("previaRol").hidden, false);
   assert.equal(pagina.texto("previaInicial"), "?");
   assert.match(pagina.texto("previaBio"), /^Elige una ficha del roster/);
   assert.ok(pagina.porId("previaBio").classList.contains("colaboradores__bio--vacia"));
@@ -319,11 +379,13 @@ function assertVistaPreviaVacia(pagina) {
   assert.deepEqual(leerAtributos(pagina.porId("previaAtributos")).map((fila) => fila.llenos), [0, 0, 0, 0, 0]);
 }
 
-function assertVistaPreviaDe(pagina, indice) {
-  const ficha = COLABORADORES[indice];
+function assertVistaPreviaDe(pagina, indice, lista = MUESTRA) {
+  const ficha = lista[indice];
   assert.equal(pagina.texto("previaNombre"), ficha.nombre);
   assert.equal(pagina.texto("previaRol"), ficha.rol);
   assert.equal(pagina.texto("previaClase"), ficha.clase);
+  assert.equal(pagina.porId("previaClase").hidden, false);
+  assert.equal(pagina.porId("previaRol").hidden, false);
   assert.equal(pagina.texto("previaBio"), ficha.bio);
   assert.equal(pagina.porId("previaBio").classList.contains("colaboradores__bio--vacia"), false);
   assert.equal(pagina.porId("previaAcciones").inert, false);
@@ -333,11 +395,37 @@ function assertVistaPreviaDe(pagina, indice) {
   assert.deepEqual(filas.map((fila) => fila.llenos), ficha.stats);
   // Sólo la ficha mostrada queda marcada como activa.
   const activas = pagina.fichas().map((boton) => boton.classList.contains("colaboradores__ficha--activa"));
-  assert.deepEqual(activas, COLABORADORES.map((_, i) => i === indice));
+  assert.deepEqual(activas, lista.map((_, i) => i === indice));
 }
 
-function assertPerfilDe(pagina, indice) {
-  const ficha = COLABORADORES[indice];
+/*
+  Persona sin ficha de perfil: la vista previa muestra SÓLO su nombre. Nada de
+  clase, rol ni bio, y ni acciones, ni enlaces, ni barras con qué llenarse.
+*/
+function assertVistaPreviaSoloNombre(pagina, persona) {
+  assert.equal(pagina.texto("previaNombre"), persona.nombre);
+  assert.equal(pagina.porId("previaClase").hidden, true);
+  assert.equal(pagina.porId("previaRol").hidden, true);
+  assert.equal(pagina.texto("previaBio"), "");
+  assert.equal(pagina.porId("previaAcciones").inert, true);
+  assert.equal(pagina.porId("previaEnlaces").hidden, true);
+  assert.equal(pagina.porId("previaEnlaces").children.length, 0);
+  assert.deepEqual(leerAtributos(pagina.porId("previaAtributos")).map((fila) => fila.llenos), [0, 0, 0, 0, 0]);
+}
+
+function assertAviso(pagina, mensaje, { reintentar }) {
+  assert.equal(pagina.porId("colaboradoresAviso").hidden, false);
+  assert.equal(pagina.texto("colaboradoresAvisoMensaje"), mensaje);
+  assert.equal(pagina.porId("colaboradoresReintentar").hidden, !reintentar);
+}
+
+function assertSinAviso(pagina) {
+  assert.equal(pagina.porId("colaboradoresAviso").hidden, true);
+  assert.notEqual(pagina.porId("colaboradoresGrilla").getAttribute("aria-busy"), "true");
+}
+
+function assertPerfilDe(pagina, indice, lista = MUESTRA) {
+  const ficha = lista[indice];
   assert.equal(pagina.porId("colaboradoresRoster").hidden, true);
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, false);
   assert.equal(pagina.texto("perfilNombre"), ficha.nombre);
@@ -360,7 +448,7 @@ function assertPerfilDe(pagina, indice) {
   assert.deepEqual(filas.map((fila) => fila.valor), ficha.stats.map((n) => `${n}/5`));
   assert.deepEqual(filas.map((fila) => fila.llenos), ficha.stats);
 
-  const colega = COLABORADORES[colegaSugerido(indice, COLABORADORES.length)];
+  const colega = lista[colegaSugerido(indice, lista.length)];
   assert.equal(pagina.porId("perfilColega").hidden, false);
   assert.equal(pagina.texto("perfilColegaNombre"), colega.nombre);
   assert.equal(pagina.texto("perfilColegaInicial"), colega.nombre.charAt(0));
@@ -374,7 +462,7 @@ function assertRosterConSeleccion(pagina, indice) {
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
   assert.deepEqual(
     fichas.map((boton) => boton.getAttribute("aria-current")),
-    COLABORADORES.map((_, i) => (i === indice ? "true" : null)),
+    MUESTRA.map((_, i) => (i === indice ? "true" : null)),
   );
   assert.ok(fichas[indice].classList.contains("colaboradores__ficha--seleccionada"));
   assertVistaPreviaDe(pagina, indice);
@@ -382,11 +470,11 @@ function assertRosterConSeleccion(pagina, indice) {
 
 /* ---------- Roster ---------- */
 
-test("renders one tile button per collaborator, named with full name and role", () => {
-  const pagina = cargarPagina();
+test("renders one tile button per collaborator, named with full name and role", async () => {
+  const pagina = await cargarPagina();
   const celdas = pagina.porId("colaboradoresGrilla").children;
 
-  assert.equal(celdas.length, COLABORADORES.length);
+  assert.equal(celdas.length, MUESTRA.length);
   celdas.forEach((celda, indice) => {
     assert.equal(celda.tagName, "LI");
     assert.equal(celda.children.length, 1);
@@ -394,19 +482,22 @@ test("renders one tile button per collaborator, named with full name and role", 
     assert.equal(boton.tagName, "BUTTON");
     assert.equal(boton.type, "button");
     const nombreAccesible = boton.getAttribute("aria-label");
-    assert.ok(nombreAccesible.includes(COLABORADORES[indice].nombre), nombreAccesible);
-    assert.ok(nombreAccesible.includes(COLABORADORES[indice].rol), nombreAccesible);
+    assert.ok(nombreAccesible.includes(MUESTRA[indice].nombre), nombreAccesible);
+    assert.ok(nombreAccesible.includes(MUESTRA[indice].rol), nombreAccesible);
     assert.equal(boton.getAttribute("aria-current"), null);
   });
 
-  // Recién cargada: roster a la vista, perfil oculto, vista previa vacía.
+  // Recién cargada: roster a la vista, perfil oculto, vista previa vacía, sin
+  // aviso de carga y con la tarjeta de perfil (todas las de muestra tienen ficha).
   assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
+  assertSinAviso(pagina);
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, false);
   assertVistaPreviaVacia(pagina);
 });
 
-test("hovering a tile previews that card and leaving it returns to the empty state", () => {
-  const pagina = cargarPagina();
+test("hovering a tile previews that card and leaving it returns to the empty state", async () => {
+  const pagina = await cargarPagina();
   const fichas = pagina.fichas();
 
   fichas[3].disparar("mouseenter");
@@ -414,7 +505,7 @@ test("hovering a tile previews that card and leaving it returns to the empty sta
   // Las barras tienen cinco segmentos; el valor va oculto para lectores.
   const filas = leerAtributos(pagina.porId("previaAtributos"));
   assert.deepEqual(filas.map((fila) => fila.segmentos), [5, 5, 5, 5, 5]);
-  assert.deepEqual(filas.map((fila) => fila.valor), COLABORADORES[3].stats.map((n) => `${n}/5`));
+  assert.deepEqual(filas.map((fila) => fila.valor), MUESTRA[3].stats.map((n) => `${n}/5`));
 
   // Pasar a otra ficha sin mouseleave intermedio cambia la vista previa.
   fichas[8].disparar("mouseenter");
@@ -431,8 +522,8 @@ test("hovering a tile previews that card and leaving it returns to the empty sta
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
 });
 
-test("focusing a tile previews it like hover does, and blur clears it", () => {
-  const pagina = cargarPagina();
+test("focusing a tile previews it like hover does, and blur clears it", async () => {
+  const pagina = await cargarPagina();
   const fichas = pagina.fichas();
 
   fichas[5].focus();
@@ -452,8 +543,8 @@ test("focusing a tile previews it like hover does, and blur clears it", () => {
   sola variable: con el foco del teclado en una ficha, pasar el mouse por encima
   y sacarlo apagaba la vista previa aunque la ficha siguiera enfocada.
 */
-test("the pointer leaving a tile does not drop the preview of the tile that still has keyboard focus", () => {
-  const pagina = cargarPagina();
+test("the pointer leaving a tile does not drop the preview of the tile that still has keyboard focus", async () => {
+  const pagina = await cargarPagina();
   const fichas = pagina.fichas();
 
   fichas[5].focus();
@@ -474,8 +565,8 @@ test("the pointer leaving a tile does not drop the preview of the tile that stil
 
 /* ---------- Perfil ---------- */
 
-test("clicking a tile puts its profile in the hash as a new history entry and moves focus to the profile name", () => {
-  const pagina = cargarPagina();
+test("clicking a tile puts its profile in the hash as a new history entry and moves focus to the profile name", async () => {
+  const pagina = await cargarPagina();
   const ficha = pagina.fichas()[2];
 
   ficha.focus();
@@ -489,8 +580,8 @@ test("clicking a tile puts its profile in the hash as a new history entry and mo
   assertFocoEn(pagina, pagina.porId("perfilNombre"));
 });
 
-test("the browser back button returns to the roster and restores focus to the opened tile", () => {
-  const pagina = cargarPagina();
+test("the browser back button returns to the roster and restores focus to the opened tile", async () => {
+  const pagina = await cargarPagina();
   const fichas = pagina.fichas();
 
   fichas[7].disparar("click");
@@ -509,23 +600,23 @@ test("the browser back button returns to the roster and restores focus to the op
   assertVistaPreviaDe(pagina, 7);
 });
 
-test("'Suele trabajar con' swaps the whole profile to the suggested colleague, wrapping last to first", () => {
-  const pagina = cargarPagina();
-  const total = COLABORADORES.length;
+test("'Suele trabajar con' swaps the whole profile to the suggested colleague, wrapping last to first", async () => {
+  const pagina = await cargarPagina();
+  const total = MUESTRA.length;
   const penultima = total - 2;
   const ultima = total - 1;
   assert.equal(colegaSugerido(ultima, total), 0, "premisa: la última ficha sugiere a la primera");
 
   pagina.fichas()[penultima].disparar("click");
   assertPerfilDe(pagina, penultima);
-  assert.equal(pagina.texto("perfilColegaNombre"), COLABORADORES[ultima].nombre);
+  assert.equal(pagina.texto("perfilColegaNombre"), MUESTRA[ultima].nombre);
 
   const colega = pagina.porId("perfilColega");
   colega.focus();
   colega.disparar("click");
   assertPerfilDe(pagina, ultima);
   assert.equal(pagina.hash(), rutaDe(ultima));
-  assert.equal(pagina.texto("perfilColegaNombre"), COLABORADORES[0].nombre);
+  assert.equal(pagina.texto("perfilColegaNombre"), MUESTRA[0].nombre);
   // El salto no se lleva el foco: sigue en el botón, que no se ocultó.
   assertFocoEn(pagina, colega);
 
@@ -533,7 +624,7 @@ test("'Suele trabajar con' swaps the whole profile to the suggested colleague, w
   colega.disparar("click");
   assertPerfilDe(pagina, 0);
   assert.equal(pagina.hash(), rutaDe(0));
-  assert.equal(pagina.texto("perfilNumero"), `01 · ${COLABORADORES[0].clase}`);
+  assert.equal(pagina.texto("perfilNumero"), `01 · ${MUESTRA[0].clase}`);
 
   // Cada salto REEMPLAZA la entrada del perfil: atrás, desde cualquier perfil,
   // deja en el roster de una vez, sin recorrer cada colega visitado.
@@ -548,11 +639,11 @@ test("'Suele trabajar con' swaps the whole profile to the suggested colleague, w
 
 /* ---------- Perfil en el hash ---------- */
 
-test("loading with a profile hash shows that profile without moving focus or adding history", () => {
-  const mariana = indicePorSlug("mariana");
+test("loading with a profile hash shows that profile without moving focus or adding history", async () => {
+  const mariana = indicePorSlug(MUESTRA, "mariana");
   assert.notEqual(mariana, -1, "premisa: hay una ficha con el slug mariana");
 
-  const pagina = cargarPagina({ hash: "#/mariana" });
+  const pagina = await cargarPagina({ hash: "#/mariana" });
 
   assertPerfilDe(pagina, mariana);
   assert.equal(pagina.documento.activeElement, null, "cargar la página no mueve el foco");
@@ -565,8 +656,8 @@ test("loading with a profile hash shows that profile without moving focus or add
   assertRosterConSeleccion(pagina, mariana);
 });
 
-test("an unknown profile slug falls back to the roster and cleans the hash without adding history", () => {
-  const pagina = cargarPagina({ hash: "#/nadie" });
+test("an unknown profile slug falls back to the roster and cleans the hash without adding history", async () => {
+  const pagina = await cargarPagina({ hash: "#/nadie" });
 
   assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
@@ -592,8 +683,8 @@ test("an unknown profile slug falls back to the roster and cleans the hash witho
   Supabase lee y limpia los tokens de sesión que llegan en el hash, y borrarlos
   antes que él rompería el inicio de sesión.
 */
-test("a hash that is not a profile route shows the roster and is left alone", () => {
-  const pagina = cargarPagina({ hash: "#access_token=abc" });
+test("a hash that is not a profile route shows the roster and is left alone", async () => {
+  const pagina = await cargarPagina({ hash: "#access_token=abc" });
 
   assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
@@ -603,8 +694,8 @@ test("a hash that is not a profile route shows the roster and is left alone", ()
 
 /* ---------- Enlaces de contacto ---------- */
 
-test("contact pills: none with the sample data; safe links render with the right href, target and rel", () => {
-  const deMuestra = cargarPagina();
+test("contact pills: none with the sample data; safe links render with the right href, target and rel", async () => {
+  const deMuestra = await cargarPagina();
   deMuestra.fichas()[0].disparar("mouseenter");
   assert.equal(deMuestra.porId("previaEnlaces").hidden, true);
   assert.equal(deMuestra.porId("previaEnlaces").children.length, 0);
@@ -612,7 +703,7 @@ test("contact pills: none with the sample data; safe links render with the right
   assert.equal(deMuestra.porId("perfilEnlaces").hidden, true);
   assert.equal(deMuestra.porId("perfilEnlaces").children.length, 0);
 
-  const pagina = cargarPagina({
+  const pagina = await cargarPagina({
     retoques: {
       0: {
         linkedin: "https://www.linkedin.com/in/valeria-ortiz",
@@ -659,18 +750,235 @@ test("contact pills: none with the sample data; safe links render with the right
 
 /* ---------- Página a medio montar ---------- */
 
-test("a half-mounted page or a missing roster leaves the static HTML untouched instead of throwing", () => {
-  let pagina;
-  assert.doesNotThrow(() => { pagina = cargarPagina({ sinIds: ["colaboradoresPerfil"] }); });
+test("a half-mounted page or missing roster logic leaves the static HTML untouched instead of throwing", async () => {
+  let llamadas = 0;
+  const servicio = async () => { llamadas += 1; return exito(MUESTRA); };
+
+  let pagina = await cargarPagina({ sinIds: ["colaboradoresPerfil"], servicio });
   // Todo o nada: sin la sección de perfil no se pinta ni una ficha. Esto es lo
   // que distingue a los tests de arriba de un DOM falso que acepta cualquier cosa.
   assert.equal(pagina.porId("colaboradoresGrilla").children.length, 0);
   assert.equal(pagina.texto("previaNombre"), "¿Quién?");
-  // Nada quedó conectado: ni el colega ni el hash.
+  // Nada quedó conectado: ni el colega, ni el hash, ni el reintento. Y la
+  // lista ni se pidió: no había dónde pintarla.
   assert.deepEqual(pagina.porId("perfilColega").listeners, {});
+  assert.deepEqual(pagina.porId("colaboradoresReintentar").listeners, {});
   assert.equal(pagina.oyentesDeHash(), 0);
+  assert.equal(llamadas, 0);
 
-  assert.doesNotThrow(() => { pagina = cargarPagina({ sinDatos: true }); });
+  pagina = await cargarPagina({ sinDatos: true, servicio });
   assert.equal(pagina.porId("colaboradoresGrilla").children.length, 0);
   assert.equal(pagina.texto("previaNombre"), "¿Quién?");
+  assert.equal(pagina.porId("colaboradoresAviso").hidden, true);
+  assert.equal(llamadas, 0);
+});
+
+/* ---------- Carga de la lista ---------- */
+
+test("while the list loads the grid is busy and the notice says it is loading", async () => {
+  const respuesta = diferido();
+  const pagina = abrirPagina({ servicio: () => respuesta.promesa });
+
+  assert.equal(pagina.porId("colaboradoresGrilla").getAttribute("aria-busy"), "true");
+  assertAviso(pagina, CARGANDO, { reintentar: false });
+  assert.equal(pagina.fichas().length, 0);
+
+  respuesta.resolver(exito(MUESTRA));
+  await pagina.iniciada;
+
+  assertSinAviso(pagina);
+  assert.equal(pagina.porId("colaboradoresGrilla").getAttribute("aria-busy"), "false");
+  assert.equal(pagina.fichas().length, MUESTRA.length);
+});
+
+// Un enlace compartido que llega mientras la lista carga se resuelve al cargar,
+// no antes: con la lista vacía, #/mariana se habría limpiado por desconocido.
+test("a profile hash present while loading opens once the list arrives", async () => {
+  const respuesta = diferido();
+  const pagina = abrirPagina({ servicio: () => respuesta.promesa, hash: "#/mariana" });
+
+  assert.equal(pagina.hash(), "#/mariana", "no se limpia antes de saber quién existe");
+  respuesta.resolver(exito(MUESTRA));
+  await pagina.iniciada;
+
+  assertPerfilDe(pagina, indicePorSlug(MUESTRA, "mariana"));
+  assert.equal(pagina.hash(), "#/mariana");
+});
+
+test("a failed load shows the error and an enabled retry button, with no tiles", async () => {
+  const pagina = await cargarPagina({ servicio: enSecuencia(FALLO) });
+
+  assertAviso(pagina, ERROR_DE_CARGA, { reintentar: true });
+  const boton = pagina.porId("colaboradoresReintentar");
+  assert.equal(boton.disabled, false);
+  assert.equal(boton.textContent, "Reintentar carga");
+  assert.ok(pagina.porId("colaboradoresAviso").classList.contains("colaboradores__aviso--error"));
+  assert.equal(pagina.porId("colaboradoresGrilla").getAttribute("aria-busy"), "false");
+  assert.equal(pagina.fichas().length, 0);
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, true);
+});
+
+// Si el script del servicio no llegó, la llamada lanza ReferenceError: la
+// página lo trata como cualquier otro fallo de carga.
+test("a missing service script shows the load error instead of throwing", async () => {
+  const pagina = await cargarPagina({ sinServicio: true });
+
+  assertAviso(pagina, ERROR_DE_CARGA, { reintentar: true });
+  assert.equal(pagina.fichas().length, 0);
+});
+
+test("a successful retry renders the tiles and moves focus to the first one", async () => {
+  const pagina = await cargarPagina({ servicio: enSecuencia(FALLO, exito(MUESTRA)) });
+  const boton = pagina.porId("colaboradoresReintentar");
+  boton.focus();
+
+  const reintento = pagina.reintentar();
+  // Mientras vuelve a cargar: aviso de carga y el botón no responde.
+  assert.equal(boton.disabled, true);
+  assert.equal(pagina.texto("colaboradoresAvisoMensaje"), CARGANDO);
+  assert.equal(pagina.porId("colaboradoresGrilla").getAttribute("aria-busy"), "true");
+  await reintento;
+
+  assertSinAviso(pagina);
+  assert.equal(pagina.fichas().length, MUESTRA.length);
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, false);
+  // El botón que tenía el foco se ocultó con el aviso: el foco no cae al <body>.
+  assertFocoEn(pagina, pagina.fichas()[0]);
+});
+
+test("a failed retry keeps the error and moves focus to the notice", async () => {
+  const pagina = await cargarPagina({ servicio: enSecuencia(FALLO, FALLO) });
+  pagina.porId("colaboradoresReintentar").focus();
+
+  await pagina.reintentar();
+
+  assertAviso(pagina, ERROR_DE_CARGA, { reintentar: true });
+  assert.equal(pagina.porId("colaboradoresReintentar").disabled, false);
+  assertFocoEn(pagina, pagina.porId("colaboradoresAviso"));
+});
+
+// Con un enlace a un perfil en la barra, el reintento exitoso abre ese perfil:
+// la grilla queda oculta y el foco va a lo primero que hay que leer.
+test("a retry that lands on a shared profile link moves focus to the profile name", async () => {
+  const pagina = await cargarPagina({ servicio: enSecuencia(FALLO, exito(MUESTRA)), hash: "#/mariana" });
+  assert.equal(pagina.hash(), "#/mariana", "un fallo de carga no limpia el enlace");
+
+  await pagina.reintentar();
+
+  assertPerfilDe(pagina, indicePorSlug(MUESTRA, "mariana"));
+  assertFocoEn(pagina, pagina.porId("perfilNombre"));
+});
+
+// Si el enlace era de alguien sin ficha y no es la primera ficha, el foco va a
+// SU ficha: enfocar la primera la pondría en la vista previa por encima de la
+// elegida, y Enter activaría a otra persona.
+test("a retry that lands on a no-profile link focuses that person's tile, not the first one", async () => {
+  const pagina = await cargarPagina({ servicio: enSecuencia(FALLO, exito([MUESTRA[0], SAMAEL])), hash: "#/samael" });
+  pagina.porId("colaboradoresReintentar").focus();
+
+  await pagina.reintentar();
+
+  const [, fichaSamael] = pagina.fichas();
+  assert.equal(fichaSamael.getAttribute("aria-current"), "true");
+  assertFocoEn(pagina, fichaSamael);
+  assertVistaPreviaSoloNombre(pagina, SAMAEL);
+});
+
+test("an empty list shows its own message, no tiles and no retry", async () => {
+  const pagina = await cargarPagina({ servicio: conLista([]) });
+
+  assertAviso(pagina, VACIO, { reintentar: false });
+  assert.equal(pagina.porId("colaboradoresAviso").classList.contains("colaboradores__aviso--error"), false);
+  assert.equal(pagina.fichas().length, 0);
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, true);
+  assertVistaPreviaVacia(pagina);
+});
+
+test("the colleague and hash listeners are wired once, on the first successful load", async () => {
+  const pagina = await cargarPagina({ servicio: enSecuencia(FALLO, FALLO, exito(MUESTRA)) });
+  assert.equal(pagina.oyentesDeHash(), 0, "sin lista no hay perfil que abrir");
+
+  await pagina.reintentar();
+  assert.equal(pagina.oyentesDeHash(), 0);
+  assert.deepEqual(pagina.porId("perfilColega").listeners, {});
+
+  await pagina.reintentar();
+  assert.equal(pagina.oyentesDeHash(), 1);
+  assert.equal(pagina.porId("perfilColega").listeners.click.length, 1);
+
+  // Y ese único oyente atiende el hash: abrir y volver funcionan una vez cargada.
+  pagina.irA(rutaDe(4));
+  assertPerfilDe(pagina, 4);
+  pagina.atras();
+  assertRosterConSeleccion(pagina, 4);
+});
+
+/* ---------- Personas sin ficha de perfil ---------- */
+
+test("a tile without profile data only gets selected: no hash, name-only preview, no profile card", async () => {
+  const pagina = await cargarPagina({ servicio: conLista([SAMAEL]) });
+  const [ficha] = pagina.fichas();
+
+  // Sin rol que agregar, el nombre accesible es sólo el nombre.
+  assert.equal(ficha.getAttribute("aria-label"), SAMAEL.nombre);
+  // Nadie tiene ficha: la tarjeta de perfil del roster no aparece.
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, true);
+
+  ficha.focus();
+  ficha.disparar("click");
+
+  assert.equal(pagina.hash(), "");
+  assert.equal(pagina.historial(), 1, "elegir no agrega entradas al historial");
+  assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
+  assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
+  assert.equal(ficha.getAttribute("aria-current"), "true");
+  assert.ok(ficha.classList.contains("colaboradores__ficha--seleccionada"));
+  assertFocoEn(pagina, ficha);
+
+  // Ya sin foco ni cursor, la vista previa vuelve a la elegida: sólo el nombre.
+  ficha.disparar("blur");
+  assertVistaPreviaSoloNombre(pagina, SAMAEL);
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, true);
+});
+
+test("a profile hash of a person without profile data selects them, stays in the roster and cleans the hash", async () => {
+  const pagina = await cargarPagina({ servicio: conLista([SAMAEL]), hash: "#/samael" });
+
+  assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
+  assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
+  assert.equal(pagina.fichas()[0].getAttribute("aria-current"), "true");
+  assertVistaPreviaSoloNombre(pagina, SAMAEL);
+  assert.equal(pagina.hash(), "");
+  assert.equal(pagina.url(), URL_DE_LA_PAGINA, "se limpia sólo el hash: la ruta queda");
+  assert.equal(pagina.historial(), 1, "limpiar reemplaza la entrada, no agrega otra");
+  assert.equal(pagina.documento.activeElement, null, "cargar la página no mueve el foco");
+});
+
+/*
+  Con al menos una ficha de perfil en la lista, la tarjeta aparece y se queda:
+  prenderla y apagarla según la ficha bajo el cursor haría saltar la grilla.
+*/
+test("in a mixed list the profile card shows and stays while the preview follows each person", async () => {
+  const lista = [MUESTRA[0], SAMAEL];
+  const pagina = await cargarPagina({ servicio: conLista(lista) });
+  const [conPerfil, sinPerfil] = pagina.fichas();
+  const resumen = pagina.porId("colaboradoresResumen");
+
+  assert.equal(resumen.hidden, false);
+  assert.equal(conPerfil.getAttribute("aria-label"), `${MUESTRA[0].nombre}, ${MUESTRA[0].rol}`);
+  assert.equal(sinPerfil.getAttribute("aria-label"), SAMAEL.nombre);
+
+  sinPerfil.disparar("mouseenter");
+  assertVistaPreviaSoloNombre(pagina, SAMAEL);
+  assert.equal(resumen.hidden, false);
+
+  sinPerfil.disparar("mouseleave");
+  conPerfil.disparar("mouseenter");
+  assertVistaPreviaDe(pagina, 0, lista);
+  assert.equal(resumen.hidden, false);
+
+  // Quien sí tiene ficha abre su perfil como siempre.
+  conPerfil.disparar("click");
+  assert.equal(pagina.hash(), rutaDe(0));
+  assertPerfilDe(pagina, 0, lista);
 });

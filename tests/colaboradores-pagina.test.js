@@ -48,9 +48,10 @@ test("the content sits in the shared container", () => {
     "el <main> lleva sólo el bloque: el contenedor va en un hijo");
 });
 
-test("the sample roster is kept out of search engines", () => {
-  // QUITAR ESTA ASERCIÓN cuando el equipo real reemplace las fichas de muestra:
-  // mientras sean personas inventadas, la página no debe indexarse.
+test("the unfinished page is kept out of search engines", () => {
+  // QUITAR ESTA ASERCIÓN cuando existan las fichas de perfil reales ("Mi
+  // ficha"): mientras cada persona muestre sólo su nombre, la página está a
+  // medias y no debe indexarse.
   assert.match(HTML, /<meta name="robots" content="noindex">/);
 });
 
@@ -65,6 +66,40 @@ test("the profile view starts hidden and both views exist", () => {
   const perfil = HTML.match(/<section[^>]*id="colaboradoresPerfil"[^>]*>/);
   assert.ok(perfil, "falta la sección del perfil");
   assert.match(perfil[0], /\shidden(?:\s|>)/);
+});
+
+/*
+  La tarjeta "Perfil" del roster muestra la ficha de perfil de quien se está
+  viendo. Arranca oculta: colaboradores.js la muestra sólo si alguien de la
+  lista cargada tiene ficha, así no queda una tarjeta vacía para nadie.
+*/
+test("the roster profile card starts hidden", () => {
+  const resumen = sinComentariosHtml(HTML).match(/<div[^>]*id="colaboradoresResumen"[^>]*>/);
+  assert.ok(resumen, "falta la tarjeta de perfil del roster");
+  assert.match(resumen[0], /class="colaboradores__resumen panel"/);
+  assert.match(resumen[0], /\shidden(?:\s|>)/);
+});
+
+/*
+  Carga, error y lista vacía comparten una región: un aviso cortés (`status`,
+  no `alert`, porque también anuncia "Cargando…") que puede recibir el foco
+  cuando un reintento falla, y el botón de reintentar, oculto hasta un error.
+*/
+test("the load notice is a focusable status region that holds a hidden retry button", () => {
+  const html = sinComentariosHtml(HTML);
+  const aviso = html.match(/<div[^>]*id="colaboradoresAviso"[^>]*>/);
+  assert.ok(aviso, "falta la región del aviso de carga");
+  assert.match(aviso[0], /\srole="status"/);
+  assert.match(aviso[0], /\stabindex="-1"/);
+  assert.match(aviso[0], /\shidden(?:\s|>)/);
+  assert.match(html, /<p[^>]*id="colaboradoresAvisoMensaje"/);
+
+  const boton = html.match(/<button([^>]*)id="colaboradoresReintentar"([^>]*)>([^<]*)<\/button>/);
+  assert.ok(boton, "falta el botón de reintentar");
+  const atributos = `${boton[1]} ${boton[2]}`;
+  assert.match(atributos, /type="button"/);
+  assert.match(atributos, /\shidden(?:\s|$)/);
+  assert.equal(boton[3].trim(), "Reintentar carga");
 });
 
 /*
@@ -174,8 +209,11 @@ test("the roster fits the viewport height on desktop and flows again on mobile",
   assert.match(roster, /min-block-size:\s*\d+px/,
     "con un piso: en una ventana muy baja se prefiere scrollear a aplastar las fichas");
 
-  assert.match(regla(".colaboradores__grilla"), /grid-auto-rows:\s*minmax\(0,\s*1fr\)/,
-    "las filas se reparten el alto disponible, sean las que sean");
+  const grilla = regla(".colaboradores__grilla");
+  assert.match(grilla, /grid-template-rows:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    "tres filas fijas: con pocas fichas, una sola no se estira al alto entero de la grilla");
+  assert.match(grilla, /grid-auto-rows:\s*minmax\(0,\s*1fr\)/,
+    "las filas de más, si las hay, se reparten el mismo alto");
   assert.doesNotMatch(regla(".colaboradores__ficha"), /aspect-ratio/,
     "en escritorio la ficha llena su celda; un 1:1 acá volvería a desbordar el alto");
 
@@ -183,6 +221,8 @@ test("the roster fits the viewport height on desktop and flows again on mobile",
   assert.notEqual(movil, -1);
   assert.match(regla(".colaboradores__roster", movil), /block-size:\s*auto/,
     "en móvil el roster vuelve a fluir");
+  assert.match(regla(".colaboradores__grilla", movil), /grid-template-rows:\s*none/,
+    "sin alto que repartir, tres filas `fr` quedarían como filas cuadradas vacías");
   assert.match(regla(".colaboradores__ficha", movil), /aspect-ratio:\s*1\s*\/\s*1/,
     "y las fichas recuperan el cuadrado");
 });
@@ -228,6 +268,8 @@ test("scripts load in dependency order", () => {
     return indice;
   };
 
+  const cliente = posicion("/app/core/supabase/supabase-client.js");
+  const servicio = posicion("/app/core/colaboradores/colaboradores.service.js");
   const navbar = posicion("/app/shared/navbar/navbar.js");
   const particulas = posicion("https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js");
   const datos = posicion("/app/features/colaboradores/colaboradores.datos.js");
@@ -235,6 +277,8 @@ test("scripts load in dependency order", () => {
   const pagina = posicion("/app/features/colaboradores/colaboradores.js");
 
   assert.ok(posicion("/app/core/auth/auth.service.js") < navbar);
+  assert.ok(cliente < servicio, "el servicio usa supabaseClient");
+  assert.ok(servicio < pagina, "la página le pide la lista al servicio");
   assert.ok(particulas < fondo, "tsParticles va antes del fondo que lo usa");
-  assert.ok(datos < pagina, "los datos van antes de la página que los pinta");
+  assert.ok(datos < pagina, "la lógica del roster va antes de la página que la usa");
 });

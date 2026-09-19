@@ -1,15 +1,15 @@
 /*
-  Roster de colaboradores y la lógica pura que lo recorre. Sin DOM: este archivo
-  se carga igual en la página y en los tests de Node.
+  Lógica pura del roster de colaboradores. Sin DOM: este archivo se carga igual
+  en la página y en los tests de Node.
 
-  LAS DOCE FICHAS SON DE MUESTRA. Vienen del prototipo de diseño y son personas
-  inventadas: nombres, ciudades, años de experiencia y proyectos no corresponden
-  a nadie. Tienen que reemplazarse por el equipo real, con el visto bueno de
-  cada persona, antes de que esta página llegue a producción.
+  Acá NO hay personas. La lista sale de la base con listarColaboradores()
+  (core/colaboradores/colaboradores.service.js), que entrega nombre, corto y
+  slug de cada una. Las fichas de muestra del prototipo viven en
+  tests/fixtures/colaboradores.muestra.js y sólo las usan los tests.
 
-  Una ficha lleva TODOS sus campos. El prototipo los traía en dos arreglos
-  paralelos emparejados por índice; borrar o reordenar a alguien en uno solo
-  desfasaba a los demás sin que nada fallara.
+  La ficha de perfil (rol, clase, bio, atributos…) todavía no existe: llega
+  con "Mi ficha". Hasta entonces una persona puede estar en el roster sin
+  tener perfil que abrir; tienePerfil() es quien lo decide.
 
   Campos opcionales de contacto: `linkedin`, `github` (URL https) y `correo`.
   Los que falten no se pintan; ver enlacesDisponibles().
@@ -22,39 +22,42 @@ const DISPONIBILIDADES = ["Disponible", "Parcial"];
 // arriba/abajo saltan de a una fila, o sea de a COLUMNAS_ROSTER fichas.
 const COLUMNAS_ROSTER = 4;
 
-const COLABORADORES = [
-  { nombre: "Valeria Ortiz", corto: "Valeria", rol: "Arquitectura de datos", clase: "ESTRATEGA", bio: "Diseña pipelines y modelos de datos que aguantan crecimiento. Convierte tablas desordenadas en decisiones.", stats: [5, 3, 4, 4, 3], ciudad: "Querétaro, MX", anios: "8 años", esp: "Data warehousing", stack: "PostgreSQL · Python · GCP", disp: "Disponible", proyectos: 24 },
-  { nombre: "Diego Ramírez", corto: "Diego", rol: "Backend & APIs", clase: "TANQUE", bio: "Servicios estables bajo carga. Si el sistema no se cae, probablemente él lo construyó.", stats: [3, 5, 2, 5, 3], ciudad: "CDMX, MX", anios: "10 años", esp: "Sistemas distribuidos", stack: "Node.js · Docker · AWS", disp: "Disponible", proyectos: 31 },
-  { nombre: "Mariana Cruz", corto: "Mariana", rol: "Frontend & UX", clase: "VELOCISTA", bio: "Interfaces rápidas que la gente entiende sin manual. Detalle obsesivo en animación y accesibilidad.", stats: [2, 4, 3, 2, 4], ciudad: "Guadalajara, MX", anios: "6 años", esp: "Design systems", stack: "HTML/CSS · JavaScript · Figma", disp: "Parcial", proyectos: 19 },
-  { nombre: "Iván Torres", corto: "Iván", rol: "Modelos de IA", clase: "MAGO", bio: "Predicción de demanda, clasificación, LLMs aplicados. Traduce el negocio a features y las features a resultados.", stats: [4, 3, 5, 3, 4], ciudad: "Querétaro, MX", anios: "7 años", esp: "ML aplicado", stack: "Python · R · Vertex AI", disp: "Disponible", proyectos: 17 },
-  { nombre: "Renata Solís", corto: "Renata", rol: "Cloud & DevOps", clase: "INGENIERA", bio: "Infraestructura como código, despliegues sin sustos y facturas de nube que sí cierran.", stats: [3, 4, 2, 5, 2], ciudad: "Monterrey, MX", anios: "9 años", esp: "IaC y observabilidad", stack: "Docker · Git · AWS", disp: "Disponible", proyectos: 28 },
-  { nombre: "Emilio Vega", corto: "Emilio", rol: "Capacitación técnica", clase: "MENTOR", bio: "Cursos y talleres para equipos que quieren dejar de depender de terceros. Explica lo difícil sin simplificarlo de más.", stats: [4, 3, 3, 2, 5], ciudad: "Querétaro, MX", anios: "12 años", esp: "Formación técnica", stack: "Python · SQL · Docencia", disp: "Parcial", proyectos: 40 },
-  { nombre: "Camila Ruiz", corto: "Camila", rol: "Analítica de negocio", clase: "ESTRATEGA", bio: "Tableros que responden preguntas, no que las generan. KPIs, forecasting y storytelling con datos.", stats: [5, 2, 3, 2, 4], ciudad: "Puebla, MX", anios: "6 años", esp: "BI y forecasting", stack: "Power BI · SQL · Python", disp: "Disponible", proyectos: 22 },
-  { nombre: "Sebastián Lara", corto: "Sebastián", rol: "Apps móviles", clase: "VELOCISTA", bio: "Del prototipo a la tienda. Apps que se sienten nativas y hablan con el backend sin fricción.", stats: [2, 4, 3, 3, 3], ciudad: "CDMX, MX", anios: "5 años", esp: "Apps nativas", stack: "Java · C++ · APIs", disp: "Disponible", proyectos: 14 },
-  { nombre: "Lucía Herrera", corto: "Lucía", rol: "QA & Automatización", clase: "GUARDIANA", bio: "Pruebas que atrapan el bug antes que el cliente. Pipelines de CI que no dejan pasar nada roto.", stats: [3, 4, 2, 3, 3], ciudad: "León, MX", anios: "7 años", esp: "Testing automatizado", stack: "Cypress · Jest · CI/CD", disp: "Disponible", proyectos: 26 },
-  { nombre: "Andrés Molina", corto: "Andrés", rol: "Gestión de proyectos", clase: "CAPITÁN", bio: "Alcance claro, entregas a tiempo y cero sorpresas. Traduce entre negocio y equipo técnico.", stats: [3, 3, 2, 2, 4], ciudad: "Querétaro, MX", anios: "11 años", esp: "Delivery ágil", stack: "Scrum · Jira · Notion", disp: "Parcial", proyectos: 35 },
-  { nombre: "Paola Núñez", corto: "Paola", rol: "Ciencia de datos", clase: "MAGA", bio: "Estadística aplicada, experimentos A/B y modelos que explican por qué, no solo qué.", stats: [5, 2, 5, 2, 3], ciudad: "Mérida, MX", anios: "6 años", esp: "Estadística aplicada", stack: "Python · R · SQL", disp: "Disponible", proyectos: 15 },
-  { nombre: "Jorge Castillo", corto: "Jorge", rol: "Seguridad", clase: "CENTINELA", bio: "Auditorías, hardening y respuesta a incidentes. Que lo tuyo siga siendo tuyo.", stats: [3, 4, 2, 5, 2], ciudad: "CDMX, MX", anios: "9 años", esp: "Ciberseguridad", stack: "Pentesting · SIEM · IAM", disp: "Disponible", proyectos: 21 },
-];
+// Todo lo que la vista de perfil escribe como texto: si falta uno, quedaría un
+// hueco en blanco en la ficha técnica.
+const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "rol", "clase", "bio", "ciudad", "anios", "esp", "stack", "disp"];
+
+/*
+  ¿Tiene esta persona la ficha de perfil COMPLETA? Todo o nada: la vista de
+  perfil pinta cada campo, así que una ficha a medias no se abre. Cada barra
+  tiene tantos segmentos como atributos hay, y el valor va de 1 a ese total.
+*/
+function tienePerfil(persona) {
+  if (!persona || typeof persona !== "object") return false;
+
+  const textosCompletos = CAMPOS_DE_TEXTO_DEL_PERFIL.every(
+    (campo) => typeof persona[campo] === "string" && persona[campo].trim() !== "",
+  );
+  const { stats } = persona;
+  const atributosCompletos = Array.isArray(stats)
+    && stats.length === ETIQUETAS_ATRIBUTOS.length
+    && stats.every((valor) => Number.isInteger(valor) && valor >= 1 && valor <= ETIQUETAS_ATRIBUTOS.length);
+
+  return textosCompletos
+    && atributosCompletos
+    && DISPONIBILIDADES.includes(persona.disp)
+    && Number.isInteger(persona.proyectos)
+    && persona.proyectos >= 0;
+}
 
 /*
   El perfil vive en el hash (#/valeria) para que el botón atrás del navegador
-  vuelva al roster. NFD separa la letra de su acento y el rango U+0300–U+036F
-  son justamente esos acentos sueltos: "Sebastián" → "sebastian".
+  vuelva al roster. El slug es el de la base, tal cual: el front no lo deriva
+  del nombre, así un cambio de nombre no rompe los enlaces compartidos.
 */
-function slugDeColaborador(ficha) {
-  return String(ficha?.corto || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function indicePorSlug(slug) {
+function indicePorSlug(lista, slug) {
   const buscado = String(slug || "").trim().toLowerCase();
-  if (!buscado) return -1;
-  return COLABORADORES.findIndex((ficha) => slugDeColaborador(ficha) === buscado);
+  if (!buscado || !Array.isArray(lista)) return -1;
+  return lista.findIndex((persona) => persona?.slug === buscado);
 }
 
 /*
@@ -129,11 +132,10 @@ function enlacesDisponibles(ficha) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    COLABORADORES,
     ETIQUETAS_ATRIBUTOS,
     COLUMNAS_ROSTER,
     DISPONIBILIDADES,
-    slugDeColaborador,
+    tienePerfil,
     indicePorSlug,
     moverSeleccion,
     colegaSugerido,
