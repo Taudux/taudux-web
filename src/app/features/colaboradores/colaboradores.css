@@ -447,7 +447,7 @@
   }
 
   /* Columna en flex y no retrato absoluto: cuando no hay píldoras de contacto
-     (hoy, nadie las tiene) el retrato ocupa todo el alto. */
+     (los enlaces de la ficha son opcionales) el retrato ocupa todo el alto. */
   .colaboradores__figura {
     display: flex;
     flex-direction: column;
@@ -534,7 +534,10 @@
     gap: 8px;
   }
 
-  /* Apagado por defecto ("Parcial"); sólo "Disponible" lo enciende en verde. */
+  /* Un estado por disponibilidad, puesto por colaboradores.js: verde,
+     ámbar o apagado. Sin estado queda apagado, que es la lectura prudente. El
+     punto es decorado (aria-hidden): el valor accesible es el texto de al
+     lado, así que el color nunca es lo único que lo dice. */
   .colaboradores__punto {
     flex: none;
     inline-size: 8px;
@@ -546,6 +549,16 @@
   .colaboradores__punto--disponible {
     background: var(--color-success);
     box-shadow: 0 0 8px var(--color-success);
+  }
+
+  .colaboradores__punto--parcial {
+    background: var(--color-warning);
+    box-shadow: 0 0 8px var(--color-warning);
+  }
+
+  .colaboradores__punto--no-disponible {
+    background: var(--color-text-subtle);
+    box-shadow: none;
   }
 
   .colaboradores__detalle {

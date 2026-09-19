@@ -3,9 +3,13 @@
   supabaseClient y debe cargarse después de él; la página es pública, así que
   funciona con la anon key y sin sesión.
 
-  La lista sale del RPC `listar_colaboradores()` (migración 0038), security
-  definer, que entrega sólo nombre, apellidos y slug de las cuentas marcadas.
-  Este servicio vuelve a recortar del lado del cliente: arma cada ficha
+  La lista sale del RPC `listar_colaboradores()` (migraciones 0038 y 0039),
+  security definer, que entrega de cada cuenta marcada nombre, apellidos y
+  slug, más los campos de su ficha pública (rol, especialidad, ubicación,
+  stack, disponibilidad, año de inicio, bio y enlaces). Quien todavía no llenó
+  su ficha los trae en null: el RPC hace left join.
+
+  Este servicio vuelve a recortar del lado del cliente: arma cada registro
   campo por campo, así que una columna que el RPC agregue más adelante no
   llega a la página por accidente.
 */
@@ -41,11 +45,28 @@ function tieneSlugDeColaborador(fila) {
   return typeof fila?.slug === "string" && PATRON_SLUG_COLABORADOR.test(fila.slug);
 }
 
+// La página une el stack con " · ": sólo pasa un arreglo de textos, copiado
+// para no compartirlo con la respuesta. Cualquier otra forma llega como null.
+function stackDeColaborador(valor) {
+  const esListaDeTextos = Array.isArray(valor) && valor.every((elemento) => typeof elemento === "string");
+  return esListaDeTextos ? [...valor] : null;
+}
+
+// Un campo de ficha pasa tal cual; uno ausente llega como null, igual que el
+// de quien todavía no llenó su ficha. Si la ficha alcanza para abrir un
+// perfil lo decide tienePerfil() (colaboradores.datos.js), no el servicio.
+function campoDeFichaColaborador(valor) {
+  return valor ?? null;
+}
+
 /*
-  Ficha pública: sólo nombre, corto y slug. `nombre` es el nombre completo que
-  se muestra en el perfil y `corto` el que va en la tarjeta del roster; si la
+  Registro público de cada colaborador. `nombre` es el nombre completo que se
+  muestra en el perfil y `corto` el que va en la tarjeta del roster; si la
   cuenta no tiene nombre ni apellidos, ambos caen al slug para que la tarjeta
   nunca quede en blanco.
+
+  Los campos de la ficha conservan los nombres de la base. Ojo: `rol` es el
+  puesto que la persona escribe en su ficha, no un rol de cuenta.
 */
 function aColaborador(fila) {
   const nombre = textoDeColaborador(fila.nombre);
@@ -54,6 +75,16 @@ function aColaborador(fila) {
     nombre: [nombre, apellidos].filter(Boolean).join(" ") || fila.slug,
     corto: nombre || apellidos || fila.slug,
     slug: fila.slug,
+    rol: campoDeFichaColaborador(fila.rol),
+    especialidad: campoDeFichaColaborador(fila.especialidad),
+    ubicacion: campoDeFichaColaborador(fila.ubicacion),
+    stack: stackDeColaborador(fila.stack),
+    disponibilidad: campoDeFichaColaborador(fila.disponibilidad),
+    anio_inicio: campoDeFichaColaborador(fila.anio_inicio),
+    bio: campoDeFichaColaborador(fila.bio),
+    linkedin: campoDeFichaColaborador(fila.linkedin),
+    github: campoDeFichaColaborador(fila.github),
+    correo: campoDeFichaColaborador(fila.correo),
   };
 }
 

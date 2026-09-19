@@ -10,16 +10,29 @@
   vista; la navegación con flechas, que llega después, entra como una fuente
   más de cambio de estado sin tocar el pintado.
 
-  Hoy la base entrega sólo nombre y slug: la ficha de perfil llega con "Mi
-  ficha". Quien no la tiene aparece en el roster, pero no abre perfil: su
-  ficha sólo se elige y la vista previa muestra su nombre.
+  La base entrega, además del nombre y el slug, la ficha pública de cada
+  persona (0039). Quien todavía no llenó la suya la trae en null: aparece en
+  el roster, pero no abre perfil; su ficha sólo se elige y la vista previa
+  muestra su nombre.
 
   Todo el texto entra por textContent. Los nombres vienen de la base y las
-  fichas van a ser escritas a mano por cada persona: nada de lo que venga de
-  ahí se interpreta como markup.
+  fichas las escribe a mano cada persona: nada de lo que venga de ahí se
+  interpreta como markup.
 */
 (function () {
   const SIGLAS_DE_ENLACE = { linkedin: "in", github: "gh", correo: "@" };
+
+  // Un estado del punto por disponibilidad (verde, ámbar, apagado). Los
+  // colores viven en colaboradores.css; el valor accesible es el texto de al
+  // lado, el punto es decorado.
+  const ESTADOS_DEL_PUNTO = {
+    Disponible: "colaboradores__punto--disponible",
+    Parcial: "colaboradores__punto--parcial",
+    "No disponible": "colaboradores__punto--no-disponible",
+  };
+
+  // El stack se muestra en una línea, como lo mostraba el prototipo.
+  const SEPARADOR_DEL_STACK = " · ";
 
   const VACIA = {
     inicial: "?",
@@ -373,16 +386,19 @@
       escribir(el.perfilInicial, inicialDe(ficha));
       escribir(el.perfilNombre, ficha.nombre);
       escribir(el.perfilRol, ficha.rol);
-      escribir(el.perfilEspecialidad, ficha.esp);
-      escribir(el.perfilUbicacion, ficha.ciudad);
-      escribir(el.perfilExperiencia, ficha.anios);
-      escribir(el.perfilDisponibilidad, ficha.disp);
-      escribir(el.perfilStack, ficha.stack);
+      escribir(el.perfilEspecialidad, ficha.especialidad);
+      escribir(el.perfilUbicacion, ficha.ubicacion);
+      // La base guarda el año de inicio; los años se cuentan al pintar.
+      escribir(el.perfilExperiencia, experienciaDesde(ficha.anio_inicio, new Date().getFullYear()));
+      escribir(el.perfilDisponibilidad, ficha.disponibilidad);
+      escribir(el.perfilStack, ficha.stack.join(SEPARADOR_DEL_STACK));
       escribir(el.perfilBio, ficha.bio);
 
-      // Verde sólo para "Disponible"; cualquier otro valor se queda apagado, que
-      // es la lectura prudente si mañana aparece un tercer estado.
-      el.perfilPunto.classList.toggle("colaboradores__punto--disponible", ficha.disp === "Disponible");
+      // Sólo la clase del estado actual: al pasar de un perfil a otro, la del
+      // anterior se apaga. tienePerfil() ya garantiza un valor conocido.
+      for (const [disponibilidad, clase] of Object.entries(ESTADOS_DEL_PUNTO)) {
+        el.perfilPunto.classList.toggle(clase, ficha.disponibilidad === disponibilidad);
+      }
 
       pintarEnlaces(el.perfilEnlaces, ficha);
     }

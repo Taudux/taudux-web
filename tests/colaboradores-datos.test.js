@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -7,7 +8,9 @@ const ROOT = path.resolve(__dirname, "..");
 const DATOS = require(path.join(ROOT, "src/app/features/colaboradores/colaboradores.datos.js"));
 const {
   COLUMNAS_ROSTER,
+  DISPONIBILIDADES,
   tienePerfil,
+  experienciaDesde,
   indicePorSlug,
   moverSeleccion,
   numeroDeFicha,
@@ -71,27 +74,150 @@ test("sample slugs are unique and follow the database slug format", () => {
 });
 
 /*
-  Hoy la base entrega sólo nombre, corto y slug: "Mi ficha" todavía no existe.
-  Esa persona sale en el roster, pero no tiene perfil que abrir.
+  La muestra ejercita cada estado del punto de disponibilidad, y está
+  congelada hasta el stack: un test que la retoque sin clonarla lanza en vez
+  de ensuciar al siguiente.
 */
-test("a public record with only name and slug has no profile yet", () => {
+test("the sample covers every availability value and is frozen all the way down", () => {
+  assert.deepEqual(new Set(MUESTRA.map((persona) => persona.disponibilidad)), new Set(DISPONIBILIDADES));
+
+  assert.ok(Object.isFrozen(MUESTRA));
+  for (const persona of MUESTRA) {
+    assert.ok(Object.isFrozen(persona), `${persona.nombre}: la ficha no está congelada`);
+    assert.ok(Object.isFrozen(persona.stack), `${persona.nombre}: el stack no está congelado`);
+  }
+});
+
+// Un enlace de la muestra que la página descartara dejaría a los tests de
+// píldoras probando menos de lo que parece.
+test("every link in the sample is one the page offers, and only some people have links", () => {
+  let conEnlaces = 0;
+  for (const persona of MUESTRA) {
+    const cargados = ["linkedin", "github", "correo"].filter((tipo) => persona[tipo] !== null);
+    const ofrecidos = enlacesDisponibles(persona).map((enlace) => enlace.tipo);
+    assert.deepEqual(ofrecidos, cargados, `${persona.nombre}: un enlace de la muestra se descarta`);
+    if (cargados.length > 0) conEnlaces += 1;
+  }
+  assert.ok(conEnlaces > 0, "alguien de la muestra tiene que tener enlaces");
+  assert.ok(conEnlaces < MUESTRA.length, "y alguien tiene que no tener ninguno");
+});
+
+/*
+  El front y la base no pueden desfasarse: una disponibilidad que la 0039
+  acepte y el front no conozca dejaría a esa persona sin perfil, y una que el
+  front acepte y la base no, sería código muerto.
+*/
+test("the availability values are exactly the ones the 0039 CHECK allows, in the same order", () => {
+  const sql = fs.readFileSync(path.join(ROOT, "supabase/migrations/0039_fichas_colaborador.sql"), "utf8");
+  const check = sql.match(/fichas_colaborador_disponibilidad_valida\s+check\s*\(\s*disponibilidad\s+in\s*\(([^)]*)\)/);
+  assert.ok(check, "no se encontró el CHECK de disponibilidad en la 0039");
+
+  const valoresDeLaBase = [...check[1].matchAll(/'([^']*)'/g)].map(([, valor]) => valor);
+  assert.deepEqual([...DISPONIBILIDADES], valoresDeLaBase);
+  assert.deepEqual([...DISPONIBILIDADES], ["Disponible", "Parcial", "No disponible"]);
+});
+
+/*
+  Quien todavía no llenó su ficha llega del servicio con todos los campos de
+  ficha en null (el RPC hace left join). Sale en el roster, pero no tiene
+  perfil que abrir.
+*/
+test("a public record without a card yet has no profile", () => {
   assert.equal(tienePerfil({ nombre: "Samael Flores", corto: "Samael", slug: "samael" }), false);
+  assert.equal(tienePerfil({
+    nombre: "Samael Flores",
+    corto: "Samael",
+    slug: "samael",
+    rol: null,
+    especialidad: null,
+    ubicacion: null,
+    stack: null,
+    disponibilidad: null,
+    anio_inicio: null,
+    bio: null,
+    linkedin: null,
+    github: null,
+    correo: null,
+  }), false);
   assert.equal(tienePerfil(null), false);
   assert.equal(tienePerfil(undefined), false);
 });
 
-// Cada campo que la vista de perfil escribe es obligatorio: faltando uno,
-// quedaría un hueco en blanco en la ficha técnica.
+/*
+  La base garantiza que una ficha guardada está completa, pero tienePerfil()
+  no se fía: una columna que mañana se vuelva opcional no debe dejar huecos en
+  blanco en la ficha técnica. Cada campo que la vista pinta es obligatorio.
+*/
 test("a single missing, blank or unknown field is enough to have no profile", () => {
   const base = MUESTRA[0];
   assert.equal(tienePerfil({ ...base }), true, "premisa: la base sí tiene ficha");
 
-  for (const campo of ["nombre", "corto", "rol", "bio", "ciudad", "anios", "esp", "stack", "disp"]) {
-    assert.equal(tienePerfil({ ...base, [campo]: undefined }), false, `sin ${campo}`);
-    assert.equal(tienePerfil({ ...base, [campo]: "   " }), false, `${campo} en blanco`);
-    assert.equal(tienePerfil({ ...base, [campo]: 7 }), false, `${campo} que no es texto`);
+  for (const campo of ["nombre", "corto", "rol", "especialidad", "ubicacion", "bio"]) {
+    for (const valor of [undefined, null, "", "   ", 7]) {
+      assert.equal(tienePerfil({ ...base, [campo]: valor }), false, `${campo} = ${JSON.stringify(valor)}`);
+    }
   }
-  assert.equal(tienePerfil({ ...base, disp: "Ocupado" }), false, "disponibilidad desconocida");
+
+  // El stack es un arreglo con al menos un texto, y ninguno en blanco.
+  for (const stack of [undefined, null, [], ["   "], ["Python", ""], ["Python", null], [7], "PostgreSQL · Python"]) {
+    assert.equal(tienePerfil({ ...base, stack }), false, `stack = ${JSON.stringify(stack)}`);
+  }
+
+  for (const disponibilidad of [undefined, null, "", "Ocupado", "disponible", " Disponible"]) {
+    assert.equal(tienePerfil({ ...base, disponibilidad }), false, `disponibilidad = ${JSON.stringify(disponibilidad)}`);
+  }
+
+  // Un año entero, no un texto ni una fracción: de él sale la experiencia.
+  for (const anio_inicio of [undefined, null, "2018", 2018.5, Number.NaN, Infinity]) {
+    assert.equal(tienePerfil({ ...base, anio_inicio }), false, `anio_inicio = ${String(anio_inicio)}`);
+  }
+});
+
+test("each availability value is a valid one for a profile", () => {
+  for (const disponibilidad of DISPONIBILIDADES) {
+    assert.equal(tienePerfil({ ...MUESTRA[0], disponibilidad }), true, disponibilidad);
+  }
+});
+
+/*
+  Los campos del prototipo se renombraron a los de la base (0039): ciudad →
+  ubicacion, esp → especialidad, disp → disponibilidad, anios → anio_inicio
+  (un año, no un texto) y el stack pasó de texto a arreglo. Una ficha con la
+  forma vieja ya no abre perfil, y la muestra no la conserva.
+*/
+test("a card in the old prototype shape has no profile, and the sample no longer uses it", () => {
+  const { especialidad, ubicacion, disponibilidad, anio_inicio, stack, ...resto } = MUESTRA[0];
+  const vieja = {
+    ...resto,
+    esp: especialidad,
+    ciudad: ubicacion,
+    disp: disponibilidad,
+    anios: "8 años",
+    stack: stack.join(" · "),
+  };
+  assert.equal(tienePerfil(vieja), false);
+  assert.equal(anio_inicio, 2018, "premisa: la muestra trae el año, no el texto");
+
+  for (const persona of MUESTRA) {
+    for (const viejo of ["ciudad", "esp", "disp", "anios"]) {
+      assert.equal(viejo in persona, false, `${persona.nombre} todavía trae ${viejo}`);
+    }
+  }
+});
+
+/*
+  La experiencia se calcula al pintar, a partir del año de inicio: la base
+  guarda un año y no un texto que envejezca. El año actual entra como
+  argumento para que el cálculo sea puro y el test no dependa del reloj.
+*/
+test("experience reads in whole years from the start year and a given current year", () => {
+  assert.equal(experienciaDesde(2018, 2026), "8 años");
+  assert.equal(experienciaDesde(2024, 2026), "2 años");
+  assert.equal(experienciaDesde(2025, 2026), "1 año");
+  assert.equal(experienciaDesde(2026, 2026), "Menos de un año");
+  assert.equal(experienciaDesde(1950, 2026), "76 años");
+  // Un año de inicio en el futuro no da una experiencia negativa.
+  assert.equal(experienciaDesde(2030, 2026), "Menos de un año");
 });
 
 /*
@@ -205,4 +331,51 @@ test("only links with a real destination are offered", () => {
     assert.deepEqual(enlacesDisponibles({ correo }), [], `debe rechazar ${correo}`);
   }
   assert.equal(enlacesDisponibles({ correo: "nombre.apellido+filtro@sub.taudux.com" }).length, 1);
+});
+
+/*
+  La píldora dice "LinkedIn" o "GitHub": el destino tiene que ser ese sitio,
+  no cualquier https. Es la misma expresión que el CHECK de la 0039, así que
+  una ficha guardada siempre pasa y lo que la base no aceptaría, el front
+  tampoco lo pinta.
+*/
+test("a LinkedIn or GitHub link must point at that site, the same rule as the 0039 CHECK", () => {
+  const tipos = (ficha) => enlacesDisponibles(ficha).map((enlace) => enlace.tipo);
+
+  for (const linkedin of [
+    "https://linkedin.com/in/ana",
+    "https://www.linkedin.com/in/ana",
+    "https://mx.linkedin.com/in/ana",
+  ]) {
+    assert.deepEqual(tipos({ linkedin }), ["linkedin"], `debe aceptar ${linkedin}`);
+  }
+  for (const linkedin of [
+    "https://linkedin.com.evil.com/x",
+    "https://evil.com/linkedin.com",
+    "https://evil-linkedin.com/in/ana",
+    "https://linkedin.com@evil.com/in/ana",
+    "http://linkedin.com/in/ana",
+    "https://linkedin.com/",
+    "https://linkedin.com/in/ana con espacio",
+    // Igual que el `~` de la base, distingue mayúsculas.
+    "https://LinkedIn.com/in/ana",
+    // Otro sitio válido, pero en el campo equivocado.
+    "https://github.com/ana",
+  ]) {
+    assert.deepEqual(tipos({ linkedin }), [], `debe rechazar ${linkedin}`);
+  }
+
+  for (const github of ["https://github.com/ana", "https://www.github.com/ana"]) {
+    assert.deepEqual(tipos({ github }), ["github"], `debe aceptar ${github}`);
+  }
+  for (const github of [
+    "http://github.com/x",
+    "https://github.com.evil.com/x",
+    "https://evil.com/github.com",
+    "https://gist.github.com/ana",
+    "https://github.com/",
+    "https://www.linkedin.com/in/ana",
+  ]) {
+    assert.deepEqual(tipos({ github }), [], `debe rechazar ${github}`);
+  }
 });

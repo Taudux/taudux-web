@@ -3,41 +3,71 @@
   en la página y en los tests de Node.
 
   Acá NO hay personas. La lista sale de la base con listarColaboradores()
-  (core/colaboradores/colaboradores.service.js), que entrega nombre, corto y
-  slug de cada una. Las fichas de muestra del prototipo viven en
+  (core/colaboradores/colaboradores.service.js), que entrega de cada una
+  nombre, corto y slug, más los campos de su ficha (migración 0039) con los
+  nombres de la base: rol, especialidad, ubicacion, stack (arreglo de textos),
+  disponibilidad, anio_inicio (un año entero), bio, linkedin, github y correo.
+  Las fichas de muestra del prototipo viven en
   tests/fixtures/colaboradores.muestra.js y sólo las usan los tests.
 
-  La ficha de perfil (rol, bio, especialidad…) todavía no existe: llega con
-  "Mi ficha". Hasta entonces una persona puede estar en el roster sin tener
-  perfil que abrir; tienePerfil() es quien lo decide.
+  Quien todavía no llenó su ficha trae esos campos en null: está en el roster
+  pero no tiene perfil que abrir. tienePerfil() es quien lo decide.
 
-  Campos opcionales de contacto: `linkedin`, `github` (URL https) y `correo`.
-  Los que falten no se pintan; ver enlacesDisponibles().
+  Campos opcionales de contacto: `linkedin`, `github` (URL https a ese sitio)
+  y `correo`. Los que falten no se pintan; ver enlacesDisponibles().
 */
 
-const DISPONIBILIDADES = ["Disponible", "Parcial"];
+// Los mismos valores, en el mismo orden, que el CHECK
+// `fichas_colaborador_disponibilidad_valida` de la 0039. Un test compara las
+// dos listas.
+const DISPONIBILIDADES = Object.freeze(["Disponible", "Parcial", "No disponible"]);
 
 // La grilla del roster tiene cuatro columnas en todos los anchos; en
 // moverSeleccion, arriba/abajo saltan de a una fila, o sea de a
 // COLUMNAS_ROSTER fichas.
 const COLUMNAS_ROSTER = 4;
 
-// Todo lo que la vista de perfil escribe como texto: si falta uno, quedaría un
-// hueco en blanco en la ficha técnica.
-const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "rol", "bio", "ciudad", "anios", "esp", "stack", "disp"];
+// Todo lo que la vista de perfil escribe tal cual como texto: si falta uno,
+// quedaría un hueco en blanco en la ficha técnica.
+const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "rol", "especialidad", "ubicacion", "bio"];
+
+function esTextoConContenido(valor) {
+  return typeof valor === "string" && valor.trim() !== "";
+}
 
 /*
   ¿Tiene esta persona la ficha de perfil COMPLETA? Todo o nada: la vista de
   perfil pinta cada campo, así que una ficha a medias no se abre.
+
+  La base ya garantiza que una ficha guardada está completa (todo `not null`
+  en la 0039), pero acá no se da por hecho: si mañana una columna se vuelve
+  opcional, esa persona se queda sin perfil en vez de romper el pintado.
 */
 function tienePerfil(persona) {
   if (!persona || typeof persona !== "object") return false;
 
-  const textosCompletos = CAMPOS_DE_TEXTO_DEL_PERFIL.every(
-    (campo) => typeof persona[campo] === "string" && persona[campo].trim() !== "",
-  );
+  const textosCompletos = CAMPOS_DE_TEXTO_DEL_PERFIL.every((campo) => esTextoConContenido(persona[campo]));
+  const stackCompleto = Array.isArray(persona.stack)
+    && persona.stack.length > 0
+    && persona.stack.every(esTextoConContenido);
 
-  return textosCompletos && DISPONIBILIDADES.includes(persona.disp);
+  return textosCompletos
+    && stackCompleto
+    && DISPONIBILIDADES.includes(persona.disponibilidad)
+    && Number.isInteger(persona.anio_inicio);
+}
+
+/*
+  La base guarda el año de inicio y no un texto como "8 años", que envejecería
+  solo. El año en curso entra como argumento para que esto sea puro: la página
+  le pasa el del reloj y los tests, uno fijo. Un año de inicio en el futuro no
+  da una experiencia negativa.
+*/
+function experienciaDesde(anioInicio, anioActual) {
+  const anios = anioActual - anioInicio;
+  if (anios <= 0) return "Menos de un año";
+  if (anios === 1) return "1 año";
+  return `${anios} años`;
 }
 
 /*
@@ -84,22 +114,36 @@ function numeroDeFicha(indice) {
 }
 
 /*
+  Las mismas expresiones que los CHECK `fichas_colaborador_linkedin_valido` y
+  `fichas_colaborador_github_valido` de la 0039 (allá `[^[:space:]]`, acá
+  `[^\s]`). La píldora dice "LinkedIn" o "GitHub": el destino tiene que ser ese
+  sitio, y no `linkedin.com.otro-sitio.com` ni `otro-sitio.com/linkedin.com`.
+  Sin la bandera `i`, igual que el `~` de la base: una ficha guardada siempre
+  pasa, y lo que la base rechazaría el front tampoco lo pinta.
+*/
+const PATRONES_DE_ENLACE = Object.freeze({
+  linkedin: /^https:\/\/([a-z0-9-]+\.)?linkedin\.com\/[^\s]+$/,
+  github: /^https:\/\/(www\.)?github\.com\/[^\s]+$/,
+});
+
+/*
   En el prototipo todos los enlaces eran "#". Un enlace muerto es peor que
   ninguno, así que sólo se ofrecen los que tienen destino real, en orden fijo.
-  Sólo https y direcciones de correo: lo que venga en los datos termina en un
-  href, y un `javascript:` ahí sería una puerta abierta.
+  Sólo https al sitio que nombra la píldora y direcciones de correo: lo que
+  venga en los datos termina en un href, y un `javascript:` ahí sería una
+  puerta abierta.
 */
 function enlacesDisponibles(ficha) {
   const enlaces = [];
-  const urlSegura = (valor) => {
-    const texto = String(valor || "").trim();
-    return /^https:\/\/[^\s]+$/i.test(texto) ? texto : null;
+  const urlDe = (tipo) => {
+    const texto = String(ficha?.[tipo] || "").trim();
+    return PATRONES_DE_ENLACE[tipo].test(texto) ? texto : null;
   };
 
-  const linkedin = urlSegura(ficha?.linkedin);
+  const linkedin = urlDe("linkedin");
   if (linkedin) enlaces.push({ tipo: "linkedin", texto: "LinkedIn", href: linkedin });
 
-  const github = urlSegura(ficha?.github);
+  const github = urlDe("github");
   if (github) enlaces.push({ tipo: "github", texto: "GitHub", href: github });
 
   // Lista blanca de caracteres de una dirección, no "cualquier cosa con una
@@ -118,6 +162,7 @@ if (typeof module !== "undefined" && module.exports) {
     COLUMNAS_ROSTER,
     DISPONIBILIDADES,
     tienePerfil,
+    experienciaDesde,
     indicePorSlug,
     moverSeleccion,
     numeroDeFicha,

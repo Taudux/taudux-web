@@ -49,9 +49,10 @@ test("the content sits in the shared container", () => {
 });
 
 test("the unfinished page is kept out of search engines", () => {
-  // QUITAR ESTA ASERCIÓN cuando existan las fichas de perfil reales ("Mi
-  // ficha"): mientras cada persona muestre sólo su nombre, la página está a
-  // medias y no debe indexarse.
+  // QUITAR ESTA ASERCIÓN cuando "Mi ficha" deje a cada colaborador llenar su
+  // ficha desde el sitio. La página ya pinta la ficha real (0039), pero
+  // mientras nadie pueda cargarla, casi todos muestran sólo su nombre: la
+  // página está a medias y no debe indexarse.
   assert.match(HTML, /<meta name="robots" content="noindex">/);
 });
 
@@ -177,6 +178,23 @@ test("the roster card and the profile detail lost their attributes column", () =
   const html = sinComentariosHtml(HTML);
   assert.doesNotMatch(html, /colaboradores__resumen-texto|colaboradores__detalle-columna/,
     "sin segunda columna, el envoltorio de la primera sobra");
+});
+
+/*
+  colaboradores.js le pone al punto de disponibilidad una clase por estado. Sin
+  la regla en la hoja, ese estado se vería en silencio como el punto por
+  defecto; y con un estilo en línea, el color dejaría de vivir en la hoja.
+*/
+test("the availability dot stays decorative and each of its states has its own rule", () => {
+  const punto = sinComentariosHtml(HTML).match(/<span[^>]*id="perfilPunto"[^>]*>/);
+  assert.ok(punto, "falta el punto de disponibilidad");
+  assert.match(punto[0], /\saria-hidden="true"/, "el valor accesible es el texto, no el punto");
+
+  const css = sinComentariosCss(CSS);
+  for (const estado of ["disponible", "parcial", "no-disponible"]) {
+    assert.match(css, new RegExp(`\\.colaboradores__punto--${estado}\\s*\\{`), `falta la regla del estado ${estado}`);
+  }
+  assert.doesNotMatch(sinComentariosJs(JS), /\.style\b/, "el punto cambia por clase, no con estilos en línea");
 });
 
 test("the page script never writes markup from data", () => {

@@ -22,15 +22,45 @@ const leer = (archivo) => fs.readFileSync(path.join(ROOT, CARPETA, archivo), "ut
 // muestra que le sirve el servicio falso: es el lado "esperado" de cada
 // comparación.
 const {
+  DISPONIBILIDADES,
   numeroDeFicha,
   indicePorSlug,
+  experienciaDesde,
+  enlacesDisponibles,
 } = require(path.join(ROOT, CARPETA, "colaboradores.datos.js"));
 const { COLABORADORES_MUESTRA: MUESTRA } = require("./fixtures/colaboradores.muestra.js");
 
 const rutaDe = (indice) => `#/${MUESTRA[indice].slug}`;
 
-// Lo que hoy entrega la base: nombre, corto y slug, sin ficha de perfil.
-const SAMAEL = Object.freeze({ nombre: "Samael Flores", corto: "Samael", slug: "samael" });
+// Los campos de ficha (0039) de quien todavía no la llenó: el RPC hace left
+// join y el servicio los entrega en null.
+const FICHA_EN_NULL = Object.freeze({
+  rol: null,
+  especialidad: null,
+  ubicacion: null,
+  stack: null,
+  disponibilidad: null,
+  anio_inicio: null,
+  bio: null,
+  linkedin: null,
+  github: null,
+  correo: null,
+});
+
+// Lo que entrega el servicio para alguien sin ficha: su nombre, su slug y la
+// ficha en null.
+const SAMAEL = Object.freeze({ nombre: "Samael Flores", corto: "Samael", slug: "samael", ...FICHA_EN_NULL });
+
+// Un estado del punto por valor de disponibilidad; el texto de al lado es el
+// valor accesible, el punto es decorado.
+const CLASES_DEL_PUNTO = Object.freeze({
+  Disponible: "colaboradores__punto--disponible",
+  Parcial: "colaboradores__punto--parcial",
+  "No disponible": "colaboradores__punto--no-disponible",
+});
+
+// La experiencia se calcula con el año en curso, igual que la página.
+const experienciaDe = (ficha) => experienciaDesde(ficha.anio_inicio, new Date().getFullYear());
 
 const CARGANDO = "Cargando colaboradores…";
 const ERROR_DE_CARGA = "No se pudo cargar la lista de colaboradores. Reintenta cuando tengas conexión.";
@@ -63,6 +93,23 @@ function muestraConRetoques(retoques) {
   const lista = structuredClone(MUESTRA);
   for (const [indice, campos] of Object.entries(retoques)) Object.assign(lista[indice], campos);
   return lista;
+}
+
+/*
+  El servicio REAL, corrido en su propio vm contra un RPC falso que responde
+  con estas filas. Así la página recibe exactamente lo que arma el servicio con
+  lo que devuelve la base, y no una ficha escrita a mano con la forma que el
+  test cree que tiene.
+*/
+const SERVICIO = fs.readFileSync(path.join(ROOT, "src/app/core/colaboradores/colaboradores.service.js"), "utf8");
+
+function servicioReal(filas) {
+  const contexto = {
+    console: { error() {} },
+    supabaseClient: { rpc: async () => ({ data: structuredClone(filas), error: null }) },
+  };
+  vm.runInNewContext(SERVICIO, contexto);
+  return contexto.listarColaboradores;
 }
 
 /* ---------- DOM falso: sólo lo que colaboradores.js usa ---------- */
@@ -409,16 +456,19 @@ function assertPerfilDe(pagina, indice, lista = MUESTRA) {
   assert.equal(pagina.texto("perfilNombre"), ficha.nombre);
   assert.equal(pagina.texto("perfilNumero"), numeroDeFicha(indice));
   assert.equal(pagina.texto("perfilRol"), ficha.rol);
-  assert.equal(pagina.texto("perfilEspecialidad"), ficha.esp);
-  assert.equal(pagina.texto("perfilUbicacion"), ficha.ciudad);
-  assert.equal(pagina.texto("perfilExperiencia"), ficha.anios);
-  assert.equal(pagina.texto("perfilDisponibilidad"), ficha.disp);
-  assert.equal(pagina.texto("perfilStack"), ficha.stack);
+  assert.equal(pagina.texto("perfilEspecialidad"), ficha.especialidad);
+  assert.equal(pagina.texto("perfilUbicacion"), ficha.ubicacion);
+  assert.equal(pagina.texto("perfilExperiencia"), experienciaDe(ficha));
+  assert.equal(pagina.texto("perfilDisponibilidad"), ficha.disponibilidad);
+  assert.equal(pagina.texto("perfilStack"), ficha.stack.join(" · "));
   assert.equal(pagina.texto("perfilBio"), ficha.bio);
-  assert.equal(
-    pagina.porId("perfilPunto").classList.contains("colaboradores__punto--disponible"),
-    ficha.disp === "Disponible",
-  );
+  assert.deepEqual(estadosDelPunto(pagina), [CLASES_DEL_PUNTO[ficha.disponibilidad]]);
+}
+
+// Las clases de estado que tiene puestas el punto de disponibilidad.
+function estadosDelPunto(pagina) {
+  const punto = pagina.porId("perfilPunto");
+  return Object.values(CLASES_DEL_PUNTO).filter((clase) => punto.classList.contains(clase));
 }
 
 // De vuelta en el roster, la ficha que se estaba viendo queda como selección:
@@ -537,7 +587,7 @@ test("clicking a tile puts its profile in the hash as a new history entry and mo
 
   assert.equal(pagina.hash(), rutaDe(2));
   assert.equal(pagina.historial(), 2, "abrir un perfil agrega UNA entrada: la que el botón atrás deshace");
-  // Índice 2 es "Parcial": cubre también el punto de disponibilidad apagado.
+  // Índice 2 es "Parcial": cubre también el punto de disponibilidad ámbar.
   assertPerfilDe(pagina, 2);
   // La ficha que tenía el foco se ocultó con el roster.
   assertFocoEn(pagina, pagina.porId("perfilNombre"));
@@ -620,6 +670,61 @@ test("the profile shows only its card number, with no class, attributes, project
   }
 });
 
+/*
+  La base guarda el año de inicio, no un texto: la experiencia se calcula al
+  pintar con el año en curso. El esperado sale de la misma función pura y,
+  para no probar la función contra sí misma, también del texto literal.
+*/
+test("the profile shows the experience computed from anio_inicio and the current year", async () => {
+  const anioActual = new Date().getFullYear();
+  // [índice de la ficha, años desde que empezó, texto esperado]
+  const casos = [[0, 8, "8 años"], [1, 1, "1 año"], [2, 0, "Menos de un año"]];
+  const retoques = Object.fromEntries(
+    casos.map(([indice, anios]) => [indice, { anio_inicio: anioActual - anios }]),
+  );
+  const pagina = await cargarPagina({ retoques });
+
+  for (const [indice, anios, esperado] of casos) {
+    pagina.irA(rutaDe(indice));
+    assert.equal(pagina.porId("colaboradoresPerfil").hidden, false);
+    assert.equal(pagina.texto("perfilExperiencia"), experienciaDesde(anioActual - anios, anioActual));
+    assert.equal(pagina.texto("perfilExperiencia"), esperado);
+  }
+});
+
+test("the profile shows the stack as one line joined with middle dots", async () => {
+  const pagina = await cargarPagina();
+
+  pagina.fichas()[0].disparar("click");
+  assert.equal(pagina.texto("perfilStack"), "PostgreSQL · Python · GCP");
+
+  // Un solo elemento no lleva separador.
+  const conUno = await cargarPagina({ retoques: { 0: { stack: ["Python"] } } });
+  conUno.fichas()[0].disparar("click");
+  assert.equal(conUno.texto("perfilStack"), "Python");
+});
+
+/*
+  Un estado del punto por valor: verde, ámbar o apagado. El punto es decorado
+  (aria-hidden) y el valor accesible es el texto de al lado. De un perfil a
+  otro sin pasar por el roster, el estado anterior no se queda pegado.
+*/
+test("the availability dot takes one state class per value and the text stays the accessible value", async () => {
+  const pagina = await cargarPagina();
+  const punto = pagina.porId("perfilPunto");
+
+  for (const disponibilidad of DISPONIBILIDADES) {
+    const indice = MUESTRA.findIndex((persona) => persona.disponibilidad === disponibilidad);
+    assert.notEqual(indice, -1, `premisa: la muestra tiene a alguien "${disponibilidad}"`);
+
+    pagina.irA(rutaDe(indice));
+    assert.deepEqual(estadosDelPunto(pagina), [CLASES_DEL_PUNTO[disponibilidad]], disponibilidad);
+    assert.equal(pagina.texto("perfilDisponibilidad"), disponibilidad);
+    assert.equal(punto.getAttribute("aria-hidden"), "true");
+    assert.equal(punto.textContent, "", "el punto no lleva texto: lo dice el de al lado");
+  }
+});
+
 /* ---------- Perfil en el hash ---------- */
 
 test("loading with a profile hash shows that profile without moving focus or adding history", async () => {
@@ -677,7 +782,10 @@ test("a hash that is not a profile route shows the roster and is left alone", as
 
 /* ---------- Enlaces de contacto ---------- */
 
-test("contact pills: none with the sample data; safe links render with the right href, target and rel", async () => {
+test("contact pills: none for a person without links; safe links render with the right href, target and rel", async () => {
+  assert.deepEqual(enlacesDisponibles(MUESTRA[0]), [], "premisa: la ficha 0 no tiene enlaces");
+  assert.deepEqual(enlacesDisponibles(MUESTRA[1]), [], "premisa: la ficha 1 no tiene enlaces");
+
   const deMuestra = await cargarPagina();
   deMuestra.fichas()[0].disparar("mouseenter");
   assert.equal(deMuestra.porId("previaEnlaces").hidden, true);
@@ -730,6 +838,22 @@ test("contact pills: none with the sample data; safe links render with the right
   pagina.irA(rutaDe(1));
   assert.equal(pagina.porId("perfilEnlaces").hidden, true);
   assert.equal(pagina.porId("perfilEnlaces").children.length, 0);
+});
+
+test("a sample person with every link shows one pill per link, in a fixed order", async () => {
+  const indice = MUESTRA.findIndex((persona) => enlacesDisponibles(persona).length === 3);
+  assert.notEqual(indice, -1, "premisa: alguien de la muestra tiene los tres enlaces");
+  const ficha = MUESTRA[indice];
+
+  const pagina = await cargarPagina();
+  pagina.irA(rutaDe(indice));
+
+  const lista = pagina.porId("perfilEnlaces");
+  assert.equal(lista.hidden, false);
+  assert.deepEqual(
+    lista.children.map((item) => item.children[0].href),
+    [ficha.linkedin, ficha.github, `mailto:${ficha.correo}`],
+  );
 });
 
 /* ---------- Página a medio montar ---------- */
@@ -966,4 +1090,52 @@ test("in a mixed list the profile card shows and stays while the preview follows
   conPerfil.disparar("click");
   assert.equal(pagina.hash(), rutaDe(0));
   assertPerfilDe(pagina, 0, lista);
+});
+
+/*
+  De punta a punta, con el servicio real: las filas tal como las devuelve
+  `listar_colaboradores()` de la 0039. Quien no llenó su ficha trae los campos
+  en null (left join) y sólo se elige; quien la llenó abre su perfil pintado
+  con los nombres de la base.
+*/
+test("rows from the service: a collaborator whose card fields are null only gets selected, one with a card opens", async () => {
+  const conFicha = MUESTRA[4];
+  const filas = [
+    { nombre: "Samael", apellidos: "Flores", slug: "samael", ...FICHA_EN_NULL },
+    {
+      nombre: "Renata",
+      apellidos: "Solís",
+      slug: conFicha.slug,
+      rol: conFicha.rol,
+      especialidad: conFicha.especialidad,
+      ubicacion: conFicha.ubicacion,
+      stack: [...conFicha.stack],
+      disponibilidad: conFicha.disponibilidad,
+      anio_inicio: conFicha.anio_inicio,
+      bio: conFicha.bio,
+      linkedin: null,
+      github: null,
+      correo: null,
+      // Lo que el servicio recorta: nunca llega a la página.
+      telefono: "+52 442 000 0000",
+    },
+  ];
+  const pagina = await cargarPagina({ servicio: servicioReal(filas) });
+  const [sinFicha, renata] = pagina.fichas();
+
+  assert.equal(sinFicha.getAttribute("aria-label"), "Samael Flores");
+  assert.equal(pagina.porId("colaboradoresResumen").hidden, false, "alguien de la lista sí tiene ficha");
+
+  sinFicha.disparar("click");
+  assert.equal(pagina.hash(), "");
+  assert.equal(pagina.historial(), 1, "elegir no agrega entradas al historial");
+  assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
+  assert.equal(sinFicha.getAttribute("aria-current"), "true");
+  assertVistaPreviaSoloNombre(pagina, SAMAEL);
+
+  renata.disparar("click");
+  assert.equal(pagina.hash(), `#/${conFicha.slug}`);
+  assertPerfilDe(pagina, 1, [SAMAEL, conFicha]);
+  assert.equal(conFicha.disponibilidad, "No disponible", "premisa: cubre el punto apagado");
+  assert.ok(!pagina.raiz.textContent.includes("442"), "el teléfono no llega a la página");
 });
