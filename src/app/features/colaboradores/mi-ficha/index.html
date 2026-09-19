@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Página de cuenta: exige sesión y no tiene nada que indexar. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Mi ficha | Taudux</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/field/field.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/features/colaboradores/mi-ficha/mi-ficha.css">
+</head>
+
+<body>
+  <nav class="navbar" aria-label="Navegación principal">
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <!-- navbar.js reemplaza este botón por el menú de cuenta. El href real es
+           el respaldo si el script no llega a correr; acá no va un "#". -->
+      <a href="/app/features/auth/login/" id="accessBtn" class="navbar__link button button--access">Acceder</a>
+    </div>
+  </nav>
+
+  <main class="mi-ficha">
+    <div class="mi-ficha__contenido u-contenedor u-contenedor--lectura">
+      <header class="mi-ficha__cabecera">
+        <h1 class="mi-ficha__titulo heading--gradient">Mi ficha</h1>
+        <p class="mi-ficha__intro">Tu ficha de colaborador: lo que aparece de ti en la página de Colaboradores.</p>
+      </header>
+
+      <!-- Carga, error y "sólo para colaboradores". `status` y no `alert`:
+           también anuncia "Cargando…", y eso no amerita interrumpir.
+           tabindex="-1": recibe el foco si un reintento falla, sin entrar al
+           orden del Tab. -->
+      <div class="mi-ficha__aviso panel" id="miFichaAviso" role="status" tabindex="-1" aria-busy="true">
+        <p class="mi-ficha__aviso-mensaje" id="miFichaAvisoMensaje">Cargando tu ficha…</p>
+        <button type="button" class="button button--outline" id="miFichaReintentar" hidden>Reintentar</button>
+        <a class="button button--outline" id="miFichaIrColaboradores" href="/app/features/colaboradores/" hidden>Ver Colaboradores</a>
+      </div>
+
+      <noscript>
+        <p class="mi-ficha__aviso panel">Necesitas habilitar JavaScript para editar tu ficha. Puedes <a class="mi-ficha__enlace" href="/app/features/colaboradores/">ver la página de Colaboradores</a>.</p>
+      </noscript>
+
+      <section class="mi-ficha__panel panel panel--spacious" id="miFichaContenido" aria-labelledby="miFichaTitulo" hidden>
+        <h2 class="mi-ficha__panel-titulo" id="miFichaTitulo">Tu ficha pública</h2>
+
+        <!-- Guardar la ficha es publicarla (0039): quien la llena tiene que
+             saberlo antes de escribir. tabindex="-1": recibe el foco cuando el
+             formulario aparece tras un reintento. -->
+        <p class="mi-ficha__publico" id="miFichaPublico" tabindex="-1">Todo lo que escribas aquí se muestra en la página pública de Colaboradores.</p>
+
+        <form id="formMiFicha" class="mi-ficha__form" aria-describedby="miFichaPublico" novalidate>
+          <!-- Sólo para errores del servidor: los de cada campo van junto al campo. -->
+          <p class="mi-ficha__status" id="miFichaStatus" role="alert" tabindex="-1" hidden></p>
+
+          <div class="mi-ficha__grupo">
+            <!-- Texto y no un campo: el nombre se edita en Mi cuenta. -->
+            <p class="mi-ficha__etiqueta">Nombre</p>
+            <p class="mi-ficha__nombre" id="miFichaNombre"></p>
+            <p class="mi-ficha__ayuda">Sale de tu cuenta. <a class="mi-ficha__enlace" href="/app/features/portal/#perfil">Cambia tu nombre en Mi cuenta</a></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaRol">Rol</label>
+            <input class="field" type="text" id="miFichaRol" name="rol" autocomplete="organization-title" aria-describedby="miFichaRolAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaRolAyuda">De 2 a 60 caracteres. Por ejemplo: Desarrolladora backend.</small>
+            <p class="mi-ficha__error" id="miFichaRolError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaEspecialidad">Especialidad</label>
+            <input class="field" type="text" id="miFichaEspecialidad" name="especialidad" autocomplete="off" aria-describedby="miFichaEspecialidadAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaEspecialidadAyuda">De 2 a 80 caracteres. Por ejemplo: Bases de datos.</small>
+            <p class="mi-ficha__error" id="miFichaEspecialidadError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaUbicacion">Ubicación</label>
+            <input class="field" type="text" id="miFichaUbicacion" name="ubicacion" autocomplete="off" aria-describedby="miFichaUbicacionAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaUbicacionAyuda">Ciudad y país, por ejemplo: Querétaro, México.</small>
+            <p class="mi-ficha__error" id="miFichaUbicacionError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaStack">Stack</label>
+            <input class="field" type="text" id="miFichaStack" name="stack" autocomplete="off" aria-describedby="miFichaStackAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaStackAyuda">Las tecnologías con las que trabajas, separadas por comas. Por ejemplo: Python, PostgreSQL, GCP. Hasta 12.</small>
+            <p class="mi-ficha__error" id="miFichaStackError" hidden></p>
+          </div>
+
+          <!-- Sin aria-describedby de partida: sólo apunta al error cuando lo
+               hay. Los valores son los del CHECK de la 0039. -->
+          <fieldset class="mi-ficha__grupo mi-ficha__opciones" id="miFichaDisponibilidad">
+            <legend class="mi-ficha__etiqueta">Disponibilidad</legend>
+            <p class="mi-ficha__error" id="miFichaDisponibilidadError" hidden></p>
+            <div class="mi-ficha__radios">
+              <label class="mi-ficha__radio" for="miFichaDisponible">
+                <input type="radio" id="miFichaDisponible" name="disponibilidad" value="Disponible">
+                <span>Disponible</span>
+              </label>
+              <label class="mi-ficha__radio" for="miFichaParcial">
+                <input type="radio" id="miFichaParcial" name="disponibilidad" value="Parcial">
+                <span>Parcial</span>
+              </label>
+              <label class="mi-ficha__radio" for="miFichaNoDisponible">
+                <input type="radio" id="miFichaNoDisponible" name="disponibilidad" value="No disponible">
+                <span>No disponible</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaAnioInicio">Año de inicio</label>
+            <!-- type="text" con inputmode y no type="number": el número cambia
+                 con la rueda del mouse y acepta cosas como 1e3. -->
+            <input class="field mi-ficha__anio" type="text" id="miFichaAnioInicio" name="anio_inicio" inputmode="numeric" autocomplete="off" aria-describedby="miFichaAnioInicioAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaAnioInicioAyuda">El año en que empezaste en tu área, por ejemplo 2018. Con él se calcula tu experiencia.</small>
+            <p class="mi-ficha__error" id="miFichaAnioInicioError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaBio">Bio</label>
+            <textarea class="field field--textarea" id="miFichaBio" name="bio" rows="6" aria-describedby="miFichaBioAyuda"></textarea>
+            <small class="mi-ficha__ayuda" id="miFichaBioAyuda">Preséntate en 10 a 600 caracteres. Puedes usar saltos de línea.</small>
+            <p class="mi-ficha__error" id="miFichaBioError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaLinkedin">LinkedIn (opcional)</label>
+            <input class="field" type="url" id="miFichaLinkedin" name="linkedin" autocomplete="url" aria-describedby="miFichaLinkedinAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaLinkedinAyuda">Por ejemplo: https://www.linkedin.com/in/tu-usuario</small>
+            <p class="mi-ficha__error" id="miFichaLinkedinError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaGithub">GitHub (opcional)</label>
+            <input class="field" type="url" id="miFichaGithub" name="github" autocomplete="url" aria-describedby="miFichaGithubAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaGithubAyuda">Por ejemplo: https://github.com/tu-usuario</small>
+            <p class="mi-ficha__error" id="miFichaGithubError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaCorreo">Correo de contacto (opcional)</label>
+            <input class="field" type="email" id="miFichaCorreo" name="correo" autocomplete="email" aria-describedby="miFichaCorreoAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaCorreoAyuda">Cualquiera que visite la página lo puede ver. Déjalo vacío si prefieres no mostrarlo.</small>
+            <p class="mi-ficha__error" id="miFichaCorreoError" hidden></p>
+          </div>
+
+          <!-- Apagado a propósito y sin `name`: no viaja con la ficha. Se
+               enciende cuando exista la sección de proyectos. -->
+          <div class="mi-ficha__grupo mi-ficha__grupo--apagado">
+            <label class="mi-ficha__etiqueta" for="miFichaProyectos">Proyectos</label>
+            <input class="field" type="text" id="miFichaProyectos" aria-describedby="miFichaProyectosNota" disabled>
+            <small class="mi-ficha__ayuda" id="miFichaProyectosNota">Llegará cuando exista la sección de proyectos.</small>
+          </div>
+
+          <div class="mi-ficha__acciones">
+            <!-- Aparece al guardar: el perfil público vive en el hash del roster. -->
+            <a class="button button--outline" id="miFichaVerPerfil" href="/app/features/colaboradores/" hidden>Ver mi perfil</a>
+            <button type="submit" class="button button--glow" id="miFichaGuardar" data-loading-text="Guardando…">Guardar ficha</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="/app/features/auth/auth-ui.js"></script>
+  <script src="/app/core/colaboradores/ficha.service.js"></script>
+  <script src="/app/features/colaboradores/mi-ficha/mi-ficha.logica.js"></script>
+  <script src="/app/features/colaboradores/mi-ficha/mi-ficha.js"></script>
+</body>
+
+</html>

@@ -327,12 +327,14 @@ async function requerirSesion() {
   return session;
 }
 
+// `es_colaborador` y `slug` (0038) los usa "Mi ficha": quién puede editarla y
+// a qué perfil público enlaza.
 async function obtenerPerfil(session) {
   if (!session?.user?.id) return null;
 
   const { data, error } = await supabaseClient
     .from("perfiles")
-    .select("nombre, apellidos, telefono, rol, avisos_curso_nuevo")
+    .select("nombre, apellidos, telefono, rol, avisos_curso_nuevo, es_colaborador, slug")
     .eq("id", session.user.id)
     .single();
   if (error) return null;

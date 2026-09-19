@@ -1,0 +1,235 @@
+/* "Mi ficha": el formulario con el que cada colaborador edita su ficha pública. */
+
+@layer features {
+  /*
+    Relleno en el padre y contenedor compartido sin relleno en el hijo, como
+    .colaboradores y .extractor. El despeje superior cuelga del token del
+    navbar, así que sigue solo si la barra cambia de alto.
+  */
+  .mi-ficha {
+    min-block-size: 100vh;
+    padding-block-start: var(--espacio-bajo-navbar);
+    padding-block-end: 4rem;
+    padding-inline: 2rem;
+    background-color: var(--color-background);
+  }
+
+  .mi-ficha__cabecera {
+    margin-block-end: 2rem;
+  }
+
+  .mi-ficha__titulo {
+    margin-block-end: 0.5rem;
+    font-size: clamp(1.8rem, 4vw, 2.4rem);
+  }
+
+  .mi-ficha__intro {
+    color: var(--color-text-muted);
+    line-height: 1.7;
+  }
+
+  /* Carga, error y "sólo para colaboradores" comparten esta caja. */
+  .mi-ficha__aviso {
+    display: grid;
+    justify-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  /* `display: grid` le gana al [hidden] del navegador: hay que repetirlo. */
+  .mi-ficha__aviso[hidden] {
+    display: none;
+  }
+
+  .mi-ficha__aviso:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .mi-ficha__aviso--error {
+    border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
+    color: var(--color-error-text);
+  }
+
+  .mi-ficha__panel {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .mi-ficha__panel[hidden] {
+    display: none;
+  }
+
+  .mi-ficha__panel-titulo {
+    font-size: clamp(1.3rem, 3vw, 1.7rem);
+  }
+
+  /* El aviso de consentimiento: todo lo que se guarda es público. */
+  .mi-ficha__publico {
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-field);
+    background-color: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    color: var(--color-text);
+    line-height: 1.6;
+  }
+
+  .mi-ficha__publico:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .mi-ficha__form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-inline-size: 0;
+  }
+
+  /* Sólo errores del servidor; los de cada campo van junto al campo. */
+  .mi-ficha__status {
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--color-error);
+    border-radius: var(--radius-field);
+    background-color: color-mix(in srgb, var(--color-error) 12%, transparent);
+    color: var(--color-error-text);
+  }
+
+  .mi-ficha__status:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .mi-ficha__grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-inline-size: 0;
+  }
+
+  .mi-ficha__etiqueta {
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  .mi-ficha__nombre {
+    padding-block: 0.25rem;
+    color: var(--color-text);
+    font-size: 1.1rem;
+    overflow-wrap: anywhere;
+  }
+
+  .mi-ficha__ayuda {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .mi-ficha__error {
+    color: var(--color-error-text);
+    font-size: 0.9rem;
+  }
+
+  .mi-ficha__enlace {
+    color: var(--color-accent);
+  }
+
+  .mi-ficha__enlace:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .mi-ficha__anio {
+    max-inline-size: 12ch;
+  }
+
+  /* El fieldset de disponibilidad se ve como un grupo más, sin marco. */
+  .mi-ficha__opciones {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .mi-ficha__radios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .mi-ficha__radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .mi-ficha__radio input {
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .mi-ficha__radio input:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .mi-ficha__radio input:disabled {
+    cursor: not-allowed;
+  }
+
+  /*
+    El campo apagado (Proyectos) y los campos mientras se guarda. Acotado a
+    esta página: .field es compartido y los demás formularios no lo piden.
+  */
+  .mi-ficha .field:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .mi-ficha__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  /* .button no le quita el subrayado a un <a>. */
+  .mi-ficha a.button {
+    text-align: center;
+    text-decoration: none;
+  }
+
+  @media (max-width: 760px) {
+    .mi-ficha {
+      padding-inline: 1.25rem;
+    }
+
+    /* El 4rem 3rem de .panel--spacious dejaría el formulario en la mitad del
+       ancho de un teléfono. */
+    .mi-ficha__panel {
+      padding: 2rem 1.25rem;
+    }
+
+    /* En móvil los botones ocupan el ancho: más fácil de tocar. */
+    .mi-ficha__acciones {
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .mi-ficha {
+      padding-inline: 1rem;
+    }
+
+    .mi-ficha__aviso {
+      padding: 1.5rem 1rem;
+    }
+  }
+}
