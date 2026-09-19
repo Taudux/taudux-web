@@ -449,11 +449,19 @@
       const ficha = persona && tienePerfil(persona) ? persona : null;
       const soloNombre = persona !== null && ficha === null;
 
+      /*
+        La ficha se enciende SÓLO bajo el cursor, y por eso acá no entra ni el
+        foco ni la elección. El resplandor del teclado lo pone `:focus-visible`
+        en la hoja: el navegador es quien sabe si el foco llegó con Tab o con
+        un clic, y el script no tiene por qué adivinarlo.
+
+        La elección tampoco deja marca: la que había se quedaba pegada al
+        volver de un perfil, con el mouse lejos. Sigue existiendo —decide a
+        quién vuelve la vista previa y qué ficha recibe el foco—, pero no se
+        pinta.
+      */
       fichas.forEach((boton, indice) => {
-        boton.classList.toggle("colaboradores__ficha--activa", indice === mostrada);
-        boton.classList.toggle("colaboradores__ficha--seleccionada", indice === estado.seleccion);
-        if (indice === estado.seleccion) boton.setAttribute("aria-current", "true");
-        else boton.removeAttribute("aria-current");
+        boton.classList.toggle("colaboradores__ficha--activa", indice === resaltado.cursor);
       });
 
       // Cada escritura se salta si el texto no cambió: las regiones aria-live

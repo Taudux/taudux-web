@@ -103,6 +103,43 @@ test("the Perfil headings stand alone and the edit link is built by the script",
 });
 
 /*
+  El resplandor fuerte es de la ficha bajo el CURSOR y de nadie más. Con
+  teclado no hay cursor: la ficha enfocada se distingue con el anillo de
+  `:focus-visible` y un realce tenue, nunca con el mismo brillo — si brillaran
+  igual, tabular con el mouse apoyado en otra ficha dejaría dos encendidas y
+  ninguna mandando.
+
+  Y el script no marca a la ficha elegida: esa marca era la que quedaba pegada
+  al volver de un perfil.
+*/
+test("the strong glow belongs to the cursor alone and the keyboard gets its own quieter rule", () => {
+  const css = sinComentariosCss(CSS);
+
+  const encendida = css.match(/([^{}]+)\{([^}]*--ficha-cielo:\s*rgba\(0,\s*120[^}]*)\}/);
+  assert.ok(encendida, "falta la regla de la ficha encendida");
+  assert.deepEqual(
+    encendida[1].split(",").map((selector) => selector.trim()).filter(Boolean),
+    [".colaboradores__ficha--activa"],
+    "el resplandor fuerte lo enciende el cursor y nadie más",
+  );
+  assert.match(encendida[2], /box-shadow/);
+
+  // Quien navega con teclado tiene que ver dónde está: el anillo del sistema.
+  const enfocada = css.match(/\.colaboradores__ficha:focus-visible\s*\{([^}]*)\}/);
+  assert.ok(enfocada, "falta la regla de la ficha enfocada con teclado");
+  assert.match(enfocada[1], /outline:\s*var\(--focus-ring\)/);
+
+  // Pero sin nada que compita con el resplandor del cursor.
+  for (const [, cuerpo] of css.matchAll(/\.colaboradores__ficha:focus-visible[^{]*\{([^}]*)\}/g)) {
+    assert.doesNotMatch(cuerpo, /box-shadow/, "la enfocada no lleva resplandor: no deben competir dos fichas");
+  }
+
+  assert.doesNotMatch(css, /\.colaboradores__ficha--seleccionada/, "la marca fija de la elegida se fue");
+  assert.doesNotMatch(sinComentariosJs(JS), /seleccionada|aria-current/,
+    "el script ya no marca la ficha elegida: la elección sólo decide la vista previa");
+});
+
+/*
   El enlace se apila SOBRE la ficha —que es un <button>, y un <a> adentro sería
   HTML inválido—, así que vive en la celda y se ancla en ella. Va arriba porque
   el pie de la ficha es la franja del nombre.

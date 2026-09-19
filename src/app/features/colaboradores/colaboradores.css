@@ -374,16 +374,11 @@
     transition: outline-color var(--transition-fast), box-shadow var(--transition-fast);
   }
 
-  /* Seleccionada: es la ficha a la que vuelve la vista previa al soltar el
-     cursor. Más tenue que la activa para que no compitan. */
-  .colaboradores__ficha--seleccionada {
-    --ficha-cielo: rgba(0, 80, 110, 0.35);
-
-    outline-color: rgba(0, 225, 255, 0.5);
-  }
-
-  /* Activa: la que está mostrando la vista previa ahora (cursor o foco). Sube
-     de nivel para que su resplandor no quede debajo de las vecinas. */
+  /*
+    La ficha encendida: la que está bajo el CURSOR, y ninguna otra. `--activa`
+    la pone colaboradores.js. Sube de nivel para que su resplandor no quede
+    debajo de las vecinas.
+  */
   .colaboradores__ficha--activa {
     --ficha-cielo: rgba(0, 120, 150, 0.55);
 
@@ -393,11 +388,28 @@
     color: var(--color-text);
   }
 
-  /* El anillo va hacia ADENTRO: las fichas están a 3px una de otra y un anillo
-     hacia afuera quedaría tapado por las vecinas. */
+  /* Con teclado no hay cursor, así que la ficha enfocada se distingue con el
+     anillo del sistema. Va hacia ADENTRO: las fichas están a 3px una de otra y
+     uno hacia afuera quedaría tapado por las vecinas. */
   .colaboradores__ficha:focus-visible {
     outline: var(--focus-ring);
     outline-offset: -3px;
+  }
+
+  /*
+    Y un realce tenue, para que el anillo no sea lo único que la distinga del
+    fondo. Deliberadamente por debajo del resplandor de arriba: con las dos al
+    mismo brillo, tabular con el mouse apoyado en otra ficha dejaba dos
+    encendidas y ninguna mandando.
+
+    Sólo si NO está bajo el cursor: cuando coinciden manda el resplandor
+    fuerte. Sin el `:not()` ganaría esta regla —una pseudo-clase pesa más que
+    una clase— y la ficha se vería MÁS apagada justo al tabular hasta ella.
+  */
+  .colaboradores__ficha:focus-visible:not(.colaboradores__ficha--activa) {
+    --ficha-cielo: rgba(0, 80, 110, 0.35);
+
+    color: var(--color-text);
   }
 
   .colaboradores__ficha-cabeza {

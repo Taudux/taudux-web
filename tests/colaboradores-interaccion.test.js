@@ -455,10 +455,31 @@ function assertVistaPreviaDe(pagina, indice, lista = MUESTRA) {
   assert.equal(pagina.porId("previaRol").hidden, false);
   assert.equal(pagina.texto("previaBio"), ficha.bio);
   assert.equal(pagina.porId("previaBio").classList.contains("colaboradores__bio--vacia"), false);
+}
 
-  // Sólo la ficha mostrada queda marcada como activa.
-  const activas = pagina.fichas().map((boton) => boton.classList.contains("colaboradores__ficha--activa"));
-  assert.deepEqual(activas, lista.map((_, i) => i === indice));
+/*
+  Qué ficha está ENCENDIDA (`--activa`), o `null` si ninguna. La enciende sólo
+  el cursor: con teclado el resplandor lo pone `:focus-visible` en la hoja, que
+  el navegador prende al tabular y no al llegar con el mouse. Por eso la vista
+  previa puede estar mostrando a alguien sin que ninguna ficha esté encendida.
+*/
+function assertFichaEncendida(pagina, indice) {
+  const encendidas = pagina.fichas()
+    .flatMap((boton, i) => (boton.classList.contains("colaboradores__ficha--activa") ? [i] : []));
+  assert.deepEqual(encendidas, indice === null ? [] : [indice]);
+}
+
+// Ninguna ficha queda marcada como "la actual": la elección no se anuncia ni
+// se pinta, sólo decide a quién vuelve la vista previa.
+function assertSinMarcaPegada(pagina) {
+  assert.deepEqual(
+    pagina.fichas().map((boton) => boton.getAttribute("aria-current")),
+    pagina.fichas().map(() => null),
+  );
+  assert.ok(
+    pagina.fichas().every((boton) => !boton.classList.contains("colaboradores__ficha--seleccionada")),
+    "la clase de la ficha elegida ya no existe",
+  );
 }
 
 /*
@@ -506,17 +527,17 @@ function estadosDelPunto(pagina) {
   return Object.values(CLASES_DEL_PUNTO).filter((clase) => punto.classList.contains(clase));
 }
 
-// De vuelta en el roster, la ficha que se estaba viendo queda como selección:
-// la única marcada y la que muestra la vista previa.
+/*
+  De vuelta en el roster, la ficha que se estaba viendo recibe el FOCO y con él
+  manda en la vista previa. Nada más: sin cursor encima no hay ficha encendida
+  y no queda ninguna marca pegada, que es justo lo que se veía antes al volver.
+*/
 function assertRosterConSeleccion(pagina, indice) {
-  const fichas = pagina.fichas();
   assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
-  assert.deepEqual(
-    fichas.map((boton) => boton.getAttribute("aria-current")),
-    MUESTRA.map((_, i) => (i === indice ? "true" : null)),
-  );
-  assert.ok(fichas[indice].classList.contains("colaboradores__ficha--seleccionada"));
+  assertFocoEn(pagina, pagina.fichas()[indice]);
+  assertFichaEncendida(pagina, null);
+  assertSinMarcaPegada(pagina);
   assertVistaPreviaDe(pagina, indice);
 }
 
@@ -557,22 +578,32 @@ test("hovering a tile previews that card and leaving it returns to the empty sta
 
   fichas[3].disparar("mouseenter");
   assertVistaPreviaDe(pagina, 3);
+  assertFichaEncendida(pagina, 3);
 
   // Pasar a otra ficha sin mouseleave intermedio cambia la vista previa.
   fichas[8].disparar("mouseenter");
   assertVistaPreviaDe(pagina, 8);
+  assertFichaEncendida(pagina, 8);
 
   // El mouseleave atrasado de la ficha anterior no apaga a la actual.
   fichas[3].disparar("mouseleave");
   assertVistaPreviaDe(pagina, 8);
+  assertFichaEncendida(pagina, 8);
 
   fichas[8].disparar("mouseleave");
   assertVistaPreviaVacia(pagina);
-  assert.ok(pagina.fichas().every((boton) => !boton.classList.contains("colaboradores__ficha--activa")));
+  assertFichaEncendida(pagina, null);
   // Hover nunca abre el perfil.
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
 });
 
+/*
+  El foco mueve la vista previa igual que el cursor, pero NO enciende la ficha:
+  el resplandor del teclado lo pone `:focus-visible` en la hoja. Así el
+  script no tiene que adivinar si el foco llegó con Tab o con un clic — eso lo
+  sabe el navegador— y al volver de un perfil con el mouse no queda nada
+  encendido.
+*/
 test("focusing a tile previews it like hover does, and blur clears it", async () => {
   const pagina = await cargarPagina();
   const fichas = pagina.fichas();
@@ -580,10 +611,12 @@ test("focusing a tile previews it like hover does, and blur clears it", async ()
   fichas[5].focus();
   assertFocoEn(pagina, fichas[5]);
   assertVistaPreviaDe(pagina, 5);
+  assertFichaEncendida(pagina, null);
 
   // Tab a la siguiente: blur de una + focus de la otra.
   fichas[6].focus();
   assertVistaPreviaDe(pagina, 6);
+  assertFichaEncendida(pagina, null);
 
   fichas[6].disparar("blur");
   assertVistaPreviaVacia(pagina);
@@ -600,15 +633,20 @@ test("the pointer leaving a tile does not drop the preview of the tile that stil
 
   fichas[5].focus();
   fichas[5].disparar("mouseenter");
+  assertFichaEncendida(pagina, 5);
   fichas[5].disparar("mouseleave");
   assertVistaPreviaDe(pagina, 5);
+  // La sigue mostrando por el foco, pero ya sin cursor no está encendida.
+  assertFichaEncendida(pagina, null);
 
   // El cursor manda mientras está encima de OTRA ficha, y al irse la vista
   // vuelve a la que tiene el foco, no al vacío.
   fichas[2].disparar("mouseenter");
   assertVistaPreviaDe(pagina, 2);
+  assertFichaEncendida(pagina, 2);
   fichas[2].disparar("mouseleave");
   assertVistaPreviaDe(pagina, 5);
+  assertFichaEncendida(pagina, null);
 
   fichas[5].disparar("blur");
   assertVistaPreviaVacia(pagina);
@@ -1024,9 +1062,9 @@ test("a retry that lands on a no-profile link focuses that person's tile, not th
   await pagina.reintentar();
 
   const [, fichaSamael] = pagina.fichas();
-  assert.equal(fichaSamael.getAttribute("aria-current"), "true");
   assertFocoEn(pagina, fichaSamael);
   assertVistaPreviaSoloNombre(pagina, SAMAEL);
+  assertSinMarcaPegada(pagina);
 });
 
 test("an empty list shows its own message, no tiles and no retry", async () => {
@@ -1078,11 +1116,13 @@ test("a tile without profile data only gets selected: no hash, name-only preview
   assert.equal(pagina.historial(), 1, "elegir no agrega entradas al historial");
   assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
-  assert.equal(ficha.getAttribute("aria-current"), "true");
-  assert.ok(ficha.classList.contains("colaboradores__ficha--seleccionada"));
   assertFocoEn(pagina, ficha);
+  // La elección no se pinta ni se anuncia: no deja marca en la ficha.
+  assertSinMarcaPegada(pagina);
+  assertFichaEncendida(pagina, null);
 
   // Ya sin foco ni cursor, la vista previa vuelve a la elegida: sólo el nombre.
+  // Eso es lo único que la elección sigue decidiendo.
   ficha.disparar("blur");
   assertVistaPreviaSoloNombre(pagina, SAMAEL);
   assert.equal(pagina.porId("colaboradoresResumen").hidden, true);
@@ -1093,7 +1133,8 @@ test("a profile hash of a person without profile data selects them, stays in the
 
   assert.equal(pagina.porId("colaboradoresRoster").hidden, false);
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
-  assert.equal(pagina.fichas()[0].getAttribute("aria-current"), "true");
+  // Queda elegido sin que se le note: lo único que lo delata es la vista previa.
+  assertSinMarcaPegada(pagina);
   assertVistaPreviaSoloNombre(pagina, SAMAEL);
   assert.equal(pagina.hash(), "");
   assert.equal(pagina.url(), URL_DE_LA_PAGINA, "se limpia sólo el hash: la ruta queda");
@@ -1168,7 +1209,7 @@ test("rows from the service: a collaborator whose card fields are null only gets
   assert.equal(pagina.hash(), "");
   assert.equal(pagina.historial(), 1, "elegir no agrega entradas al historial");
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, true);
-  assert.equal(sinFicha.getAttribute("aria-current"), "true");
+  assertSinMarcaPegada(pagina);
   assertVistaPreviaSoloNombre(pagina, SAMAEL);
 
   renata.disparar("click");
