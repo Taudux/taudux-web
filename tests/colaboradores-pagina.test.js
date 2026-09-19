@@ -118,6 +118,67 @@ test("the regions that change with the selection are live, there is no back butt
   assert.match(nombre[0], /\stabindex="-1"/, "el nombre recibe el foco al abrir un perfil, sin entrar al orden del Tab");
 });
 
+/*
+  Retirados por decisión de producto (2026-09-19): los atributos 1–5 con sus
+  barras, la "clase" (ESTRATEGA, TANQUE…), el botón "Contactar", "Suele
+  trabajar con" y la fila de Proyectos (apagados en todo el producto hasta que
+  tengan infraestructura). Esto impide que vuelvan pegados desde el prototipo.
+*/
+test("the retired profile pieces are gone from the markup, the script and the stylesheet", () => {
+  const html = sinComentariosHtml(HTML);
+  for (const [patron, que] of [
+    [/previaClase|colaboradores__clase|Sin selección/, "la clase de la vista previa"],
+    [/previaAtributos|perfilAtributos|colaboradores__atributo|>Atributos</, "los atributos"],
+    [/Contactar|colaboradores__contactar/, "el botón Contactar"],
+    [/perfilColega|colaboradores__colega|Suele trabajar con/, "el colega sugerido"],
+    [/perfilProyectos|>Proyectos</, "la fila de Proyectos"],
+  ]) {
+    assert.doesNotMatch(html, patron, `el HTML todavía tiene ${que}`);
+  }
+
+  const js = sinComentariosJs(JS);
+  for (const patron of [
+    /previaClase/, /Sin selección/, /\.clase\b/,
+    /ETIQUETAS_ATRIBUTOS/, /etiquetaDeAtributo/, /Atributos/, /\.stats\b/,
+    /Contactar/,
+    /perfilColega/, /colegaSugerido/, /verColega/, /location\.replace/,
+    /perfilProyectos/, /\.proyectos\b/,
+  ]) {
+    assert.doesNotMatch(js, patron, `el script todavía usa ${patron}`);
+  }
+
+  const css = sinComentariosCss(CSS);
+  for (const patron of [
+    /\.colaboradores__clase\b/,
+    /\.colaboradores__atributo/, /\.colaboradores__barra-segmentos/, /\.colaboradores__segmento/,
+    /\.colaboradores__contactar/,
+    /\.colaboradores__colega/,
+    // Su único consumidor era la cifra de Proyectos.
+    /\.colaboradores__dato-valor--cifra/,
+  ]) {
+    assert.doesNotMatch(css, patron, `la hoja todavía tiene ${patron}`);
+  }
+});
+
+/*
+  La tarjeta "Perfil" del roster y el detalle del perfil tenían una segunda
+  columna para los atributos. Sin ella, un grid de dos columnas dejaría la bio
+  apretada en la mitad de la tarjeta junto a un hueco vacío.
+*/
+test("the roster card and the profile detail lost their attributes column", () => {
+  const css = sinComentariosCss(CSS);
+  for (const selector of [".colaboradores__resumen", ".colaboradores__detalle"]) {
+    const reglas = [...css.matchAll(new RegExp(`${selector.replace(".", "\\.")}\\s*[,{][^}]*\\}`, "g"))];
+    assert.ok(reglas.length > 0, `falta la regla ${selector}`);
+    for (const [regla] of reglas) {
+      assert.doesNotMatch(regla, /grid-template-columns/, `${selector} ya no reparte columnas`);
+    }
+  }
+  const html = sinComentariosHtml(HTML);
+  assert.doesNotMatch(html, /colaboradores__resumen-texto|colaboradores__detalle-columna/,
+    "sin segunda columna, el envoltorio de la primera sobra");
+});
+
 test("the page script never writes markup from data", () => {
   const js = sinComentariosJs(JS);
   assert.doesNotMatch(js, /innerHTML|insertAdjacentHTML|outerHTML/);

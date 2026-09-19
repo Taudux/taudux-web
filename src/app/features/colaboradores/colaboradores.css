@@ -137,14 +137,6 @@
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
   }
 
-  .colaboradores__contactar {
-    flex: none;
-    padding: 0.5625rem 1.125rem;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.35);
-    font-size: 0.8125rem;
-    white-space: nowrap;
-  }
-
   /* Píldoras de contacto. Sólo existen las que enlacesDisponibles() devuelve. */
   .colaboradores__enlaces {
     display: flex;
@@ -176,7 +168,6 @@
      con teclado, el anillo tiene que ser el mismo que el del resto. */
   .colaboradores__enlace:focus-visible,
   .colaboradores__perfil-nombre:focus-visible,
-  .colaboradores__colega:focus-visible,
   .colaboradores__aviso:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
@@ -185,60 +176,6 @@
   .colaboradores__enlace-sigla {
     font: 700 0.8125rem var(--font-display);
     color: var(--color-text);
-  }
-
-  /* Barras de atributos: cinco segmentos, los encendidos en cian. */
-  .colaboradores__atributos {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.4375rem;
-    min-inline-size: 0;
-  }
-
-  .colaboradores__atributo {
-    /* Ancla del valor oculto (.u-visually-hidden es absoluto): sin esto se
-       posiciona contra la página y puede estirar su ancho. */
-    position: relative;
-    display: grid;
-    grid-template-columns: 82px minmax(0, 1fr);
-    align-items: center;
-    gap: 0.625rem;
-  }
-
-  .colaboradores__atributos--perfil .colaboradores__atributo {
-    grid-template-columns: 76px minmax(0, 1fr) 26px;
-    gap: 0.5rem;
-  }
-
-  .colaboradores__atributo-nombre {
-    font: 500 0.6875rem var(--font-mono);
-    letter-spacing: 1px;
-    color: var(--color-text-subtle);
-  }
-
-  .colaboradores__atributo-valor {
-    font: 500 0.625rem var(--font-mono);
-    color: #5ad7ff;
-    text-align: end;
-  }
-
-  .colaboradores__barra-segmentos {
-    display: flex;
-    gap: 4px;
-  }
-
-  .colaboradores__segmento {
-    flex: 1;
-    block-size: 6px;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.08);
-    transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
-  }
-
-  .colaboradores__segmento--lleno {
-    background: var(--color-accent);
-    box-shadow: 0 0 8px rgba(0, 225, 255, 0.5);
   }
 
   /* ---------- Vista roster ---------- */
@@ -284,14 +221,6 @@
   .colaboradores__identidad {
     position: relative;
     padding: 0 6px 8px;
-  }
-
-  .colaboradores__clase {
-    margin-block-end: 6px;
-    font: 500 0.75rem var(--font-mono);
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--color-accent);
   }
 
   .colaboradores__nombre {
@@ -485,30 +414,13 @@
   }
 
   .colaboradores__resumen {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(140px, 180px);
-    gap: 22px;
     padding: 18px 22px;
   }
 
-  .colaboradores__resumen-texto {
-    min-inline-size: 0;
-  }
-
-  .colaboradores__acciones {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.625rem;
+  /* Acotado a la tarjeta: en el perfil, la separación de las píldoras la pone
+     el `gap` de .colaboradores__figura. */
+  .colaboradores__resumen .colaboradores__enlaces {
     margin-block-start: 0.875rem;
-    transition: opacity var(--transition-fast);
-  }
-
-  /* Sin ficha a la vista no hay a quién contactar. El JS suma `inert` para que
-     tampoco se llegue con el teclado; esto es sólo lo que se ve. */
-  .colaboradores__acciones--inactivas {
-    opacity: 0.25;
-    pointer-events: none;
   }
 
   /* ---------- Vista perfil ---------- */
@@ -563,12 +475,12 @@
     min-inline-size: 0;
   }
 
+  /* Flex con un solo hijo a propósito: el nombre mide lo que mide su texto y
+     el degradado de .colaboradores__perfil-nombre lo recorre entero. Como
+     bloque se estiraría al ancho de la columna y el texto sólo mostraría el
+     arranque del degradado. */
   .colaboradores__cabecera {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 20px;
   }
 
   .colaboradores__perfil-nombre {
@@ -616,12 +528,6 @@
     font-weight: 500;
   }
 
-  .colaboradores__dato-valor--cifra {
-    font: 900 1.375rem / 1 var(--font-display);
-    color: var(--color-accent);
-    text-shadow: 0 0 14px rgba(0, 225, 255, 0.45);
-  }
-
   .colaboradores__disponibilidad {
     display: flex;
     align-items: center;
@@ -643,72 +549,13 @@
   }
 
   .colaboradores__detalle {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-content: start;
-    gap: 14px 28px;
     padding: 14px 20px;
   }
 
-  .colaboradores__detalle-columna {
-    min-inline-size: 0;
-  }
-
+  /* En el perfil la bio no cambia bajo el cursor: no necesita el piso que la
+     tarjeta del roster le reserva. */
   .colaboradores__detalle .colaboradores__bio {
     min-block-size: 0;
-    margin-block-end: 0.75rem;
-  }
-
-  .colaboradores__colega {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-inline-size: 100%;
-    border: 0;
-    border-radius: var(--radius-field);
-    background: none;
-    color: var(--color-text);
-    text-align: start;
-    cursor: pointer;
-  }
-
-  .colaboradores__colega-inicial {
-    flex: none;
-    display: grid;
-    place-items: center;
-    inline-size: 32px;
-    block-size: 32px;
-    border: 1px solid rgba(0, 225, 255, 0.4);
-    border-radius: 50%;
-    background: rgba(0, 225, 255, 0.08);
-    font: 700 0.75rem var(--font-display);
-    color: #5ad7ff;
-    transition: background-color var(--transition-fast);
-  }
-
-  .colaboradores__colega:hover .colaboradores__colega-inicial {
-    background: rgba(0, 225, 255, 0.2);
-  }
-
-  .colaboradores__colega-texto {
-    display: block;
-    min-inline-size: 0;
-  }
-
-  .colaboradores__colega-etiqueta {
-    display: block;
-    margin-block-end: 2px;
-    font: 500 0.5625rem var(--font-mono);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--color-text-subtle);
-  }
-
-  .colaboradores__colega-nombre {
-    display: block;
-    font: 700 0.8125rem var(--font-body);
-    letter-spacing: 0;
-    overflow-wrap: anywhere;
   }
 
   /* ---------- Responsive ---------- */
@@ -721,9 +568,7 @@
     /* Una sola columna en las dos vistas. La grilla de fichas NO cambia: sigue
        en cuatro columnas (ver el comentario de .colaboradores__grilla). */
     .colaboradores__roster,
-    .colaboradores__perfil,
-    .colaboradores__resumen,
-    .colaboradores__detalle {
+    .colaboradores__perfil {
       grid-template-columns: minmax(0, 1fr);
     }
 
@@ -778,10 +623,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .colaboradores__ficha,
-    .colaboradores__segmento,
-    .colaboradores__acciones,
-    .colaboradores__enlace,
-    .colaboradores__colega-inicial {
+    .colaboradores__enlace {
       transition: none;
     }
   }

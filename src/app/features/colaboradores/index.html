@@ -52,7 +52,6 @@
             <span class="colaboradores__inicial" id="previaInicial">?</span>
           </div>
           <div class="colaboradores__identidad" aria-live="polite" aria-atomic="true">
-            <p class="colaboradores__clase" id="previaClase">Sin selección</p>
             <p class="colaboradores__nombre" id="previaNombre">¿Quién?</p>
             <p class="colaboradores__rol" id="previaRol">Pasa el cursor o elige una ficha</p>
           </div>
@@ -76,15 +75,9 @@
           <!-- Oculta hasta saber que alguien de la lista tiene ficha de perfil:
                la decide colaboradores.js una vez por carga, no por ficha. -->
           <div class="colaboradores__resumen panel" id="colaboradoresResumen" hidden>
-            <div class="colaboradores__resumen-texto">
-              <h2 class="colaboradores__etiqueta">Perfil</h2>
-              <p class="colaboradores__bio colaboradores__bio--vacia" id="previaBio" aria-live="polite">Elige una ficha del roster para ver su perfil, especialidades y cómo trabajar con esa persona.</p>
-              <div class="colaboradores__acciones" id="previaAcciones">
-                <a class="colaboradores__contactar button button--glow" href="/#contacto">Contactar</a>
-                <ul class="colaboradores__enlaces" id="previaEnlaces" hidden></ul>
-              </div>
-            </div>
-            <div class="colaboradores__atributos" id="previaAtributos" role="list" aria-label="Atributos"></div>
+            <h2 class="colaboradores__etiqueta">Perfil</h2>
+            <p class="colaboradores__bio colaboradores__bio--vacia" id="previaBio" aria-live="polite">Elige una ficha del roster para ver su perfil y especialidades.</p>
+            <ul class="colaboradores__enlaces" id="previaEnlaces" hidden></ul>
           </div>
         </div>
       </section>
@@ -110,7 +103,6 @@
             <!-- tabindex="-1": recibe el foco al abrir un perfil (la ficha que
                  lo tenía se oculta con el roster), sin entrar al orden del Tab. -->
             <h1 class="colaboradores__perfil-nombre" id="perfilNombre" tabindex="-1" aria-live="polite"></h1>
-            <a class="colaboradores__contactar button button--glow" href="/#contacto">Contactar</a>
           </div>
 
           <dl class="colaboradores__datos panel">
@@ -121,10 +113,6 @@
             <div class="colaboradores__dato">
               <dt class="colaboradores__dato-etiqueta">Especialidad</dt>
               <dd class="colaboradores__dato-valor" id="perfilEspecialidad"></dd>
-            </div>
-            <div class="colaboradores__dato">
-              <dt class="colaboradores__dato-etiqueta">Proyectos</dt>
-              <dd class="colaboradores__dato-valor colaboradores__dato-valor--cifra" id="perfilProyectos"></dd>
             </div>
             <div class="colaboradores__dato">
               <dt class="colaboradores__dato-etiqueta">Ubicación</dt>
@@ -148,21 +136,8 @@
           </dl>
 
           <div class="colaboradores__detalle panel">
-            <div class="colaboradores__detalle-columna">
-              <h2 class="colaboradores__etiqueta">Perfil</h2>
-              <p class="colaboradores__bio" id="perfilBio"></p>
-              <button type="button" class="colaboradores__colega" id="perfilColega" hidden>
-                <span class="colaboradores__colega-inicial" id="perfilColegaInicial" aria-hidden="true"></span>
-                <span class="colaboradores__colega-texto">
-                  <span class="colaboradores__colega-etiqueta">Suele trabajar con</span>
-                  <span class="colaboradores__colega-nombre" id="perfilColegaNombre"></span>
-                </span>
-              </button>
-            </div>
-            <div class="colaboradores__detalle-columna">
-              <h2 class="colaboradores__etiqueta">Atributos</h2>
-              <div class="colaboradores__atributos colaboradores__atributos--perfil" id="perfilAtributos" role="list"></div>
-            </div>
+            <h2 class="colaboradores__etiqueta">Perfil</h2>
+            <p class="colaboradores__bio" id="perfilBio"></p>
           </div>
         </div>
       </section>

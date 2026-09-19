@@ -7,15 +7,14 @@
   slug de cada una. Las fichas de muestra del prototipo viven en
   tests/fixtures/colaboradores.muestra.js y sólo las usan los tests.
 
-  La ficha de perfil (rol, clase, bio, atributos…) todavía no existe: llega
-  con "Mi ficha". Hasta entonces una persona puede estar en el roster sin
-  tener perfil que abrir; tienePerfil() es quien lo decide.
+  La ficha de perfil (rol, bio, especialidad…) todavía no existe: llega con
+  "Mi ficha". Hasta entonces una persona puede estar en el roster sin tener
+  perfil que abrir; tienePerfil() es quien lo decide.
 
   Campos opcionales de contacto: `linkedin`, `github` (URL https) y `correo`.
   Los que falten no se pintan; ver enlacesDisponibles().
 */
 
-const ETIQUETAS_ATRIBUTOS = ["DATOS", "SOFTWARE", "IA", "NUBE", "DOCENCIA"];
 const DISPONIBILIDADES = ["Disponible", "Parcial"];
 
 // La grilla del roster tiene cuatro columnas en todos los anchos; en
@@ -25,12 +24,11 @@ const COLUMNAS_ROSTER = 4;
 
 // Todo lo que la vista de perfil escribe como texto: si falta uno, quedaría un
 // hueco en blanco en la ficha técnica.
-const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "rol", "clase", "bio", "ciudad", "anios", "esp", "stack", "disp"];
+const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "rol", "bio", "ciudad", "anios", "esp", "stack", "disp"];
 
 /*
   ¿Tiene esta persona la ficha de perfil COMPLETA? Todo o nada: la vista de
-  perfil pinta cada campo, así que una ficha a medias no se abre. Cada barra
-  tiene tantos segmentos como atributos hay, y el valor va de 1 a ese total.
+  perfil pinta cada campo, así que una ficha a medias no se abre.
 */
 function tienePerfil(persona) {
   if (!persona || typeof persona !== "object") return false;
@@ -38,16 +36,8 @@ function tienePerfil(persona) {
   const textosCompletos = CAMPOS_DE_TEXTO_DEL_PERFIL.every(
     (campo) => typeof persona[campo] === "string" && persona[campo].trim() !== "",
   );
-  const { stats } = persona;
-  const atributosCompletos = Array.isArray(stats)
-    && stats.length === ETIQUETAS_ATRIBUTOS.length
-    && stats.every((valor) => Number.isInteger(valor) && valor >= 1 && valor <= ETIQUETAS_ATRIBUTOS.length);
 
-  return textosCompletos
-    && atributosCompletos
-    && DISPONIBILIDADES.includes(persona.disp)
-    && Number.isInteger(persona.proyectos)
-    && persona.proyectos >= 0;
+  return textosCompletos && DISPONIBILIDADES.includes(persona.disp);
 }
 
 /*
@@ -89,18 +79,8 @@ function moverSeleccion(indice, tecla, total, columnas = COLUMNAS_ROSTER) {
   return destino;
 }
 
-// "Suele trabajar con": la ficha siguiente, dando la vuelta al final.
-function colegaSugerido(indice, total) {
-  if (total < 2) return null;
-  return (indice + 1) % total;
-}
-
 function numeroDeFicha(indice) {
   return String(indice + 1).padStart(2, "0");
-}
-
-function etiquetaDeAtributo(valor) {
-  return `${valor}/${ETIQUETAS_ATRIBUTOS.length}`;
 }
 
 /*
@@ -135,15 +115,12 @@ function enlacesDisponibles(ficha) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    ETIQUETAS_ATRIBUTOS,
     COLUMNAS_ROSTER,
     DISPONIBILIDADES,
     tienePerfil,
     indicePorSlug,
     moverSeleccion,
-    colegaSugerido,
     numeroDeFicha,
-    etiquetaDeAtributo,
     enlacesDisponibles,
   };
 }

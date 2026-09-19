@@ -6,14 +6,11 @@ const ROOT = path.resolve(__dirname, "..");
 
 const DATOS = require(path.join(ROOT, "src/app/features/colaboradores/colaboradores.datos.js"));
 const {
-  ETIQUETAS_ATRIBUTOS,
   COLUMNAS_ROSTER,
   tienePerfil,
   indicePorSlug,
   moverSeleccion,
-  colegaSugerido,
   numeroDeFicha,
-  etiquetaDeAtributo,
   enlacesDisponibles,
 } = DATOS;
 const { COLABORADORES_MUESTRA: MUESTRA } = require("./fixtures/colaboradores.muestra.js");
@@ -38,10 +35,32 @@ test("the page data module ships no sample people and no slug generator of its o
 */
 test("every sample person carries the full profile the profile view paints", () => {
   assert.ok(MUESTRA.length > 0, "la muestra no puede estar vacía");
-  assert.equal(ETIQUETAS_ATRIBUTOS.length, 5);
   for (const persona of MUESTRA) {
     assert.equal(tienePerfil(persona), true, `${persona.nombre}: ficha incompleta`);
   }
+});
+
+/*
+  La página retiró los atributos 1–5, la clase, el colega sugerido y los
+  proyectos (2026-09-19). Ni la lógica los ofrece ni la ficha de perfil los
+  exige: una persona que no los tenga abre su perfil igual.
+*/
+test("the retired attributes, class, colleague and projects are gone from the roster logic", () => {
+  assert.equal(DATOS.ETIQUETAS_ATRIBUTOS, undefined, "sin atributos no hay etiquetas");
+  assert.equal(DATOS.etiquetaDeAtributo, undefined, "sin atributos no hay valor n/5");
+  assert.equal(DATOS.colegaSugerido, undefined, "\"Suele trabajar con\" ya no existe");
+
+  for (const persona of MUESTRA) {
+    for (const campo of ["clase", "stats", "proyectos"]) {
+      assert.equal(campo in persona, false, `${persona.nombre} todavía trae ${campo}`);
+    }
+  }
+});
+
+test("a profile no longer depends on class, attributes or project count", () => {
+  const base = MUESTRA[0];
+  // Aunque lleguen, vacíos o fuera de rango, ya no deciden si hay perfil.
+  assert.equal(tienePerfil({ ...base, clase: "", stats: [], proyectos: -1 }), true);
 });
 
 // Dos personas con el mismo slug abrirían siempre la primera.
@@ -61,26 +80,18 @@ test("a public record with only name and slug has no profile yet", () => {
   assert.equal(tienePerfil(undefined), false);
 });
 
-test("a single missing or out-of-range field is enough to have no profile", () => {
+// Cada campo que la vista de perfil escribe es obligatorio: faltando uno,
+// quedaría un hueco en blanco en la ficha técnica.
+test("a single missing, blank or unknown field is enough to have no profile", () => {
   const base = MUESTRA[0];
-  assert.equal(tienePerfil(structuredClone(base)), true, "premisa: la base sí tiene ficha");
+  assert.equal(tienePerfil({ ...base }), true, "premisa: la base sí tiene ficha");
 
-  const casos = {
-    "sin rol": { rol: undefined },
-    "rol en blanco": { rol: "   " },
-    "bio vacía": { bio: "" },
-    "sin atributos": { stats: undefined },
-    "un atributo de menos": { stats: [5, 3, 4, 4] },
-    "atributo en cero": { stats: [0, 3, 4, 4, 3] },
-    "atributo sobre el máximo": { stats: [6, 3, 4, 4, 3] },
-    "atributo no entero": { stats: [2.5, 3, 4, 4, 3] },
-    "disponibilidad desconocida": { disp: "Ocupado" },
-    "proyectos negativos": { proyectos: -1 },
-    "proyectos como texto": { proyectos: "24" },
-  };
-  for (const [caso, cambios] of Object.entries(casos)) {
-    assert.equal(tienePerfil({ ...structuredClone(base), ...cambios }), false, caso);
+  for (const campo of ["nombre", "corto", "rol", "bio", "ciudad", "anios", "esp", "stack", "disp"]) {
+    assert.equal(tienePerfil({ ...base, [campo]: undefined }), false, `sin ${campo}`);
+    assert.equal(tienePerfil({ ...base, [campo]: "   " }), false, `${campo} en blanco`);
+    assert.equal(tienePerfil({ ...base, [campo]: 7 }), false, `${campo} que no es texto`);
   }
+  assert.equal(tienePerfil({ ...base, disp: "Ocupado" }), false, "disponibilidad desconocida");
 });
 
 /*
@@ -157,16 +168,9 @@ test("an index that points at no card counts as no selection", () => {
   assert.equal(moverSeleccion(null, "ArrowDown", 0), null, "con el roster vacío no hay a dónde entrar");
 });
 
-test("the suggested colleague is the next card, wrapping at the end, and never oneself in a team of two or more", () => {
-  assert.equal(colegaSugerido(0, 12), 1);
-  assert.equal(colegaSugerido(11, 12), 0);
-  assert.equal(colegaSugerido(0, 1), null, "con una sola persona no hay colega que sugerir");
-});
-
-test("card numbers are zero-padded and attribute labels read n/5", () => {
+test("card numbers are zero-padded", () => {
   assert.equal(numeroDeFicha(0), "01");
   assert.equal(numeroDeFicha(11), "12");
-  assert.equal(etiquetaDeAtributo(4), "4/5");
 });
 
 /*

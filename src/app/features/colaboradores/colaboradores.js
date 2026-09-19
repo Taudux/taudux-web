@@ -1,7 +1,7 @@
 /*
   La página de colaboradores: pinta el roster y la ficha de perfil. La lista la
   pide a listarColaboradores() (colaboradores.service.js) y la lógica pura
-  (colega sugerido, numeración, enlaces seguros, quién tiene perfil) sale de
+  (numeración, enlaces seguros, quién tiene perfil) sale de
   colaboradores.datos.js. Acá sólo hay DOM.
 
   Un único estado y una única función que deriva la pantalla de él. Los
@@ -23,10 +23,9 @@
 
   const VACIA = {
     inicial: "?",
-    clase: "Sin selección",
     nombre: "¿Quién?",
     rol: "Pasa el cursor o elige una ficha",
-    bio: "Elige una ficha del roster para ver su perfil, especialidades y cómo trabajar con esa persona.",
+    bio: "Elige una ficha del roster para ver su perfil y especialidades.",
   };
 
   const AVISOS = {
@@ -51,30 +50,22 @@
       grilla: porId("colaboradoresGrilla"),
       resumen: porId("colaboradoresResumen"),
       previaInicial: porId("previaInicial"),
-      previaClase: porId("previaClase"),
       previaNombre: porId("previaNombre"),
       previaRol: porId("previaRol"),
       previaBio: porId("previaBio"),
-      previaAcciones: porId("previaAcciones"),
       previaEnlaces: porId("previaEnlaces"),
-      previaAtributos: porId("previaAtributos"),
       perfilNumero: porId("perfilNumero"),
       perfilInicial: porId("perfilInicial"),
       perfilEnlaces: porId("perfilEnlaces"),
       perfilNombre: porId("perfilNombre"),
       perfilRol: porId("perfilRol"),
       perfilEspecialidad: porId("perfilEspecialidad"),
-      perfilProyectos: porId("perfilProyectos"),
       perfilUbicacion: porId("perfilUbicacion"),
       perfilExperiencia: porId("perfilExperiencia"),
       perfilPunto: porId("perfilPunto"),
       perfilDisponibilidad: porId("perfilDisponibilidad"),
       perfilStack: porId("perfilStack"),
       perfilBio: porId("perfilBio"),
-      perfilColega: porId("perfilColega"),
-      perfilColegaInicial: porId("perfilColegaInicial"),
-      perfilColegaNombre: porId("perfilColegaNombre"),
-      perfilAtributos: porId("perfilAtributos"),
     };
 
     // Todo o nada: con media página sin montar, pintar() reventaría en el
@@ -99,11 +90,8 @@
     // La lista cargada y sus botones: se reemplazan juntos, en montarRoster().
     let colaboradores = [];
     let fichas = [];
-    // El colega y el hash se conectan UNA vez, con la primera lista que llega.
+    // El hash se conecta UNA vez, con la primera lista que llega.
     let conectada = false;
-
-    const atributosPrevia = crearAtributos(el.previaAtributos, { valorVisible: false });
-    const atributosPerfil = crearAtributos(el.perfilAtributos, { valorVisible: true });
 
     el.reintentar.addEventListener("click", reintentarCarga);
 
@@ -150,7 +138,6 @@
 
       if (!conectada) {
         conectada = true;
-        el.perfilColega.addEventListener("click", verColega);
         window.addEventListener("hashchange", () => aplicarHash({ moverFoco: true }));
       }
 
@@ -253,44 +240,6 @@
       return celda;
     }
 
-    /*
-      Las barras se construyen una vez y después sólo cambian de clase: se
-      repintan en cada mouseenter, y recrear 25 nodos por panel en cada paso del
-      cursor sobre la grilla es trabajo tirado.
-    */
-    function crearAtributos(contenedor, { valorVisible }) {
-      const filas = ETIQUETAS_ATRIBUTOS.map((etiqueta) => {
-        const fila = document.createElement("div");
-        fila.className = "colaboradores__atributo";
-        fila.setAttribute("role", "listitem");
-
-        const nombre = document.createElement("span");
-        nombre.className = "colaboradores__atributo-nombre";
-        nombre.textContent = etiqueta;
-
-        const barra = document.createElement("span");
-        barra.className = "colaboradores__barra-segmentos";
-        barra.setAttribute("aria-hidden", "true");
-        const segmentos = ETIQUETAS_ATRIBUTOS.map(() => {
-          const segmento = document.createElement("span");
-          segmento.className = "colaboradores__segmento";
-          return segmento;
-        });
-        barra.append(...segmentos);
-
-        // En la vista previa no hay lugar para el "4/5", pero la barra sola no
-        // le dice nada a un lector de pantalla: el valor va igual, oculto.
-        const valor = document.createElement("span");
-        valor.className = valorVisible ? "colaboradores__atributo-valor" : "u-visually-hidden";
-
-        fila.append(nombre, barra, valor);
-        return { fila, segmentos, valor };
-      });
-
-      contenedor.replaceChildren(...filas.map(({ fila }) => fila));
-      return filas;
-    }
-
     /* ---------- Transiciones de estado ---------- */
 
     // Sin ficha de perfil no hay perfil que abrir: el clic sólo la deja
@@ -313,16 +262,6 @@
       window.location.hash = rutaDePerfil(indice);
     }
 
-    function verColega() {
-      const colega = colegaSugerido(estado.seleccion, colaboradores.length);
-      if (colega === null) return;
-      // replace y no location.hash: saltar entre colegas reemplaza la entrada
-      // del perfil en vez de apilar una, así atrás desde cualquier perfil deja
-      // en el roster de una vez. Y replace, no replaceState: replace sí emite
-      // hashchange, así que el colega se pinta por el mismo camino que todo.
-      window.location.replace(rutaDePerfil(colega));
-    }
-
     function rutaDePerfil(indice) {
       return `#/${colaboradores[indice].slug}`;
     }
@@ -330,7 +269,7 @@
     /*
       El hash es la fuente de verdad de la vista: #/<slug> de alguien con ficha
       de perfil es su perfil; cualquier otra cosa, el roster. Por acá pasan el
-      clic en una ficha, el colega, atrás y adelante, y un enlace compartido.
+      clic en una ficha, atrás y adelante, y un enlace compartido.
     */
     function aplicarHash({ moverFoco }) {
       const hash = window.location.hash;
@@ -368,8 +307,9 @@
         // El nombre es lo primero que hay que leer del perfil.
         el.perfilNombre.focus();
       } else {
-        // De vuelta a la ficha que se estaba viendo, no al principio de la
-        // grilla: después de un salto de colega, es la del colega.
+        // De vuelta a la ficha del perfil que se estaba viendo, no al principio
+        // de la grilla ni a la que se abrió primero: si se cambió de perfil
+        // desde la barra, es la del último.
         fichas[estado.seleccion]?.focus();
       }
     }
@@ -407,11 +347,9 @@
       escribir(el.previaInicial, persona ? inicialDe(persona) : VACIA.inicial);
       escribir(el.previaNombre, persona ? persona.nombre : VACIA.nombre);
 
-      // Clase y rol se ocultan en vez de quedar vacíos: un <p> vacío igual
-      // conserva sus márgenes.
-      el.previaClase.hidden = soloNombre;
+      // El rol se oculta en vez de quedar vacío: un <p> vacío igual conserva
+      // sus márgenes.
       el.previaRol.hidden = soloNombre;
-      escribir(el.previaClase, textoDePrevia(ficha, soloNombre, "clase"));
       escribir(el.previaRol, textoDePrevia(ficha, soloNombre, "rol"));
 
       // La bio NO se oculta: vive en la tarjeta de abajo, y ocultarla cambiaría
@@ -419,13 +357,7 @@
       escribir(el.previaBio, textoDePrevia(ficha, soloNombre, "bio"));
       el.previaBio.classList.toggle("colaboradores__bio--vacia", !ficha);
 
-      // `inert` además de la clase: la clase sólo lo atenúa a la vista, y un
-      // "Contactar" apagado no debe seguir recibiendo el foco del teclado.
-      el.previaAcciones.classList.toggle("colaboradores__acciones--inactivas", !ficha);
-      el.previaAcciones.inert = !ficha;
-
       pintarEnlaces(el.previaEnlaces, ficha);
-      pintarAtributos(atributosPrevia, ficha ? ficha.stats : null);
     }
 
     // Con ficha, su campo; sin ficha, nada; sin nadie a la vista, la invitación.
@@ -437,12 +369,11 @@
     function pintarPerfil(indice) {
       const ficha = colaboradores[indice];
 
-      escribir(el.perfilNumero, `${numeroDeFicha(indice)} · ${ficha.clase}`);
+      escribir(el.perfilNumero, numeroDeFicha(indice));
       escribir(el.perfilInicial, inicialDe(ficha));
       escribir(el.perfilNombre, ficha.nombre);
       escribir(el.perfilRol, ficha.rol);
       escribir(el.perfilEspecialidad, ficha.esp);
-      escribir(el.perfilProyectos, String(ficha.proyectos));
       escribir(el.perfilUbicacion, ficha.ciudad);
       escribir(el.perfilExperiencia, ficha.anios);
       escribir(el.perfilDisponibilidad, ficha.disp);
@@ -453,25 +384,7 @@
       // es la lectura prudente si mañana aparece un tercer estado.
       el.perfilPunto.classList.toggle("colaboradores__punto--disponible", ficha.disp === "Disponible");
 
-      const colega = colegaSugerido(indice, colaboradores.length);
-      el.perfilColega.hidden = colega === null;
-      if (colega !== null) {
-        escribir(el.perfilColegaInicial, inicialDe(colaboradores[colega]));
-        escribir(el.perfilColegaNombre, colaboradores[colega].nombre);
-      }
-
       pintarEnlaces(el.perfilEnlaces, ficha);
-      pintarAtributos(atributosPerfil, ficha.stats);
-    }
-
-    function pintarAtributos(filas, stats) {
-      filas.forEach(({ segmentos, valor }, atributo) => {
-        const puntos = stats ? stats[atributo] : 0;
-        segmentos.forEach((segmento, posicion) => {
-          segmento.classList.toggle("colaboradores__segmento--lleno", posicion < puntos);
-        });
-        escribir(valor, stats ? etiquetaDeAtributo(puntos) : "");
-      });
     }
 
     // La lista queda `hidden` si no hay ninguno: una <ul> vacía igual ocupa su
