@@ -190,12 +190,32 @@ function errorDeTextoMiFicha(campo, texto, { conSaltos = false } = {}) {
   return null;
 }
 
+/*
+  El veredicto de UNA tecnología: los dos motivos que la 0039 revisa elemento
+  por elemento con stack_colaborador_valido(). No mira el mínimo de un
+  carácter porque quien arma el stack ya descarta lo vacío antes de llegar
+  acá; el editor de etiquetas avisa ese caso por su cuenta.
+*/
+function errorDeElementoStackMiFicha(tecnologia) {
+  const mensajes = MENSAJES_MI_FICHA.stack;
+  if (tieneCaracteresProhibidosMiFicha(tecnologia)) return mensajes.caracteres;
+  if (largoMiFicha(tecnologia) > LIMITES_MI_FICHA.tecnologia.max) return mensajes.largo;
+  return null;
+}
+
+/*
+  El veredicto del stack entero. Primero la cantidad, y después los motivos
+  por elemento en su orden de siempre: si en el mismo stack una tecnología
+  trae caracteres prohibidos y otra se pasa de largo, gana el de caracteres.
+  Por eso se recorren los doce y no se corta en el primero que falle.
+*/
 function errorDeStackMiFicha(stack) {
   const mensajes = MENSAJES_MI_FICHA.stack;
   if (stack.length < LIMITES_MI_FICHA.stack.min) return mensajes.vacio;
   if (stack.length > LIMITES_MI_FICHA.stack.max) return mensajes.muchas;
-  if (stack.some(tieneCaracteresProhibidosMiFicha)) return mensajes.caracteres;
-  if (stack.some((elemento) => largoMiFicha(elemento) > LIMITES_MI_FICHA.tecnologia.max)) return mensajes.largo;
+  const errores = stack.map(errorDeElementoStackMiFicha);
+  if (errores.includes(mensajes.caracteres)) return mensajes.caracteres;
+  if (errores.includes(mensajes.largo)) return mensajes.largo;
   return null;
 }
 
@@ -292,6 +312,7 @@ if (typeof module === "object" && module.exports) {
     LIMITES_MI_FICHA,
     PATRONES_ENLACE_MI_FICHA,
     separarStack,
+    errorDeElementoStackMiFicha,
     normalizarMiFicha,
     validarMiFicha,
     valoresFormularioMiFicha,

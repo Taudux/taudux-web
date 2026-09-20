@@ -24,6 +24,7 @@ const {
   LIMITES_MI_FICHA,
   PATRONES_ENLACE_MI_FICHA,
   separarStack,
+  errorDeElementoStackMiFicha,
   normalizarMiFicha,
   validarMiFicha,
   valoresFormularioMiFicha,
@@ -230,6 +231,48 @@ test("stack: each item from 1 to 40 characters, with the same character rules", 
   for (const bidi of BIDI) {
     assertSoloErrorEn(valoresValidos({ stack: `Python, Postgres${bidi}` }), "stack", `bidi U+${bidi.codePointAt(0).toString(16)}`);
   }
+});
+
+/*
+  Cuando las dos faltas conviven en el mismo stack gana la de caracteres, esté
+  donde esté el elemento que la comete. Eso es lo que separa revisar los doce
+  elementos de cortar en el primero que falla: con el corte, el mensaje
+  dependería del orden en que se escribieron las tecnologías.
+*/
+test("stack: the character fault wins over the length one, whatever the order", () => {
+  const largo = "a".repeat(41);
+  const conControl = "Po\u0000stgres";
+
+  const porCaracteres = assertSoloErrorEn(valoresValidos({ stack: conControl }), "stack", "sólo caracteres");
+  const porLargo = assertSoloErrorEn(valoresValidos({ stack: largo }), "stack", "sólo largo");
+  assert.notEqual(porCaracteres, porLargo, "los dos motivos tienen que decir cosas distintas");
+
+  for (const orden of [[largo, conControl], [conControl, largo]]) {
+    const mensaje = assertSoloErrorEn(valoresValidos({ stack: orden.join(", ") }), "stack", orden.join(" + "));
+    assert.equal(mensaje, porCaracteres, "gana caracteres sin importar el orden");
+  }
+});
+
+/*
+  El veredicto de una sola tecnología, que es lo que consulta el editor de
+  etiquetas para decidir si la deja entrar. Los mismos dos motivos que el
+  stack entero, y ningún otro: el mínimo de un carácter no es asunto suyo.
+*/
+test("a single technology is judged by the same two rules as the whole stack", () => {
+  assert.equal(errorDeElementoStackMiFicha("PostgreSQL"), null);
+  assert.equal(errorDeElementoStackMiFicha("a".repeat(40)), null);
+  assert.equal(errorDeElementoStackMiFicha("😀".repeat(40)), null, "40 emojis cuentan como 40");
+  assert.equal(errorDeElementoStackMiFicha(""), null, "lo vacío lo descarta quien arma el stack");
+
+  const porLargo = errorDeElementoStackMiFicha("a".repeat(41));
+  const porCaracteres = errorDeElementoStackMiFicha("Po\u0000stgres");
+  assert.ok(porLargo, "41 caracteres tiene que dar mensaje");
+  assert.ok(porCaracteres, "un carácter de control tiene que dar mensaje");
+  assert.notEqual(porLargo, porCaracteres);
+
+  // En un elemento que comete las dos, manda el de caracteres: es el mismo
+  // orden con el que errorDeStackMiFicha resuelve el stack completo.
+  assert.equal(errorDeElementoStackMiFicha("Po\u0000stgres".padEnd(41, "a")), porCaracteres);
 });
 
 /* ---------- Disponibilidad ---------- */
