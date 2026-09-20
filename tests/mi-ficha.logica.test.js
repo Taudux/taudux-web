@@ -23,7 +23,6 @@ const {
   DISPONIBILIDADES_MI_FICHA,
   LIMITES_MI_FICHA,
   PATRONES_ENLACE_MI_FICHA,
-  separarStack,
   errorDeElementoStackMiFicha,
   normalizarMiFicha,
   validarMiFicha,
@@ -52,7 +51,7 @@ function valoresValidos(cambios = {}) {
     rol: "Desarrolladora backend",
     especialidad: "Bases de datos",
     ubicacion: "Querétaro, México",
-    stack: "PostgreSQL, Python, GCP",
+    stack: ["PostgreSQL", "Python", "GCP"],
     disponibilidad: "Parcial",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -107,12 +106,12 @@ test("normalizing always returns exactly the ten card keys", () => {
   }
 });
 
-test("normalizing trims texts, splits the stack, parses the year and turns empty links into null", () => {
+test("normalizing trims texts, trims each stack item and drops the empty ones, parses the year and turns empty links into null", () => {
   const ficha = normalizarMiFicha({
     rol: "  Desarrolladora backend ",
     especialidad: "\tBases de datos\n",
     ubicacion: " Querétaro ",
-    stack: " PostgreSQL ,Python,, GCP ,",
+    stack: [" PostgreSQL ", "Python", "", "  ", " GCP "],
     disponibilidad: "Parcial",
     anio_inicio: " 2018 ",
     bio: "\n\n  Primera línea.\nSegunda línea.  \n",
@@ -133,6 +132,14 @@ test("normalizing trims texts, splits the stack, parses the year and turns empty
     github: null,
     correo: null,
   });
+});
+
+test("normalizing a stack that is not an array, or that has non-text items, gives an empty or trimmed array", () => {
+  for (const stack of ["PostgreSQL, Python", null, undefined, 7, {}]) {
+    assert.deepEqual(normalizarMiFicha(valoresValidos({ stack })).stack, [], JSON.stringify(stack));
+  }
+  // Lo que no es texto se descarta como si fuera un elemento vacío.
+  assert.deepEqual(normalizarMiFicha(valoresValidos({ stack: ["Python", 7, null, "  ", "GCP"] })).stack, ["Python", "GCP"]);
 });
 
 test("normalizing an empty form gives empty texts, an empty stack, no year and null links", () => {
@@ -196,40 +203,28 @@ for (const { campo, min, max } of TEXTOS_CORTOS) {
 
 /* ---------- Stack ---------- */
 
-test("separarStack splits on commas, trims each item and drops the empty ones", () => {
-  assert.deepEqual(separarStack("PostgreSQL, Python ,GCP"), ["PostgreSQL", "Python", "GCP"]);
-  assert.deepEqual(separarStack(" , ,, "), []);
-  assert.deepEqual(separarStack(""), []);
-  assert.deepEqual(separarStack("Node.js"), ["Node.js"]);
-  assert.deepEqual(separarStack("C, C++ , C#,"), ["C", "C++", "C#"]);
-  // Lo que no es texto no trae elementos.
-  assert.deepEqual(separarStack(undefined), []);
-  assert.deepEqual(separarStack(null), []);
-  assert.deepEqual(separarStack(["a", "b"]), []);
-});
-
 test("stack: from 1 to 12 items", () => {
-  assertSoloErrorEn(valoresValidos({ stack: "" }), "stack", "vacío");
-  assertSoloErrorEn(valoresValidos({ stack: " , , " }), "stack", "sólo comas");
+  assertSoloErrorEn(valoresValidos({ stack: [] }), "stack", "vacío");
+  assertSoloErrorEn(valoresValidos({ stack: ["", "  "] }), "stack", "sólo blancos");
 
-  const doce = Array.from({ length: 12 }, (_, i) => `T${i}`).join(", ");
+  const doce = Array.from({ length: 12 }, (_, i) => `T${i}`);
   assert.equal(assertValido(valoresValidos({ stack: doce }), "doce").stack.length, 12);
-  assertValido(valoresValidos({ stack: "Python" }), "uno");
+  assertValido(valoresValidos({ stack: ["Python"] }), "uno");
 
-  const trece = Array.from({ length: 13 }, (_, i) => `T${i}`).join(", ");
+  const trece = Array.from({ length: 13 }, (_, i) => `T${i}`);
   assertSoloErrorEn(valoresValidos({ stack: trece }), "stack", "trece");
 });
 
 test("stack: each item from 1 to 40 characters, with the same character rules", () => {
-  assertValido(valoresValidos({ stack: `Python, ${"a".repeat(40)}` }), "un elemento de 40");
-  assertValido(valoresValidos({ stack: `Python, ${"😀".repeat(40)}` }), "40 emojis cuentan como 40");
-  assertSoloErrorEn(valoresValidos({ stack: `Python, ${"a".repeat(41)}` }), "stack", "un elemento de 41");
+  assertValido(valoresValidos({ stack: ["Python", "a".repeat(40)] }), "un elemento de 40");
+  assertValido(valoresValidos({ stack: ["Python", "😀".repeat(40)] }), "40 emojis cuentan como 40");
+  assertSoloErrorEn(valoresValidos({ stack: ["Python", "a".repeat(41)] }), "stack", "un elemento de 41");
 
   for (const control of ["\u0000", "\t", "\n", "\u007f"]) {
-    assertSoloErrorEn(valoresValidos({ stack: `Python, Po${control}stgres` }), "stack", "control");
+    assertSoloErrorEn(valoresValidos({ stack: ["Python", `Po${control}stgres`] }), "stack", "control");
   }
   for (const bidi of BIDI) {
-    assertSoloErrorEn(valoresValidos({ stack: `Python, Postgres${bidi}` }), "stack", `bidi U+${bidi.codePointAt(0).toString(16)}`);
+    assertSoloErrorEn(valoresValidos({ stack: ["Python", `Postgres${bidi}`] }), "stack", `bidi U+${bidi.codePointAt(0).toString(16)}`);
   }
 });
 
@@ -243,12 +238,12 @@ test("stack: the character fault wins over the length one, whatever the order", 
   const largo = "a".repeat(41);
   const conControl = "Po\u0000stgres";
 
-  const porCaracteres = assertSoloErrorEn(valoresValidos({ stack: conControl }), "stack", "sólo caracteres");
-  const porLargo = assertSoloErrorEn(valoresValidos({ stack: largo }), "stack", "sólo largo");
+  const porCaracteres = assertSoloErrorEn(valoresValidos({ stack: [conControl] }), "stack", "sólo caracteres");
+  const porLargo = assertSoloErrorEn(valoresValidos({ stack: [largo] }), "stack", "sólo largo");
   assert.notEqual(porCaracteres, porLargo, "los dos motivos tienen que decir cosas distintas");
 
   for (const orden of [[largo, conControl], [conControl, largo]]) {
-    const mensaje = assertSoloErrorEn(valoresValidos({ stack: orden.join(", ") }), "stack", orden.join(" + "));
+    const mensaje = assertSoloErrorEn(valoresValidos({ stack: orden }), "stack", orden.join(" + "));
     assert.equal(mensaje, porCaracteres, "gana caracteres sin importar el orden");
   }
 });
@@ -513,7 +508,7 @@ test("errors follow the card order and each field reports only one message", () 
 
 test("error messages speak in tuteo, never voseo", () => {
   const { errores } = validarMiFicha({
-    rol: "a", especialidad: "", ubicacion: "‮", stack: "", disponibilidad: "x",
+    rol: "a", especialidad: "", ubicacion: "‮", stack: [], disponibilidad: "x",
     anio_inicio: "abc", bio: "", linkedin: "x", github: "x", correo: "x",
   }, ANIO);
   assert.equal(errores.length, CAMPOS_MI_FICHA.length, "premisa: todos los campos fallan");
@@ -526,23 +521,26 @@ test("error messages speak in tuteo, never voseo", () => {
 
 /* ---------- Del perfil y la ficha guardada al formulario ---------- */
 
-test("a saved card becomes form values: texts as is, stack joined with a comma, year as text, null links empty", () => {
-  assert.deepEqual(valoresFormularioMiFicha({
+test("a saved card becomes form values: texts as is, stack as a copied array, year as text, null links empty", () => {
+  const stackGuardado = ["PostgreSQL", "Python", "GCP"];
+  const valores = valoresFormularioMiFicha({
     rol: "Desarrolladora backend",
     especialidad: "Bases de datos",
     ubicacion: "Querétaro",
-    stack: ["PostgreSQL", "Python", "GCP"],
+    stack: stackGuardado,
     disponibilidad: "No disponible",
     anio_inicio: 2018,
     bio: "Primera.\nSegunda.",
     linkedin: "https://www.linkedin.com/in/ana",
     github: null,
     correo: null,
-  }), {
+  });
+
+  assert.deepEqual(valores, {
     rol: "Desarrolladora backend",
     especialidad: "Bases de datos",
     ubicacion: "Querétaro",
-    stack: "PostgreSQL, Python, GCP",
+    stack: ["PostgreSQL", "Python", "GCP"],
     disponibilidad: "No disponible",
     anio_inicio: "2018",
     bio: "Primera.\nSegunda.",
@@ -550,10 +548,13 @@ test("a saved card becomes form values: texts as is, stack joined with a comma, 
     github: "",
     correo: "",
   });
+  // Una COPIA: el editor de etiquetas muta el arreglo del formulario, y eso
+  // no tiene que tocar la ficha guardada.
+  assert.notEqual(valores.stack, stackGuardado);
 });
 
 test("no card yet (null) becomes an empty form", () => {
-  const vacio = Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, ""]));
+  const vacio = Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "stack" ? [] : ""]));
   assert.deepEqual(valoresFormularioMiFicha(null), vacio);
   assert.deepEqual(valoresFormularioMiFicha(undefined), vacio);
   // Un valor fuera de la lista no marca ninguna opción.

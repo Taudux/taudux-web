@@ -146,6 +146,113 @@
     max-inline-size: 12ch;
   }
 
+  /*
+    El editor de etiquetas del stack: el input de arriba, el desplegable de
+    sugerencias flotando debajo (position: relative en el envoltorio) y la
+    lista de etiquetas elegidas, que envuelve en su propia fila y nunca
+    empuja el ancho de la página.
+  */
+  .mi-ficha__stack {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .mi-ficha__stack-opciones {
+    position: absolute;
+    inset-block-start: calc(100% + 0.25rem);
+    inset-inline: 0;
+    z-index: 5;
+    margin: 0;
+    padding: 0.35rem;
+    list-style: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-field);
+    background-color: var(--color-field);
+    max-block-size: 16rem;
+    overflow-y: auto;
+  }
+
+  .mi-ficha__stack-opcion {
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-field);
+    color: var(--color-text);
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+
+  .mi-ficha__stack-opcion--resaltada {
+    background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+
+  .mi-ficha__stack-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /*
+    Una etiqueta es texto libre de hasta 40 caracteres: tiene que poder
+    envolver DENTRO de su propia píldora en vez de estirarla fuera del
+    contenedor (mismo invariante que .colaboradores__enlaces, que en esta
+    página además tiene que tolerar texto sin espacios).
+  */
+  .mi-ficha__etiqueta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-inline-size: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background-color: var(--color-field);
+    color: var(--color-text);
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+  }
+
+  /* El aviso de "ya está en tu stack": se apaga solo, a los 1.2s. */
+  .mi-ficha__etiqueta--duplicada {
+    border-color: var(--color-warning);
+    background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+  }
+
+  .mi-ficha__etiqueta-texto {
+    overflow-wrap: anywhere;
+  }
+
+  .mi-ficha__etiqueta-manija,
+  .mi-ficha__etiqueta-quitar {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .mi-ficha__etiqueta-manija {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .mi-ficha__etiqueta-quitar {
+    cursor: pointer;
+  }
+
+  .mi-ficha__etiqueta-quitar:hover {
+    color: var(--color-error-text);
+  }
+
+  .mi-ficha__etiqueta-manija:focus-visible,
+  .mi-ficha__etiqueta-quitar:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
   /* El fieldset de disponibilidad se ve como un grupo más, sin marco. */
   .mi-ficha__opciones {
     margin: 0;

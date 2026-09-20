@@ -94,8 +94,13 @@
 
           <div class="mi-ficha__grupo">
             <label class="mi-ficha__etiqueta" for="miFichaStack">Stack</label>
-            <input class="field" type="text" id="miFichaStack" name="stack" autocomplete="off" aria-describedby="miFichaStackAyuda">
-            <small class="mi-ficha__ayuda" id="miFichaStackAyuda">Las tecnologías con las que trabajas, separadas por comas. Por ejemplo: Python, PostgreSQL, GCP. Hasta 12.</small>
+            <div class="mi-ficha__stack">
+              <input class="field" type="text" id="miFichaStack" name="stack" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaStackOpciones" autocomplete="off" aria-describedby="miFichaStackAyuda">
+              <ul class="mi-ficha__stack-opciones" id="miFichaStackOpciones" role="listbox" aria-label="Sugerencias de tecnologías" hidden></ul>
+              <ul class="mi-ficha__stack-lista" id="miFichaStackLista"></ul>
+            </div>
+            <p class="u-visually-hidden" id="miFichaStackEstado" role="status" aria-live="polite"></p>
+            <small class="mi-ficha__ayuda" id="miFichaStackAyuda">Escribe una tecnología y presiona Enter para agregarla. Por ejemplo: Python, PostgreSQL, GCP. Hasta 12.</small>
             <p class="mi-ficha__error" id="miFichaStackError" hidden></p>
           </div>
 
@@ -183,6 +188,8 @@
   <script src="/app/features/auth/auth-ui.js"></script>
   <script src="/app/core/colaboradores/ficha.service.js"></script>
   <script src="/app/features/colaboradores/mi-ficha/mi-ficha.logica.js"></script>
+  <script src="/app/core/tecnologias/catalogo.service.js"></script>
+  <script src="/app/features/colaboradores/mi-ficha/mi-ficha.stack.logica.js"></script>
   <script src="/app/features/colaboradores/mi-ficha/mi-ficha.js"></script>
 </body>
 

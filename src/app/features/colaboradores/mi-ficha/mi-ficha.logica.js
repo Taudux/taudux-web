@@ -133,10 +133,16 @@ function tieneCaracteresProhibidosMiFicha(texto) {
   return CONTROL_MI_FICHA.test(texto) || BIDI_MI_FICHA.test(texto);
 }
 
-// El stack se escribe en un solo campo, separado por comas.
-function separarStack(texto) {
-  if (typeof texto !== "string") return [];
-  return texto.split(",").map((elemento) => elemento.trim()).filter((elemento) => elemento !== "");
+/*
+  El stack ya llega como arreglo: lo arma el editor de etiquetas
+  (mi-ficha.stack.logica.js), no un campo de texto separado por comas. Lo que
+  no es arreglo se trata como vacío, y cada elemento se recorta con el mismo
+  criterio que cualquier otro texto de la ficha; lo que queda en blanco se
+  descarta.
+*/
+function normalizarStackMiFicha(valor) {
+  if (!Array.isArray(valor)) return [];
+  return valor.map(textoMiFicha).filter((elemento) => elemento !== "");
 }
 
 // Sólo dígitos: "2018.5", "2e3", "-2018" o "0x7E2" no son un año, aunque
@@ -167,7 +173,7 @@ function normalizarMiFicha(valores) {
     rol: textoMiFicha(origen.rol),
     especialidad: textoMiFicha(origen.especialidad),
     ubicacion: textoMiFicha(origen.ubicacion),
-    stack: separarStack(origen.stack),
+    stack: normalizarStackMiFicha(origen.stack),
     disponibilidad: textoMiFicha(origen.disponibilidad),
     anio_inicio: anioMiFicha(origen.anio_inicio),
     bio: textoMiFicha(origen.bio),
@@ -273,8 +279,9 @@ function validarMiFicha(valores, anioActual) {
 
 /*
   De la ficha guardada (o null, si todavía no hay) a los valores del
-  formulario: el stack unido con ", " para su único campo, el año como texto y
-  los enlaces ausentes como campo vacío.
+  formulario: el stack como una COPIA del arreglo (el editor de etiquetas es
+  quien lo muta; nunca el arreglo de la ficha cargada), el año como texto y los
+  enlaces ausentes como campo vacío.
 */
 function valoresFormularioMiFicha(ficha) {
   const origen = ficha && typeof ficha === "object" ? ficha : {};
@@ -283,7 +290,7 @@ function valoresFormularioMiFicha(ficha) {
     rol: texto(origen.rol),
     especialidad: texto(origen.especialidad),
     ubicacion: texto(origen.ubicacion),
-    stack: Array.isArray(origen.stack) ? origen.stack.join(", ") : "",
+    stack: Array.isArray(origen.stack) ? [...origen.stack] : [],
     disponibilidad: DISPONIBILIDADES_MI_FICHA.includes(origen.disponibilidad) ? origen.disponibilidad : "",
     anio_inicio: Number.isInteger(origen.anio_inicio) ? String(origen.anio_inicio) : "",
     bio: texto(origen.bio),
@@ -312,7 +319,6 @@ if (typeof module === "object" && module.exports) {
     LIMITES_MI_FICHA,
     MENSAJES_MI_FICHA,
     PATRONES_ENLACE_MI_FICHA,
-    separarStack,
     errorDeElementoStackMiFicha,
     normalizarMiFicha,
     validarMiFicha,

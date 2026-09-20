@@ -21,6 +21,7 @@ const leer = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
 const CARPETA = "src/app/features/colaboradores/mi-ficha";
 const HTML = leer(`${CARPETA}/index.html`);
 const LOGICA = leer(`${CARPETA}/mi-ficha.logica.js`);
+const LOGICA_STACK = leer(`${CARPETA}/mi-ficha.stack.logica.js`);
 const PAGINA = leer(`${CARPETA}/mi-ficha.js`);
 const AUTH_UI = leer("src/app/features/auth/auth-ui.js");
 
@@ -176,6 +177,12 @@ class Nodo {
     hijos.forEach((hijo) => { hijo.parent = this; this.children.push(hijo); });
   }
   appendChild(hijo) { this.append(hijo); return hijo; }
+  replaceChildren(...hijos) { this.children = []; this.append(...hijos); }
+
+  // No-ops: el arrastre del stack los llama, pero no hay puntero real que
+  // capturar en este DOM falso.
+  setPointerCapture() {}
+  releasePointerCapture() {}
 
   setAttribute(nombre, valor) { this.attributes[nombre] = String(valor); }
   getAttribute(nombre) { return nombre in this.attributes ? this.attributes[nombre] : null; }
@@ -319,6 +326,9 @@ function montarEsqueleto(documento, html) {
     perfil        el obtenerPerfil() falso (por defecto, una colaboradora).
     ficha         el obtenerMiFicha() falso (por defecto, sin ficha todavía).
     guardar       el guardarMiFicha() falso (por defecto, devuelve lo que recibe).
+    catalogo      arreglo de tecnologías para el cargarCatalogoDeTecnologias()
+                  falso; sin pasarlo, la función no existe (el script no
+                  llegó), como en la mayoría de las páginas de verdad.
     sin           nombres de funciones globales que NO se inyectan (un script
                   que no llegó).
 */
@@ -327,11 +337,18 @@ function abrirPagina({
   perfil = enSecuencia(PERFIL),
   ficha = enSecuencia(exito(null)),
   guardar,
+  catalogo,
   sin = [],
 } = {}) {
   const alCargar = [];
   const documento = {
     activeElement: null,
+    createElement: (etiqueta) => new Nodo(documento, etiqueta),
+    createTextNode: (texto) => {
+      const nodo = new Nodo(documento, "#text");
+      nodo._texto = String(texto);
+      return nodo;
+    },
     addEventListener: (tipo, manejador) => { if (tipo === "DOMContentLoaded") alCargar.push(manejador); },
     getElementById: (id) => ids.get(id) || null,
     querySelectorAll: (selectores) => raiz.querySelectorAll(selectores),
@@ -360,6 +377,11 @@ function abrirPagina({
     // auth-ui.js la llama al cargar (agregarDestinoAEnlaces): sin destino.
     obtenerDestinoAuth: () => "",
   };
+  // Sin `catalogo`, cargarCatalogoDeTecnologias no existe: el script del
+  // catálogo no llegó, y el editor de etiquetas se degrada solo a texto libre.
+  if (catalogo !== undefined) {
+    globales.cargarCatalogoDeTecnologias = async () => ({ ok: true, tecnologias: structuredClone(catalogo) });
+  }
   for (const nombre of sin) delete globales[nombre];
 
   const oyentesDeVentana = [];
@@ -368,12 +390,17 @@ function abrirPagina({
     document: documento,
     console: { error: (...argumentos) => errores.push(argumentos) },
     addEventListener: (tipo) => oyentesDeVentana.push(tipo),
+    // El resaltado de una etiqueta duplicada se apaga solo con un temporizador
+    // real; unref() para que no deje colgado al proceso de los tests.
+    setTimeout: (...argumentos) => { const id = setTimeout(...argumentos); id?.unref?.(); return id; },
+    clearTimeout: (...argumentos) => clearTimeout(...argumentos),
   });
   // Como en el navegador, `window` es el propio global.
   contexto.window = contexto;
 
   vm.runInContext(LOGICA, contexto);
   vm.runInContext(AUTH_UI, contexto);
+  vm.runInContext(LOGICA_STACK, contexto);
   vm.runInContext(PAGINA, contexto);
   const iniciada = Promise.all(alCargar.map((manejador) => manejador()));
 
@@ -410,6 +437,18 @@ function abrirPagina({
       const radio = porId(RADIOS[disponibilidad]);
       radio.disparar("input");
       radio.disparar("change");
+    },
+    // Quien agrega una tecnología al stack: la escribe y confirma con Enter,
+    // como haría alguien de verdad con el combobox.
+    agregarStack(texto) {
+      const control = porId("miFichaStack");
+      control.value = texto;
+      control.disparar("input");
+      control.disparar("keydown", { key: "Enter" });
+    },
+    // Las tecnologías tal como quedaron pintadas en la lista de etiquetas.
+    stackEnPantalla() {
+      return porId("miFichaStackLista").children.map((item) => item.children[1].textContent);
     },
     // Envía el formulario; la promesa se cumple cuando termina el guardado.
     enviar() {
@@ -454,12 +493,16 @@ function assertFormularioVisible(pagina) {
   assert.equal(pagina.porId("miFichaAviso").getAttribute("aria-busy"), "false");
 }
 
-// Los valores que el formulario muestra, campo por campo.
+// Los valores que el formulario muestra, campo por campo. El stack ya no es
+// el .value del combobox (que sólo lleva lo que se está escribiendo): son las
+// tecnologías que quedaron pintadas como etiquetas.
 function valoresEnPantalla(pagina) {
   const valores = {};
   for (const campo of CAMPOS_MI_FICHA) {
     if (campo === "disponibilidad") {
       valores[campo] = Object.keys(RADIOS).find((valor) => pagina.porId(RADIOS[valor]).checked) ?? "";
+    } else if (campo === "stack") {
+      valores[campo] = pagina.stackEnPantalla();
     } else {
       valores[campo] = pagina.porId(ID_DE[campo]).value;
     }
@@ -467,9 +510,12 @@ function valoresEnPantalla(pagina) {
   return valores;
 }
 
+// El stack se llena de a una tecnología por vez, como en el widget: cada
+// elemento del arreglo se escribe y se confirma con Enter.
 function llenar(pagina, valores) {
   for (const [campo, valor] of Object.entries(valores)) {
     if (campo === "disponibilidad") pagina.elegir(valor);
+    else if (campo === "stack") valor.forEach((tecnologia) => pagina.agregarStack(tecnologia));
     else pagina.escribir(campo, valor);
   }
 }
@@ -478,7 +524,7 @@ const VALORES_VALIDOS = Object.freeze({
   rol: "  Desarrolladora backend ",
   especialidad: "Bases de datos",
   ubicacion: "Querétaro, México",
-  stack: " PostgreSQL ,Python,, GCP ",
+  stack: Object.freeze(["PostgreSQL", "Python", "GCP"]),
   disponibilidad: "Parcial",
   anio_inicio: "2018",
   bio: "\nDiseño esquemas y migraciones.\nMe gusta que los datos cuadren.\n",
@@ -638,7 +684,7 @@ test("a collaborator without a card gets an empty form with their name, and no p
 
   assertFormularioVisible(pagina);
   assert.deepEqual(pagina.obtenerMiFicha.llamadas, [["u-1"]]);
-  assert.deepEqual(valoresEnPantalla(pagina), Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, ""])));
+  assert.deepEqual(valoresEnPantalla(pagina), Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "stack" ? [] : ""])));
   assert.equal(pagina.texto("miFichaNombre"), "Valeria Ortiz");
   assert.equal(pagina.porId("miFichaVerPerfil").hidden, true);
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
@@ -646,7 +692,7 @@ test("a collaborator without a card gets an empty form with their name, and no p
   assert.equal(pagina.activo(), null, "cargar la página no mueve el foco");
 });
 
-test("a collaborator with a card gets it prefilled, with the stack joined by commas", async () => {
+test("a collaborator with a card gets it prefilled, with the stack shown as tags", async () => {
   const pagina = await cargarPagina({ ficha: enSecuencia(exito(FICHA)) });
 
   assertFormularioVisible(pagina);
@@ -654,7 +700,7 @@ test("a collaborator with a card gets it prefilled, with the stack joined by com
     rol: "Desarrolladora backend",
     especialidad: "Bases de datos",
     ubicacion: "Querétaro, México",
-    stack: "PostgreSQL, Python, GCP",
+    stack: ["PostgreSQL", "Python", "GCP"],
     disponibilidad: "Parcial",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -664,6 +710,8 @@ test("a collaborator with a card gets it prefilled, with the stack joined by com
   });
   // Sólo una opción marcada.
   assert.deepEqual(pagina.radios().map((radio) => radio.checked), [false, true, false]);
+  // El combobox arranca vacío: no repite lo que ya está en las etiquetas.
+  assert.equal(pagina.porId("miFichaStack").value, "");
 });
 
 /* ---------- Validación ---------- */
@@ -764,7 +812,7 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
   assert.equal(verPerfil.textContent, "Ver mi perfil");
 
   // El formulario queda con lo que devolvió la base, ya normalizado.
-  assert.equal(pagina.porId("miFichaStack").value, "PostgreSQL, Python, GCP");
+  assert.deepEqual(pagina.stackEnPantalla(), ["PostgreSQL", "Python", "GCP"]);
   assert.equal(pagina.porId("miFichaRol").value, "Desarrolladora backend");
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
   for (const campo of Object.keys(ID_DE)) assertCampoSinError(pagina, campo);
@@ -795,7 +843,7 @@ test("a service failure shows its message in the alert, focused, with no toast a
   assert.deepEqual(pagina.toasts, []);
   assert.equal(pagina.porId("miFichaVerPerfil").hidden, true);
   // Lo escrito no se pierde.
-  assert.equal(pagina.porId("miFichaStack").value, VALORES_VALIDOS.stack);
+  assert.deepEqual(pagina.stackEnPantalla(), [...VALORES_VALIDOS.stack]);
   assert.equal(pagina.porId("formMiFicha").getAttribute("aria-busy"), "false");
 
   // El siguiente intento esconde el aviso anterior antes de validar.
@@ -849,4 +897,196 @@ test("an existing card saved again sends the edited values, not the loaded ones"
     rol: "Arquitecta de datos",
     disponibilidad: "No disponible",
   }]]);
+});
+
+/* ---------- Stack: el editor de etiquetas ---------- */
+
+// La manija de la etiqueta en el índice dado (hijo 0 de su <li>).
+function manijaStack(pagina, indice) {
+  return pagina.porId("miFichaStackLista").children[indice].children[0];
+}
+
+// El botón de quitar de la etiqueta en el índice dado (hijo 2 de su <li>).
+function quitarStack(pagina, indice) {
+  return pagina.porId("miFichaStackLista").children[indice].children[2];
+}
+
+// La opción resaltada del desplegable, si hay alguna.
+function opcionResaltada(pagina) {
+  return pagina.porId("miFichaStackOpciones").children
+    .find((opcion) => opcion.classList.contains("mi-ficha__stack-opcion--resaltada"));
+}
+
+test("typing filters the catalog into the listbox, prefix matches first", async () => {
+  const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python", "AWS"] });
+  const opciones = () => pagina.porId("miFichaStackOpciones");
+
+  pagina.escribir("stack", "p");
+
+  assert.equal(opciones().hidden, false);
+  assert.deepEqual(opciones().children.map((opcion) => opcion.textContent), ["PostgreSQL", "Python"]);
+  assert.equal(pagina.porId("miFichaStack").getAttribute("aria-expanded"), "true");
+
+  pagina.escribir("stack", "");
+  assert.equal(opciones().hidden, true);
+  assert.equal(pagina.porId("miFichaStack").getAttribute("aria-expanded"), "false");
+});
+
+test("ArrowDown and ArrowUp move the highlighted suggestion, clamped at the edges", async () => {
+  const pagina = await cargarPagina({ catalogo: ["Postgres", "Python", "PHP"] });
+  const input = pagina.porId("miFichaStack");
+  pagina.escribir("stack", "p");
+
+  input.disparar("keydown", { key: "ArrowDown" });
+  assert.equal(opcionResaltada(pagina).textContent, "Postgres");
+  assert.equal(input.getAttribute("aria-activedescendant"), "miFichaStackOpcion0");
+
+  input.disparar("keydown", { key: "ArrowDown" });
+  input.disparar("keydown", { key: "ArrowDown" });
+  assert.equal(opcionResaltada(pagina).textContent, "PHP");
+  // Tope superior: un cuarto ArrowDown no sale de la última.
+  input.disparar("keydown", { key: "ArrowDown" });
+  assert.equal(opcionResaltada(pagina).textContent, "PHP");
+
+  input.disparar("keydown", { key: "ArrowUp" });
+  input.disparar("keydown", { key: "ArrowUp" });
+  assert.equal(opcionResaltada(pagina).textContent, "Postgres");
+  // Tope inferior: sin dar la vuelta a la última.
+  input.disparar("keydown", { key: "ArrowUp" });
+  assert.equal(opcionResaltada(pagina).textContent, "Postgres");
+});
+
+test("Enter without a highlighted option adds the typed text and clears the input", async () => {
+  const pagina = await cargarPagina();
+  pagina.escribir("stack", "Rust");
+
+  pagina.porId("miFichaStack").disparar("keydown", { key: "Enter" });
+
+  assert.deepEqual(pagina.stackEnPantalla(), ["Rust"]);
+  assert.equal(pagina.porId("miFichaStack").value, "");
+  assert.equal(pagina.porId("miFichaStackOpciones").hidden, true);
+});
+
+test("Enter with a highlighted suggestion confirms that suggestion, not the typed text", async () => {
+  const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python"] });
+  const input = pagina.porId("miFichaStack");
+  pagina.escribir("stack", "pos");
+  input.disparar("keydown", { key: "ArrowDown" });
+
+  input.disparar("keydown", { key: "Enter" });
+
+  assert.deepEqual(pagina.stackEnPantalla(), ["PostgreSQL"]);
+});
+
+test("a comma confirms the entry, just like Enter", async () => {
+  const pagina = await cargarPagina();
+  pagina.escribir("stack", "Go");
+
+  pagina.porId("miFichaStack").disparar("keydown", { key: "," });
+
+  assert.deepEqual(pagina.stackEnPantalla(), ["Go"]);
+});
+
+test("Escape closes the listbox without touching the text or the stack", async () => {
+  const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python"] });
+  const input = pagina.porId("miFichaStack");
+  pagina.escribir("stack", "pos");
+
+  input.disparar("keydown", { key: "Escape" });
+
+  assert.equal(pagina.porId("miFichaStackOpciones").hidden, true);
+  assert.equal(input.value, "pos");
+  assert.deepEqual(pagina.stackEnPantalla(), []);
+});
+
+test("adding a duplicate announces it, highlights the existing tag and does not grow the stack", async () => {
+  const pagina = await cargarPagina();
+  pagina.agregarStack("PostgreSQL");
+
+  pagina.agregarStack("  POSTGRESQL  ");
+
+  assert.deepEqual(pagina.stackEnPantalla(), ["PostgreSQL"]);
+  assert.equal(pagina.texto("miFichaStackEstado"), "PostgreSQL ya está en tu stack.");
+  assert.ok(manijaStack(pagina, 0).parent.classList.contains("mi-ficha__etiqueta--duplicada"));
+});
+
+test("the twelfth technology disables the input and the help says so; removing one re-enables it", async () => {
+  const pagina = await cargarPagina();
+  for (let i = 0; i < 12; i += 1) pagina.agregarStack(`T${i}`);
+
+  assert.equal(pagina.stackEnPantalla().length, 12);
+  assert.equal(pagina.porId("miFichaStack").disabled, true);
+  assert.match(pagina.texto("miFichaStackAyuda"), /12/);
+
+  quitarStack(pagina, 0).disparar("click");
+
+  assert.equal(pagina.stackEnPantalla().length, 11);
+  assert.equal(pagina.porId("miFichaStack").disabled, false);
+});
+
+test("removing a tag moves focus to the handle at the same index, then the previous one, then the input when the list empties", async () => {
+  const pagina = await cargarPagina();
+  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarStack(tecnologia));
+
+  // Quita "B" (índice 1): el foco va a la manija que ocupa ese índice ahora ("C").
+  quitarStack(pagina, 1).disparar("click");
+  assert.deepEqual(pagina.stackEnPantalla(), ["A", "C"]);
+  assert.equal(pagina.activo(), manijaStack(pagina, 1));
+
+  // Quita "C", que ahora es la última (índice 1 de 2): el foco va a la anterior.
+  quitarStack(pagina, 1).disparar("click");
+  assert.deepEqual(pagina.stackEnPantalla(), ["A"]);
+  assert.equal(pagina.activo(), manijaStack(pagina, 0));
+
+  // Quita la última que queda: la lista se vacía y el foco va al input.
+  quitarStack(pagina, 0).disparar("click");
+  assert.deepEqual(pagina.stackEnPantalla(), []);
+  assertFocoEn(pagina, "miFichaStack");
+});
+
+test("Backspace on an empty input removes the last tag and keeps focus on the input", async () => {
+  const pagina = await cargarPagina();
+  ["A", "B"].forEach((tecnologia) => pagina.agregarStack(tecnologia));
+  const input = pagina.porId("miFichaStack");
+  input.focus();
+
+  input.disparar("keydown", { key: "Backspace" });
+
+  assert.deepEqual(pagina.stackEnPantalla(), ["A"]);
+  assertFocoEn(pagina, "miFichaStack");
+});
+
+test("keyboard reordering from the handle moves the tag and focus follows it", async () => {
+  const pagina = await cargarPagina();
+  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarStack(tecnologia));
+
+  manijaStack(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+
+  assert.deepEqual(pagina.stackEnPantalla(), ["B", "A", "C"]);
+  assert.equal(pagina.activo(), manijaStack(pagina, 1));
+  assert.equal(pagina.texto("miFichaStackEstado"), "A, posición 2 de 3.");
+
+  manijaStack(pagina, 1).disparar("keydown", { key: "End" });
+  assert.deepEqual(pagina.stackEnPantalla(), ["B", "C", "A"]);
+  assert.equal(pagina.activo(), manijaStack(pagina, 2));
+});
+
+test("a missing technology catalog script degrades silently: no suggestions, but free text still works", async () => {
+  const pagina = await cargarPagina(); // sin `catalogo`: el script del catálogo no llegó.
+
+  pagina.escribir("stack", "cualquier cosa");
+  assert.equal(pagina.porId("miFichaStackOpciones").hidden, true, "sin catálogo no hay nada que sugerir");
+
+  pagina.porId("miFichaStack").disparar("keydown", { key: "Enter" });
+  assert.deepEqual(pagina.stackEnPantalla(), ["cualquier cosa"]);
+  assert.equal(pagina.errores.length, 0, "la ausencia del catálogo no se avisa ni se reintenta");
+});
+
+test("preloading a card with a technology outside the catalog keeps it exactly as it is", async () => {
+  const pagina = await cargarPagina({
+    catalogo: ["Python", "PostgreSQL"],
+    ficha: enSecuencia(exito({ ...structuredClone(FICHA), stack: ["Un framework rarísimo"] })),
+  });
+
+  assert.deepEqual(pagina.stackEnPantalla(), ["Un framework rarísimo"]);
 });

@@ -81,6 +81,8 @@ test("scripts load in dependency order", () => {
     "/app/features/auth/auth-ui.js",
     "/app/core/colaboradores/ficha.service.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.logica.js",
+    "/app/core/tecnologias/catalogo.service.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.stack.logica.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.js",
   ];
   const posiciones = orden.map((src) => {
@@ -291,6 +293,29 @@ test("the bio is a textarea and the texts are plain text inputs, with the right 
   assert.equal(tipoDe("correo"), "email");
 });
 
+test("the stack field is a combobox wired to a listbox of suggestions and a tag list, with its own live region", () => {
+  const stackInput = MARCADO.match(/<input\b[^>]*\sname="stack"[^>]*>/)[0];
+  assert.equal(atributo(stackInput, "role"), "combobox");
+  assert.equal(atributo(stackInput, "aria-autocomplete"), "list");
+  assert.equal(atributo(stackInput, "aria-expanded"), "false");
+  assert.equal(atributo(stackInput, "aria-controls"), "miFichaStackOpciones");
+
+  const opciones = porId("miFichaStackOpciones");
+  assert.match(opciones, /^<ul\b/);
+  assert.equal(atributo(opciones, "role"), "listbox");
+  assert.ok(tieneAtributo(opciones, "hidden"), "el desplegable arranca oculto");
+
+  const lista = porId("miFichaStackLista");
+  assert.match(lista, /^<ul\b/);
+
+  // Región propia del widget, distinta de la de errores del servidor
+  // (#miFichaStatus, que sigue existiendo con su propio role="alert").
+  const estado = porId("miFichaStackEstado");
+  assert.equal(atributo(estado, "role"), "status");
+  assert.equal(atributo(estado, "aria-live"), "polite");
+  assert.equal(atributo(porId("miFichaStatus"), "role"), "alert");
+});
+
 test("availability is a radio group in a fieldset with a legend, with exactly the card values", () => {
   const fieldset = MARCADO.match(/<fieldset\b[^>]*\sid="miFichaDisponibilidad"[^>]*>([\s\S]*?)<\/fieldset>/);
   assert.ok(fieldset, "falta el fieldset de disponibilidad");
@@ -386,4 +411,20 @@ test("the disabled field style is scoped to this page, not to the shared .field"
   for (const selector of deField) {
     assert.match(selector, /^\.mi-ficha/, `"${selector}" toca .field fuera de la página`);
   }
+});
+
+/*
+  `element.children` es una HTMLCollection: se puede indexar y recorrer con
+  for...of, pero NO tiene .map, .filter, .forEach ni .slice. El DOM falso de
+  tests/mi-ficha.interaccion.test.js la finge con un arreglo de verdad, así
+  que un `.children.map(...)` pasa la suite en verde y revienta en el
+  navegador — y justo el arrastre, que es lo único que los tests no ejercitan.
+  Por eso el guardián se lee del código fuente y no de un comportamiento.
+*/
+test("the wiring never calls array methods on a live HTMLCollection", () => {
+  const sospechosos = [...JS.matchAll(/\.children\s*\.\s*(\w+)/g)].map(([, metodo]) => metodo);
+  const deArreglo = sospechosos.filter((metodo) =>
+    ["map", "filter", "forEach", "slice", "reduce", "some", "every", "find", "findIndex", "flatMap", "includes", "indexOf", "sort", "reverse", "at", "join"].includes(metodo),
+  );
+  assert.deepEqual(deArreglo, [], "copia la colección con Array.from(...) antes de recorrerla");
 });
