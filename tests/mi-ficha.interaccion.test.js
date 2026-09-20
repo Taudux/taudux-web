@@ -50,11 +50,11 @@ const NO_COLABORADOR = Object.freeze({ ...PERFIL, es_colaborador: false, slug: n
 
 // Una ficha como la devuelve obtenerMiFicha(): las diez columnas.
 const FICHA = Object.freeze({
-  rol: "Desarrolladora backend",
-  especialidad: "Bases de datos",
+  puesto: "Desarrolladora backend",
+  sector: "Bases de datos",
   ubicacion: "Querétaro, México",
   stack: Object.freeze(["PostgreSQL", "Python", "GCP"]),
-  disponibilidad: "Parcial",
+  modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
   linkedin: "https://www.linkedin.com/in/valeria-ortiz",
@@ -68,8 +68,8 @@ const FALLO_AL_GUARDAR = Object.freeze({ ok: false, mensaje: "Revisa tu ficha: a
 
 // Los ids de cada campo de texto, en el orden de la ficha.
 const ID_DE = Object.freeze({
-  rol: "miFichaRol",
-  especialidad: "miFichaEspecialidad",
+  puesto: "miFichaPuesto",
+  sector: "miFichaSector",
   ubicacion: "miFichaUbicacion",
   stack: "miFichaStack",
   anio_inicio: "miFichaAnioInicio",
@@ -78,7 +78,7 @@ const ID_DE = Object.freeze({
   github: "miFichaGithub",
   correo: "miFichaCorreo",
 });
-const RADIOS = Object.freeze({ Disponible: "miFichaDisponible", Parcial: "miFichaParcial", "No disponible": "miFichaNoDisponible" });
+const RADIOS = Object.freeze({ Presencial: "miFichaPresencial", Híbrido: "miFichaHibrido", Remoto: "miFichaRemoto" });
 
 /* ---------- Servicios falsos ---------- */
 
@@ -432,9 +432,9 @@ function abrirPagina({
       control.disparar("input");
     },
     // Quien marca una opción: se desmarcan las otras y emite input y change.
-    elegir(disponibilidad) {
-      for (const [valor, id] of Object.entries(RADIOS)) porId(id).checked = valor === disponibilidad;
-      const radio = porId(RADIOS[disponibilidad]);
+    elegir(modalidad_trabajo) {
+      for (const [valor, id] of Object.entries(RADIOS)) porId(id).checked = valor === modalidad_trabajo;
+      const radio = porId(RADIOS[modalidad_trabajo]);
       radio.disparar("input");
       radio.disparar("change");
     },
@@ -499,7 +499,7 @@ function assertFormularioVisible(pagina) {
 function valoresEnPantalla(pagina) {
   const valores = {};
   for (const campo of CAMPOS_MI_FICHA) {
-    if (campo === "disponibilidad") {
+    if (campo === "modalidad_trabajo") {
       valores[campo] = Object.keys(RADIOS).find((valor) => pagina.porId(RADIOS[valor]).checked) ?? "";
     } else if (campo === "stack") {
       valores[campo] = pagina.stackEnPantalla();
@@ -514,18 +514,18 @@ function valoresEnPantalla(pagina) {
 // elemento del arreglo se escribe y se confirma con Enter.
 function llenar(pagina, valores) {
   for (const [campo, valor] of Object.entries(valores)) {
-    if (campo === "disponibilidad") pagina.elegir(valor);
+    if (campo === "modalidad_trabajo") pagina.elegir(valor);
     else if (campo === "stack") valor.forEach((tecnologia) => pagina.agregarStack(tecnologia));
     else pagina.escribir(campo, valor);
   }
 }
 
 const VALORES_VALIDOS = Object.freeze({
-  rol: "  Desarrolladora backend ",
-  especialidad: "Bases de datos",
+  puesto: "  Desarrolladora backend ",
+  sector: "Bases de datos",
   ubicacion: "Querétaro, México",
   stack: Object.freeze(["PostgreSQL", "Python", "GCP"]),
-  disponibilidad: "Parcial",
+  modalidad_trabajo: "Híbrido",
   anio_inicio: "2018",
   bio: "\nDiseño esquemas y migraciones.\nMe gusta que los datos cuadren.\n",
   linkedin: "https://www.linkedin.com/in/valeria-ortiz",
@@ -555,17 +555,17 @@ function assertCampoSinError(pagina, campo) {
   assert.equal(control.getAttribute("aria-describedby"), `${id}Ayuda`, `${campo} describe sólo su ayuda`);
 }
 
-function assertDisponibilidadConError(pagina, mensaje) {
-  const error = pagina.porId("miFichaDisponibilidadError");
+function assertModalidadTrabajoConError(pagina, mensaje) {
+  const error = pagina.porId("miFichaModalidadTrabajoError");
   assert.equal(error.hidden, false);
   assert.equal(error.textContent, mensaje);
-  assert.match(pagina.porId("miFichaDisponibilidad").getAttribute("aria-describedby") || "", /\bmiFichaDisponibilidadError\b/);
+  assert.match(pagina.porId("miFichaModalidadTrabajo").getAttribute("aria-describedby") || "", /\bmiFichaModalidadTrabajoError\b/);
   for (const radio of pagina.radios()) assert.equal(radio.getAttribute("aria-invalid"), "true");
 }
 
-function assertDisponibilidadSinError(pagina) {
-  assert.equal(pagina.porId("miFichaDisponibilidadError").hidden, true);
-  assert.equal(pagina.porId("miFichaDisponibilidad").getAttribute("aria-describedby"), null);
+function assertModalidadTrabajoSinError(pagina) {
+  assert.equal(pagina.porId("miFichaModalidadTrabajoError").hidden, true);
+  assert.equal(pagina.porId("miFichaModalidadTrabajo").getAttribute("aria-describedby"), null);
   for (const radio of pagina.radios()) assert.equal(radio.getAttribute("aria-invalid"), null);
 }
 
@@ -665,7 +665,7 @@ test("a failed card load shows the service message with a retry, and the retry f
 
   await pagina.reintentar();
   assertFormularioVisible(pagina);
-  assert.equal(pagina.porId("miFichaRol").value, FICHA.rol);
+  assert.equal(pagina.porId("miFichaPuesto").value, FICHA.puesto);
 });
 
 test("a missing script shows a page error instead of throwing, and asks nothing", async () => {
@@ -697,11 +697,11 @@ test("a collaborator with a card gets it prefilled, with the stack shown as tags
 
   assertFormularioVisible(pagina);
   assert.deepEqual(valoresEnPantalla(pagina), {
-    rol: "Desarrolladora backend",
-    especialidad: "Bases de datos",
+    puesto: "Desarrolladora backend",
+    sector: "Bases de datos",
     ubicacion: "Querétaro, México",
     stack: ["PostgreSQL", "Python", "GCP"],
-    disponibilidad: "Parcial",
+    modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
     linkedin: "https://www.linkedin.com/in/valeria-ortiz",
@@ -726,29 +726,29 @@ test("an empty submit marks every required field at once, focuses the first and 
 
   const esperados = validarMiFicha(Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, ""])), new Date().getFullYear()).errores;
   for (const { campo, mensaje } of esperados) {
-    if (campo === "disponibilidad") assertDisponibilidadConError(pagina, mensaje);
+    if (campo === "modalidad_trabajo") assertModalidadTrabajoConError(pagina, mensaje);
     else assertCampoConError(pagina, campo, mensaje);
   }
   // Los enlaces son opcionales: vacíos no tienen error.
   for (const campo of ["linkedin", "github", "correo"]) assertCampoSinError(pagina, campo);
 
-  assertFocoEn(pagina, "miFichaRol");
+  assertFocoEn(pagina, "miFichaPuesto");
   // La región role="alert" es sólo para errores del servidor.
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
   assert.equal(pagina.toasts.length, 0);
 });
 
-test("when availability is the first invalid field, focus goes to its first option", async () => {
+test("when work modality is the first invalid field, focus goes to its first option", async () => {
   const pagina = await cargarPagina();
-  const { disponibilidad, ...sinDisponibilidad } = VALORES_VALIDOS;
-  assert.ok(disponibilidad, "premisa: la ficha válida trae disponibilidad");
-  llenar(pagina, sinDisponibilidad);
+  const { modalidad_trabajo, ...sinModalidadTrabajo } = VALORES_VALIDOS;
+  assert.ok(modalidad_trabajo, "premisa: la ficha válida trae modalidad de trabajo");
+  llenar(pagina, sinModalidadTrabajo);
 
   await pagina.enviar();
 
-  assertDisponibilidadConError(pagina, "Elige tu disponibilidad.");
+  assertModalidadTrabajoConError(pagina, "Elige tu modalidad de trabajo.");
   for (const campo of Object.keys(ID_DE)) assertCampoSinError(pagina, campo);
-  assertFocoEn(pagina, "miFichaDisponible");
+  assertFocoEn(pagina, "miFichaPresencial");
   assert.equal(pagina.guardarMiFicha.llamadas.length, 0);
 });
 
@@ -760,8 +760,8 @@ test("a malformed optional link is its own error, and the rest of the form stays
 
   const [{ mensaje }] = validarMiFicha({ ...VALORES_VALIDOS, github: "http://github.com/valeria" }, new Date().getFullYear()).errores;
   assertCampoConError(pagina, "github", mensaje);
-  for (const campo of ["rol", "stack", "bio", "linkedin", "correo"]) assertCampoSinError(pagina, campo);
-  assertDisponibilidadSinError(pagina);
+  for (const campo of ["puesto", "stack", "bio", "linkedin", "correo"]) assertCampoSinError(pagina, campo);
+  assertModalidadTrabajoSinError(pagina);
   assertFocoEn(pagina, "miFichaGithub");
   assert.equal(pagina.guardarMiFicha.llamadas.length, 0);
 });
@@ -770,18 +770,18 @@ test("editing a field clears only that field's error", async () => {
   const pagina = await cargarPagina();
   await pagina.enviar();
 
-  pagina.escribir("rol", "D");
-  assertCampoSinError(pagina, "rol");
-  assert.equal(pagina.porId("miFichaEspecialidadError").hidden, false, "los demás errores siguen");
+  pagina.escribir("puesto", "D");
+  assertCampoSinError(pagina, "puesto");
+  assert.equal(pagina.porId("miFichaSectorError").hidden, false, "los demás errores siguen");
 
-  pagina.elegir("Disponible");
-  assertDisponibilidadSinError(pagina);
+  pagina.elegir("Presencial");
+  assertModalidadTrabajoSinError(pagina);
   assert.equal(pagina.porId("miFichaBioError").hidden, false);
 
   // Un envío nuevo vuelve a validar todo: "D" sigue siendo corto.
   await pagina.enviar();
-  assert.equal(pagina.porId("miFichaRolError").hidden, false);
-  assertDisponibilidadSinError(pagina);
+  assert.equal(pagina.porId("miFichaPuestoError").hidden, false);
+  assertModalidadTrabajoSinError(pagina);
 });
 
 /* ---------- Guardar ---------- */
@@ -793,11 +793,11 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
   await pagina.enviar();
 
   assert.deepEqual(pagina.guardarMiFicha.llamadas, [["u-1", {
-    rol: "Desarrolladora backend",
-    especialidad: "Bases de datos",
+    puesto: "Desarrolladora backend",
+    sector: "Bases de datos",
     ubicacion: "Querétaro, México",
     stack: ["PostgreSQL", "Python", "GCP"],
-    disponibilidad: "Parcial",
+    modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
     linkedin: "https://www.linkedin.com/in/valeria-ortiz",
@@ -813,7 +813,7 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
 
   // El formulario queda con lo que devolvió la base, ya normalizado.
   assert.deepEqual(pagina.stackEnPantalla(), ["PostgreSQL", "Python", "GCP"]);
-  assert.equal(pagina.porId("miFichaRol").value, "Desarrolladora backend");
+  assert.equal(pagina.porId("miFichaPuesto").value, "Desarrolladora backend");
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
   for (const campo of Object.keys(ID_DE)) assertCampoSinError(pagina, campo);
 });
@@ -847,7 +847,7 @@ test("a service failure shows its message in the alert, focused, with no toast a
   assert.equal(pagina.porId("formMiFicha").getAttribute("aria-busy"), "false");
 
   // El siguiente intento esconde el aviso anterior antes de validar.
-  pagina.escribir("rol", "");
+  pagina.escribir("puesto", "");
   await pagina.enviar();
   assert.equal(estado.hidden, true);
 });
@@ -887,15 +887,15 @@ test("the form is busy while saving and comes back as it was, the disabled Proye
 
 test("an existing card saved again sends the edited values, not the loaded ones", async () => {
   const pagina = await cargarPagina({ ficha: enSecuencia(exito(FICHA)) });
-  pagina.escribir("rol", "Arquitecta de datos");
-  pagina.elegir("No disponible");
+  pagina.escribir("puesto", "Arquitecta de datos");
+  pagina.elegir("Remoto");
 
   await pagina.enviar();
 
   assert.deepEqual(pagina.guardarMiFicha.llamadas, [["u-1", {
     ...structuredClone(FICHA),
-    rol: "Arquitecta de datos",
-    disponibilidad: "No disponible",
+    puesto: "Arquitecta de datos",
+    modalidad_trabajo: "Remoto",
   }]]);
 });
 

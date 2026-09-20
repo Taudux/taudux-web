@@ -3,11 +3,11 @@
   supabaseClient y debe cargarse después de él; la página es pública, así que
   funciona con la anon key y sin sesión.
 
-  La lista sale del RPC `listar_colaboradores()` (migraciones 0038 y 0039),
-  security definer, que entrega de cada cuenta marcada nombre, apellidos y
-  slug, más los campos de su ficha pública (rol, especialidad, ubicación,
-  stack, disponibilidad, año de inicio, bio y enlaces). Quien todavía no llenó
-  su ficha los trae en null: el RPC hace left join.
+  La lista sale del RPC `listar_colaboradores()` (migraciones 0038, 0039 y
+  0040), security definer, que entrega de cada cuenta marcada nombre,
+  apellidos y slug, más los campos de su ficha pública (puesto, sector,
+  ubicación, stack, modalidad de trabajo, año de inicio, bio y enlaces). Quien
+  todavía no llenó su ficha los trae en null: el RPC hace left join.
 
   Este servicio vuelve a recortar del lado del cliente: arma cada registro
   campo por campo, así que una columna que el RPC agregue más adelante no
@@ -65,8 +65,9 @@ function campoDeFichaColaborador(valor) {
   cuenta no tiene nombre ni apellidos, ambos caen al slug para que la tarjeta
   nunca quede en blanco.
 
-  Los campos de la ficha conservan los nombres de la base. Ojo: `rol` es el
-  puesto que la persona escribe en su ficha, no un rol de cuenta.
+  Los campos de la ficha conservan los nombres de la base. Ojo: `puesto` es el
+  puesto que la persona escribe en su ficha; `perfiles.rol` (usuario/admin) es
+  otra columna, de otra tabla, y no pasa por acá.
 */
 function aColaborador(fila) {
   const nombre = textoDeColaborador(fila.nombre);
@@ -75,11 +76,11 @@ function aColaborador(fila) {
     nombre: [nombre, apellidos].filter(Boolean).join(" ") || fila.slug,
     corto: nombre || apellidos || fila.slug,
     slug: fila.slug,
-    rol: campoDeFichaColaborador(fila.rol),
-    especialidad: campoDeFichaColaborador(fila.especialidad),
+    puesto: campoDeFichaColaborador(fila.puesto),
+    sector: campoDeFichaColaborador(fila.sector),
     ubicacion: campoDeFichaColaborador(fila.ubicacion),
     stack: stackDeColaborador(fila.stack),
-    disponibilidad: campoDeFichaColaborador(fila.disponibilidad),
+    modalidad_trabajo: campoDeFichaColaborador(fila.modalidad_trabajo),
     anio_inicio: campoDeFichaColaborador(fila.anio_inicio),
     bio: campoDeFichaColaborador(fila.bio),
     linkedin: campoDeFichaColaborador(fila.linkedin),

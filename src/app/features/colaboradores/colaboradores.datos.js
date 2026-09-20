@@ -4,10 +4,10 @@
 
   Acá NO hay personas. La lista sale de la base con listarColaboradores()
   (core/colaboradores/colaboradores.service.js), que entrega de cada una
-  nombre, corto y slug, más los campos de su ficha (migración 0039) con los
-  nombres de la base: rol, especialidad, ubicacion, stack (arreglo de textos),
-  disponibilidad, anio_inicio (un año entero), bio, linkedin, github y correo.
-  Las fichas de muestra del prototipo viven en
+  nombre, corto y slug, más los campos de su ficha (migraciones 0039 y 0040)
+  con los nombres de la base: puesto, sector, ubicacion, stack (arreglo de
+  textos), modalidad_trabajo, anio_inicio (un año entero), bio, linkedin,
+  github y correo. Las fichas de muestra del prototipo viven en
   tests/fixtures/colaboradores.muestra.js y sólo las usan los tests.
 
   Quien todavía no llenó su ficha trae esos campos en null: está en el roster
@@ -18,9 +18,9 @@
 */
 
 // Los mismos valores, en el mismo orden, que el CHECK
-// `fichas_colaborador_disponibilidad_valida` de la 0039. Un test compara las
-// dos listas.
-const DISPONIBILIDADES = Object.freeze(["Disponible", "Parcial", "No disponible"]);
+// `fichas_colaborador_modalidad_trabajo_valida` de la 0040. Un test compara
+// las dos listas.
+const MODALIDADES_TRABAJO = Object.freeze(["Presencial", "Híbrido", "Remoto"]);
 
 // La grilla del roster tiene cuatro columnas en todos los anchos; en
 // moverSeleccion, arriba/abajo saltan de a una fila, o sea de a
@@ -29,7 +29,7 @@ const COLUMNAS_ROSTER = 4;
 
 // Todo lo que la vista de perfil escribe tal cual como texto: si falta uno,
 // quedaría un hueco en blanco en la ficha técnica.
-const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "rol", "especialidad", "ubicacion", "bio"];
+const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "puesto", "sector", "ubicacion", "bio"];
 
 function esTextoConContenido(valor) {
   return typeof valor === "string" && valor.trim() !== "";
@@ -53,7 +53,7 @@ function tienePerfil(persona) {
 
   return textosCompletos
     && stackCompleto
-    && DISPONIBILIDADES.includes(persona.disponibilidad)
+    && MODALIDADES_TRABAJO.includes(persona.modalidad_trabajo)
     && Number.isInteger(persona.anio_inicio);
 }
 
@@ -160,7 +160,7 @@ function enlacesDisponibles(ficha) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     COLUMNAS_ROSTER,
-    DISPONIBILIDADES,
+    MODALIDADES_TRABAJO,
     tienePerfil,
     experienciaDesde,
     indicePorSlug,

@@ -1,13 +1,13 @@
 /*
   Núcleo puro de "Mi ficha": normalización y validación del formulario con el
   que cada colaborador edita su ficha pública. Las reglas son las de los CHECK
-  de `fichas_colaborador` (0039): lo que el formulario deja pasar, la base lo
-  acepta, y lo que la base rechazaría, el formulario lo avisa campo por campo
-  antes de enviarlo.
+  de `fichas_colaborador` (0039 y 0040): lo que el formulario deja pasar, la
+  base lo acepta, y lo que la base rechazaría, el formulario lo avisa campo
+  por campo antes de enviarlo.
 
-  Los límites, las expresiones de los enlaces y las disponibilidades se leen
-  también del SQL de la migración y se comparan: una copia sin vigilancia se
-  desfasa en silencio.
+  Los límites y las expresiones de los enlaces se leen de la 0039; las
+  modalidades de trabajo, de la 0040. Todo se compara contra el SQL: una copia
+  sin vigilancia se desfasa en silencio.
 */
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -20,7 +20,7 @@ const leer = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
 
 const {
   CAMPOS_MI_FICHA,
-  DISPONIBILIDADES_MI_FICHA,
+  MODALIDADES_TRABAJO_MI_FICHA,
   LIMITES_MI_FICHA,
   PATRONES_ENLACE_MI_FICHA,
   errorDeElementoStackMiFicha,
@@ -31,11 +31,12 @@ const {
   rutaPerfilPublicoMiFicha,
 } = require("../src/app/features/colaboradores/mi-ficha/mi-ficha.logica.js");
 const {
-  DISPONIBILIDADES,
+  MODALIDADES_TRABAJO,
   enlacesDisponibles,
 } = require("../src/app/features/colaboradores/colaboradores.datos.js");
 
 const SQL = leer("supabase/migrations/0039_fichas_colaborador.sql");
+const SQL_0040 = leer("supabase/migrations/0040_modalidad_trabajo_colaborador.sql");
 
 // Año fijo: la validación recibe el año en curso como argumento, así que los
 // casos no cambian con el reloj.
@@ -48,11 +49,11 @@ const BIDI = ["‎", "‏", "‪", "‫", "‬", "‭", "‮", "⁦", "⁧", "�
 // Una ficha de formulario válida, tal como la entregan los inputs (todo texto).
 function valoresValidos(cambios = {}) {
   return {
-    rol: "Desarrolladora backend",
-    especialidad: "Bases de datos",
+    puesto: "Desarrolladora backend",
+    sector: "Bases de datos",
     ubicacion: "Querétaro, México",
     stack: ["PostgreSQL", "Python", "GCP"],
-    disponibilidad: "Parcial",
+    modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
     linkedin: "",
@@ -95,7 +96,7 @@ test("the card keys are exactly the columns the service writes, in the same orde
 
   assert.deepEqual([...CAMPOS_MI_FICHA], columnas);
   assert.deepEqual([...CAMPOS_MI_FICHA], [
-    "rol", "especialidad", "ubicacion", "stack", "disponibilidad",
+    "puesto", "sector", "ubicacion", "stack", "modalidad_trabajo",
     "anio_inicio", "bio", "linkedin", "github", "correo",
   ]);
 });
@@ -108,11 +109,11 @@ test("normalizing always returns exactly the ten card keys", () => {
 
 test("normalizing trims texts, trims each stack item and drops the empty ones, parses the year and turns empty links into null", () => {
   const ficha = normalizarMiFicha({
-    rol: "  Desarrolladora backend ",
-    especialidad: "\tBases de datos\n",
+    puesto: "  Desarrolladora backend ",
+    sector: "\tBases de datos\n",
     ubicacion: " Querétaro ",
     stack: [" PostgreSQL ", "Python", "", "  ", " GCP "],
-    disponibilidad: "Parcial",
+    modalidad_trabajo: "Híbrido",
     anio_inicio: " 2018 ",
     bio: "\n\n  Primera línea.\nSegunda línea.  \n",
     linkedin: "  https://www.linkedin.com/in/ana  ",
@@ -121,11 +122,11 @@ test("normalizing trims texts, trims each stack item and drops the empty ones, p
   });
 
   assert.deepEqual(ficha, {
-    rol: "Desarrolladora backend",
-    especialidad: "Bases de datos",
+    puesto: "Desarrolladora backend",
+    sector: "Bases de datos",
     ubicacion: "Querétaro",
     stack: ["PostgreSQL", "Python", "GCP"],
-    disponibilidad: "Parcial",
+    modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Primera línea.\nSegunda línea.",
     linkedin: "https://www.linkedin.com/in/ana",
@@ -144,11 +145,11 @@ test("normalizing a stack that is not an array, or that has non-text items, give
 
 test("normalizing an empty form gives empty texts, an empty stack, no year and null links", () => {
   assert.deepEqual(normalizarMiFicha({}), {
-    rol: "",
-    especialidad: "",
+    puesto: "",
+    sector: "",
     ubicacion: "",
     stack: [],
-    disponibilidad: "",
+    modalidad_trabajo: "",
     anio_inicio: null,
     bio: "",
     linkedin: null,
@@ -158,16 +159,16 @@ test("normalizing an empty form gives empty texts, an empty stack, no year and n
 });
 
 test("a valid form validates into the normalized card", () => {
-  const ficha = assertValido(valoresValidos({ rol: "  Desarrolladora backend  " }), "la ficha de base es válida");
+  const ficha = assertValido(valoresValidos({ puesto: "  Desarrolladora backend  " }), "la ficha de base es válida");
   assert.deepEqual(ficha, normalizarMiFicha(valoresValidos()));
-  assert.equal(ficha.rol, "Desarrolladora backend");
+  assert.equal(ficha.puesto, "Desarrolladora backend");
 });
 
-/* ---------- Textos cortos: rol, especialidad, ubicación ---------- */
+/* ---------- Textos cortos: puesto, sector, ubicación ---------- */
 
 const TEXTOS_CORTOS = [
-  { campo: "rol", min: 2, max: 60 },
-  { campo: "especialidad", min: 2, max: 80 },
+  { campo: "puesto", min: 2, max: 60 },
+  { campo: "sector", min: 2, max: 80 },
   { campo: "ubicacion", min: 2, max: 80 },
 ];
 
@@ -270,24 +271,32 @@ test("a single technology is judged by the same two rules as the whole stack", (
   assert.equal(errorDeElementoStackMiFicha("Po\u0000stgres".padEnd(41, "a")), porCaracteres);
 });
 
-/* ---------- Disponibilidad ---------- */
+/* ---------- Modalidad de trabajo ---------- */
 
-test("the availability values are the same list here, on the public page and in the 0039 CHECK", () => {
-  const check = SQL.match(/fichas_colaborador_disponibilidad_valida\s+check\s*\(\s*disponibilidad\s+in\s*\(([^)]*)\)/);
-  assert.ok(check, "no se encontró el CHECK de disponibilidad en la 0039");
+test("the work modality values are the same list here, on the public page and in the 0040 CHECK", () => {
+  const check = SQL_0040.match(/fichas_colaborador_modalidad_trabajo_valida\s+check\s*\(\s*modalidad_trabajo\s+in\s*\(([^)]*)\)/);
+  assert.ok(check, "no se encontró el CHECK de modalidad_trabajo en la 0040");
   const deLaBase = [...check[1].matchAll(/'([^']*)'/g)].map(([, valor]) => valor);
 
-  assert.deepEqual([...DISPONIBILIDADES_MI_FICHA], deLaBase);
-  assert.deepEqual([...DISPONIBILIDADES_MI_FICHA], [...DISPONIBILIDADES]);
-  assert.deepEqual([...DISPONIBILIDADES_MI_FICHA], ["Disponible", "Parcial", "No disponible"]);
+  assert.deepEqual([...MODALIDADES_TRABAJO_MI_FICHA], deLaBase);
+  assert.deepEqual([...MODALIDADES_TRABAJO_MI_FICHA], [...MODALIDADES_TRABAJO]);
+  assert.deepEqual([...MODALIDADES_TRABAJO_MI_FICHA], ["Presencial", "Híbrido", "Remoto"]);
 });
 
-test("availability: one of the three values, exactly", () => {
-  for (const disponibilidad of DISPONIBILIDADES_MI_FICHA) {
-    assert.equal(assertValido(valoresValidos({ disponibilidad }), disponibilidad).disponibilidad, disponibilidad);
+// "Híbrido" tiene que estar en NFC (í = U+00ED): en NFD (i + U+0301) se ve
+// idéntico pero la base lo rechaza con 23514 (ver la 0040).
+test("every work modality value here is in NFC", () => {
+  for (const valor of MODALIDADES_TRABAJO_MI_FICHA) {
+    assert.equal(valor, valor.normalize("NFC"), `"${valor}" no está en NFC`);
   }
-  for (const disponibilidad of ["", "disponible", "Ocupado", "No  disponible", undefined]) {
-    assertSoloErrorEn(valoresValidos({ disponibilidad }), "disponibilidad", String(disponibilidad));
+});
+
+test("work modality: one of the three values, exactly", () => {
+  for (const modalidad_trabajo of MODALIDADES_TRABAJO_MI_FICHA) {
+    assert.equal(assertValido(valoresValidos({ modalidad_trabajo }), modalidad_trabajo).modalidad_trabajo, modalidad_trabajo);
+  }
+  for (const modalidad_trabajo of ["", "remoto", "Ocupado", "Semipresencial", undefined]) {
+    assertSoloErrorEn(valoresValidos({ modalidad_trabajo }), "modalidad_trabajo", String(modalidad_trabajo));
   }
 });
 
@@ -462,8 +471,8 @@ test("the length limits are the ones the 0039 CHECKs declare", () => {
     return Number(encontrado[1]);
   };
 
-  assert.deepEqual(LIMITES_MI_FICHA.rol, entre("char_length\\(rol\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.especialidad, entre("char_length\\(especialidad\\)"));
+  assert.deepEqual(LIMITES_MI_FICHA.puesto, entre("char_length\\(rol\\)"));
+  assert.deepEqual(LIMITES_MI_FICHA.sector, entre("char_length\\(especialidad\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.ubicacion, entre("char_length\\(ubicacion\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.bio, entre("char_length\\(bio\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.stack, entre("cardinality\\(stack\\)"));
@@ -493,7 +502,7 @@ test("an empty form reports every required field at once, in form order, and no 
   assert.equal(resultado.ok, false);
   assert.deepEqual(
     resultado.errores.map(({ campo }) => campo),
-    ["rol", "especialidad", "ubicacion", "stack", "disponibilidad", "anio_inicio", "bio"],
+    ["puesto", "sector", "ubicacion", "stack", "modalidad_trabajo", "anio_inicio", "bio"],
   );
   for (const { mensaje } of resultado.errores) {
     assert.equal(typeof mensaje, "string");
@@ -502,13 +511,13 @@ test("an empty form reports every required field at once, in form order, and no 
 });
 
 test("errors follow the card order and each field reports only one message", () => {
-  const resultado = validarMiFicha(valoresValidos({ correo: "no", rol: "", bio: "corta", github: "http://github.com/x" }), ANIO);
-  assert.deepEqual(resultado.errores.map(({ campo }) => campo), ["rol", "bio", "github", "correo"]);
+  const resultado = validarMiFicha(valoresValidos({ correo: "no", puesto: "", bio: "corta", github: "http://github.com/x" }), ANIO);
+  assert.deepEqual(resultado.errores.map(({ campo }) => campo), ["puesto", "bio", "github", "correo"]);
 });
 
 test("error messages speak in tuteo, never voseo", () => {
   const { errores } = validarMiFicha({
-    rol: "a", especialidad: "", ubicacion: "‮", stack: [], disponibilidad: "x",
+    puesto: "a", sector: "", ubicacion: "‮", stack: [], modalidad_trabajo: "x",
     anio_inicio: "abc", bio: "", linkedin: "x", github: "x", correo: "x",
   }, ANIO);
   assert.equal(errores.length, CAMPOS_MI_FICHA.length, "premisa: todos los campos fallan");
@@ -524,11 +533,11 @@ test("error messages speak in tuteo, never voseo", () => {
 test("a saved card becomes form values: texts as is, stack as a copied array, year as text, null links empty", () => {
   const stackGuardado = ["PostgreSQL", "Python", "GCP"];
   const valores = valoresFormularioMiFicha({
-    rol: "Desarrolladora backend",
-    especialidad: "Bases de datos",
+    puesto: "Desarrolladora backend",
+    sector: "Bases de datos",
     ubicacion: "Querétaro",
     stack: stackGuardado,
-    disponibilidad: "No disponible",
+    modalidad_trabajo: "Remoto",
     anio_inicio: 2018,
     bio: "Primera.\nSegunda.",
     linkedin: "https://www.linkedin.com/in/ana",
@@ -537,11 +546,11 @@ test("a saved card becomes form values: texts as is, stack as a copied array, ye
   });
 
   assert.deepEqual(valores, {
-    rol: "Desarrolladora backend",
-    especialidad: "Bases de datos",
+    puesto: "Desarrolladora backend",
+    sector: "Bases de datos",
     ubicacion: "Querétaro",
     stack: ["PostgreSQL", "Python", "GCP"],
-    disponibilidad: "No disponible",
+    modalidad_trabajo: "Remoto",
     anio_inicio: "2018",
     bio: "Primera.\nSegunda.",
     linkedin: "https://www.linkedin.com/in/ana",
@@ -558,7 +567,7 @@ test("no card yet (null) becomes an empty form", () => {
   assert.deepEqual(valoresFormularioMiFicha(null), vacio);
   assert.deepEqual(valoresFormularioMiFicha(undefined), vacio);
   // Un valor fuera de la lista no marca ninguna opción.
-  assert.equal(valoresFormularioMiFicha({ disponibilidad: "Ocupado" }).disponibilidad, "");
+  assert.equal(valoresFormularioMiFicha({ modalidad_trabajo: "Ocupado" }).modalidad_trabajo, "");
 });
 
 test("a saved card goes through the form and back unchanged", () => {

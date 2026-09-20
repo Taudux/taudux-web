@@ -266,22 +266,21 @@ test("the roster card and the profile detail lost their attributes column", () =
 });
 
 /*
-  La disponibilidad va a pasar a ser modalidad de trabajo (presencial /
-  híbrido / remoto), y la modalidad no tiene bueno ni malo: remoto no es peor
-  que presencial. Un semáforo de color ahí se leería como una calificación de
-  la persona, así que el punto se quita y el valor queda como texto plano,
-  igual que cualquier otro <dd> de la ficha.
+  La modalidad de trabajo (presencial / híbrido / remoto) no tiene bueno ni
+  malo: remoto no es peor que presencial. Un semáforo de color ahí se leería
+  como una calificación de la persona, así que el valor queda como texto
+  plano, igual que cualquier otro <dd> de la ficha.
 */
-test("the availability value is plain text, with no status dot", () => {
+test("the work modality value is plain text, with no status dot", () => {
   const html = sinComentariosHtml(HTML);
-  assert.doesNotMatch(html, /id="perfilPunto"/, "el punto de disponibilidad ya no debe existir");
+  assert.doesNotMatch(html, /id="perfilPunto"/, "el punto de modalidad de trabajo ya no debe existir");
 
   const css = sinComentariosCss(CSS);
   assert.doesNotMatch(css, /\.colaboradores__punto\b/, "no debe quedar ninguna regla del punto");
   assert.doesNotMatch(css, /\.colaboradores__disponibilidad\b/, "no debe quedar el flex que alineaba punto y texto");
 
-  const dd = html.match(/<dd[^>]*id="perfilDisponibilidad"[^>]*>/);
-  assert.ok(dd, "falta el <dd> de disponibilidad");
+  const dd = html.match(/<dd[^>]*id="perfilModalidadTrabajo"[^>]*>/);
+  assert.ok(dd, "falta el <dd> de modalidad de trabajo");
   assert.doesNotMatch(dd[0], /class="[^"]*colaboradores__(disponibilidad|punto)[^"]*"/, "el <dd> no debe traer clase de estado");
 });
 

@@ -29,7 +29,7 @@
   const VACIA = {
     inicial: "?",
     nombre: "¿Quién?",
-    rol: "Pasa el cursor o elige una ficha",
+    puesto: "Pasa el cursor o elige una ficha",
     bio: "Elige una ficha del roster para ver su perfil y especialidades.",
   };
 
@@ -63,11 +63,11 @@
       perfilInicial: porId("perfilInicial"),
       perfilEnlaces: porId("perfilEnlaces"),
       perfilNombre: porId("perfilNombre"),
-      perfilRol: porId("perfilRol"),
-      perfilEspecialidad: porId("perfilEspecialidad"),
+      perfilPuesto: porId("perfilPuesto"),
+      perfilSector: porId("perfilSector"),
       perfilUbicacion: porId("perfilUbicacion"),
       perfilExperiencia: porId("perfilExperiencia"),
-      perfilDisponibilidad: porId("perfilDisponibilidad"),
+      perfilModalidadTrabajo: porId("perfilModalidadTrabajo"),
       perfilStack: porId("perfilStack"),
       perfilBio: porId("perfilBio"),
     };
@@ -271,8 +271,8 @@
       boton.type = "button";
       boton.className = "colaboradores__ficha";
       // El nombre corto de la ficha no alcanza para saber a quién se abre: el
-      // nombre accesible lleva nombre completo y, si lo hay, el rol.
-      boton.setAttribute("aria-label", persona.rol ? `${persona.nombre}, ${persona.rol}` : persona.nombre);
+      // nombre accesible lleva nombre completo y, si lo hay, el puesto.
+      boton.setAttribute("aria-label", persona.puesto ? `${persona.nombre}, ${persona.puesto}` : persona.nombre);
 
       const nombre = crearDecorado("colaboradores__ficha-nombre", persona.corto);
       boton.append(
@@ -456,10 +456,10 @@
       escribir(el.previaInicial, persona ? inicialDe(persona) : VACIA.inicial);
       escribir(el.previaNombre, persona ? persona.nombre : VACIA.nombre);
 
-      // El rol se oculta en vez de quedar vacío: un <p> vacío igual conserva
-      // sus márgenes.
+      // El puesto se oculta en vez de quedar vacío: un <p> vacío igual
+      // conserva sus márgenes.
       el.previaRol.hidden = soloNombre;
-      escribir(el.previaRol, textoDePrevia(ficha, soloNombre, "rol"));
+      escribir(el.previaRol, textoDePrevia(ficha, soloNombre, "puesto"));
 
       // La bio NO se oculta: vive en la tarjeta de abajo, y ocultarla cambiaría
       // su alto con cada ficha bajo el cursor. Queda vacía, con su piso.
@@ -481,12 +481,12 @@
       escribir(el.perfilNumero, numeroDeFicha(indice));
       escribir(el.perfilInicial, inicialDe(ficha));
       escribir(el.perfilNombre, ficha.nombre);
-      escribir(el.perfilRol, ficha.rol);
-      escribir(el.perfilEspecialidad, ficha.especialidad);
+      escribir(el.perfilPuesto, ficha.puesto);
+      escribir(el.perfilSector, ficha.sector);
       escribir(el.perfilUbicacion, ficha.ubicacion);
       // La base guarda el año de inicio; los años se cuentan al pintar.
       escribir(el.perfilExperiencia, experienciaDesde(ficha.anio_inicio, new Date().getFullYear()));
-      escribir(el.perfilDisponibilidad, ficha.disponibilidad);
+      escribir(el.perfilModalidadTrabajo, ficha.modalidad_trabajo);
       pintarStack(el.perfilStack, ficha.stack);
       escribir(el.perfilBio, ficha.bio);
 

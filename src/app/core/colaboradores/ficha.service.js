@@ -18,11 +18,11 @@
 // `*`: una columna que la tabla gane después no se lee ni se escribe por
 // accidente.
 const COLUMNAS_MI_FICHA = Object.freeze([
-  "rol",
-  "especialidad",
+  "puesto",
+  "sector",
   "ubicacion",
   "stack",
-  "disponibilidad",
+  "modalidad_trabajo",
   "anio_inicio",
   "bio",
   "linkedin",

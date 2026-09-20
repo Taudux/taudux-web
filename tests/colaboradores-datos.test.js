@@ -8,7 +8,7 @@ const ROOT = path.resolve(__dirname, "..");
 const DATOS = require(path.join(ROOT, "src/app/features/colaboradores/colaboradores.datos.js"));
 const {
   COLUMNAS_ROSTER,
-  DISPONIBILIDADES,
+  MODALIDADES_TRABAJO,
   tienePerfil,
   experienciaDesde,
   indicePorSlug,
@@ -74,12 +74,12 @@ test("sample slugs are unique and follow the database slug format", () => {
 });
 
 /*
-  La muestra ejercita cada estado del punto de disponibilidad, y está
-  congelada hasta el stack: un test que la retoque sin clonarla lanza en vez
-  de ensuciar al siguiente.
+  La muestra ejercita cada modalidad de trabajo, y está congelada hasta el
+  stack: un test que la retoque sin clonarla lanza en vez de ensuciar al
+  siguiente.
 */
-test("the sample covers every availability value and is frozen all the way down", () => {
-  assert.deepEqual(new Set(MUESTRA.map((persona) => persona.disponibilidad)), new Set(DISPONIBILIDADES));
+test("the sample covers every work modality value and is frozen all the way down", () => {
+  assert.deepEqual(new Set(MUESTRA.map((persona) => persona.modalidad_trabajo)), new Set(MODALIDADES_TRABAJO));
 
   assert.ok(Object.isFrozen(MUESTRA));
   for (const persona of MUESTRA) {
@@ -103,18 +103,26 @@ test("every link in the sample is one the page offers, and only some people have
 });
 
 /*
-  El front y la base no pueden desfasarse: una disponibilidad que la 0039
-  acepte y el front no conozca dejaría a esa persona sin perfil, y una que el
-  front acepte y la base no, sería código muerto.
+  El front y la base no pueden desfasarse: una modalidad que la 0040 acepte y
+  el front no conozca dejaría a esa persona sin perfil, y una que el front
+  acepte y la base no, sería código muerto.
 */
-test("the availability values are exactly the ones the 0039 CHECK allows, in the same order", () => {
-  const sql = fs.readFileSync(path.join(ROOT, "supabase/migrations/0039_fichas_colaborador.sql"), "utf8");
-  const check = sql.match(/fichas_colaborador_disponibilidad_valida\s+check\s*\(\s*disponibilidad\s+in\s*\(([^)]*)\)/);
-  assert.ok(check, "no se encontró el CHECK de disponibilidad en la 0039");
+test("the work modality values are exactly the ones the 0040 CHECK allows, in the same order", () => {
+  const sql = fs.readFileSync(path.join(ROOT, "supabase/migrations/0040_modalidad_trabajo_colaborador.sql"), "utf8");
+  const check = sql.match(/fichas_colaborador_modalidad_trabajo_valida\s+check\s*\(\s*modalidad_trabajo\s+in\s*\(([^)]*)\)/);
+  assert.ok(check, "no se encontró el CHECK de modalidad_trabajo en la 0040");
 
   const valoresDeLaBase = [...check[1].matchAll(/'([^']*)'/g)].map(([, valor]) => valor);
-  assert.deepEqual([...DISPONIBILIDADES], valoresDeLaBase);
-  assert.deepEqual([...DISPONIBILIDADES], ["Disponible", "Parcial", "No disponible"]);
+  assert.deepEqual([...MODALIDADES_TRABAJO], valoresDeLaBase);
+  assert.deepEqual([...MODALIDADES_TRABAJO], ["Presencial", "Híbrido", "Remoto"]);
+});
+
+// "Híbrido" tiene que estar en NFC (í = U+00ED): en NFD (i + U+0301) se ve
+// idéntico pero la base lo rechaza con 23514 (ver la 0040).
+test("every work modality value is in NFC", () => {
+  for (const valor of MODALIDADES_TRABAJO) {
+    assert.equal(valor, valor.normalize("NFC"), `"${valor}" no está en NFC`);
+  }
 });
 
 /*
@@ -128,11 +136,11 @@ test("a public record without a card yet has no profile", () => {
     nombre: "Samael Flores",
     corto: "Samael",
     slug: "samael",
-    rol: null,
-    especialidad: null,
+    puesto: null,
+    sector: null,
     ubicacion: null,
     stack: null,
-    disponibilidad: null,
+    modalidad_trabajo: null,
     anio_inicio: null,
     bio: null,
     linkedin: null,
@@ -152,7 +160,7 @@ test("a single missing, blank or unknown field is enough to have no profile", ()
   const base = MUESTRA[0];
   assert.equal(tienePerfil({ ...base }), true, "premisa: la base sí tiene ficha");
 
-  for (const campo of ["nombre", "corto", "rol", "especialidad", "ubicacion", "bio"]) {
+  for (const campo of ["nombre", "corto", "puesto", "sector", "ubicacion", "bio"]) {
     for (const valor of [undefined, null, "", "   ", 7]) {
       assert.equal(tienePerfil({ ...base, [campo]: valor }), false, `${campo} = ${JSON.stringify(valor)}`);
     }
@@ -163,8 +171,8 @@ test("a single missing, blank or unknown field is enough to have no profile", ()
     assert.equal(tienePerfil({ ...base, stack }), false, `stack = ${JSON.stringify(stack)}`);
   }
 
-  for (const disponibilidad of [undefined, null, "", "Ocupado", "disponible", " Disponible"]) {
-    assert.equal(tienePerfil({ ...base, disponibilidad }), false, `disponibilidad = ${JSON.stringify(disponibilidad)}`);
+  for (const modalidad_trabajo of [undefined, null, "", "Ocupado", "remoto", " Remoto"]) {
+    assert.equal(tienePerfil({ ...base, modalidad_trabajo }), false, `modalidad_trabajo = ${JSON.stringify(modalidad_trabajo)}`);
   }
 
   // Un año entero, no un texto ni una fracción: de él sale la experiencia.
@@ -173,25 +181,25 @@ test("a single missing, blank or unknown field is enough to have no profile", ()
   }
 });
 
-test("each availability value is a valid one for a profile", () => {
-  for (const disponibilidad of DISPONIBILIDADES) {
-    assert.equal(tienePerfil({ ...MUESTRA[0], disponibilidad }), true, disponibilidad);
+test("each work modality value is a valid one for a profile", () => {
+  for (const modalidad_trabajo of MODALIDADES_TRABAJO) {
+    assert.equal(tienePerfil({ ...MUESTRA[0], modalidad_trabajo }), true, modalidad_trabajo);
   }
 });
 
 /*
-  Los campos del prototipo se renombraron a los de la base (0039): ciudad →
-  ubicacion, esp → especialidad, disp → disponibilidad, anios → anio_inicio
+  Los campos del prototipo se renombraron a los de la base (0039/0040): ciudad
+  → ubicacion, esp → sector, disp → modalidad_trabajo, anios → anio_inicio
   (un año, no un texto) y el stack pasó de texto a arreglo. Una ficha con la
   forma vieja ya no abre perfil, y la muestra no la conserva.
 */
 test("a card in the old prototype shape has no profile, and the sample no longer uses it", () => {
-  const { especialidad, ubicacion, disponibilidad, anio_inicio, stack, ...resto } = MUESTRA[0];
+  const { sector, ubicacion, modalidad_trabajo, anio_inicio, stack, ...resto } = MUESTRA[0];
   const vieja = {
     ...resto,
-    esp: especialidad,
+    esp: sector,
     ciudad: ubicacion,
-    disp: disponibilidad,
+    disp: modalidad_trabajo,
     anios: "8 años",
     stack: stack.join(" · "),
   };

@@ -3,11 +3,12 @@
   que cada colaborador edita su ficha pública. Sin DOM y sin fetch: este
   archivo se carga igual en la página y en los tests de Node.
 
-  Las reglas son las de los CHECK de `fichas_colaborador` (migración 0039). Lo
-  que este módulo deja pasar, la base lo acepta; lo que la base rechazaría, el
-  formulario lo avisa campo por campo antes de enviarlo. Los límites, las
-  expresiones de los enlaces y las disponibilidades se comparan contra el SQL
-  en tests/mi-ficha.logica.test.js: una copia sin vigilancia se desfasa sola.
+  Las reglas son las de los CHECK de `fichas_colaborador` (migraciones 0039 y
+  0040). Lo que este módulo deja pasar, la base lo acepta; lo que la base
+  rechazaría, el formulario lo avisa campo por campo antes de enviarlo. Los
+  límites, las expresiones de los enlaces y las modalidades de trabajo se
+  comparan contra el SQL en tests/mi-ficha.logica.test.js: una copia sin
+  vigilancia se desfasa sola.
 
   El cableado (leer inputs, pintar errores, llamar al servicio) vive en
   mi-ficha.js. Los nombres globales llevan "MiFicha": la página carga otros
@@ -18,11 +19,11 @@
 // ficha.service.js (su COLUMNAS_MI_FICHA; un test compara las dos). Es también
 // el orden del formulario: el primer error es el primer campo en pantalla.
 const CAMPOS_MI_FICHA = Object.freeze([
-  "rol",
-  "especialidad",
+  "puesto",
+  "sector",
   "ubicacion",
   "stack",
-  "disponibilidad",
+  "modalidad_trabajo",
   "anio_inicio",
   "bio",
   "linkedin",
@@ -31,16 +32,17 @@ const CAMPOS_MI_FICHA = Object.freeze([
 ]);
 
 // Los mismos valores, en el mismo orden, que el CHECK
-// `fichas_colaborador_disponibilidad_valida` y que DISPONIBILIDADES de
-// colaboradores.datos.js. Copia a propósito: cargar la lógica del roster en
-// esta página sólo para tres textos traería de paso todas sus globales.
-const DISPONIBILIDADES_MI_FICHA = Object.freeze(["Disponible", "Parcial", "No disponible"]);
+// `fichas_colaborador_modalidad_trabajo_valida` (0040) y que
+// MODALIDADES_TRABAJO de colaboradores.datos.js. Copia a propósito: cargar la
+// lógica del roster en esta página sólo para tres textos traería de paso
+// todas sus globales.
+const MODALIDADES_TRABAJO_MI_FICHA = Object.freeze(["Presencial", "Híbrido", "Remoto"]);
 
 // Largos en caracteres (puntos de código, como `char_length`), cantidad de
 // elementos del stack y rango de años que admite la base.
 const LIMITES_MI_FICHA = Object.freeze({
-  rol: Object.freeze({ min: 2, max: 60 }),
-  especialidad: Object.freeze({ min: 2, max: 80 }),
+  puesto: Object.freeze({ min: 2, max: 60 }),
+  sector: Object.freeze({ min: 2, max: 80 }),
   ubicacion: Object.freeze({ min: 2, max: 80 }),
   bio: Object.freeze({ min: 10, max: 600 }),
   stack: Object.freeze({ min: 1, max: 12 }),
@@ -74,15 +76,15 @@ const BIDI_MI_FICHA = /[‎‏‪-‮⁦-⁩]/u;
 const PATRON_SLUG_MI_FICHA = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const MENSAJES_MI_FICHA = Object.freeze({
-  rol: Object.freeze({
-    vacio: "Escribe tu rol.",
-    largo: "El rol debe tener entre 2 y 60 caracteres.",
-    caracteres: "El rol tiene caracteres no permitidos.",
+  puesto: Object.freeze({
+    vacio: "Escribe tu puesto.",
+    largo: "El puesto debe tener entre 2 y 60 caracteres.",
+    caracteres: "El puesto tiene caracteres no permitidos.",
   }),
-  especialidad: Object.freeze({
-    vacio: "Escribe tu especialidad.",
-    largo: "La especialidad debe tener entre 2 y 80 caracteres.",
-    caracteres: "La especialidad tiene caracteres no permitidos.",
+  sector: Object.freeze({
+    vacio: "Escribe tu sector.",
+    largo: "El sector debe tener entre 2 y 80 caracteres.",
+    caracteres: "El sector tiene caracteres no permitidos.",
   }),
   ubicacion: Object.freeze({
     vacio: "Escribe tu ubicación.",
@@ -100,7 +102,7 @@ const MENSAJES_MI_FICHA = Object.freeze({
     largo: "Cada tecnología puede tener hasta 40 caracteres.",
     caracteres: "Alguna tecnología tiene caracteres no permitidos.",
   }),
-  disponibilidad: "Elige tu disponibilidad.",
+  modalidad_trabajo: "Elige tu modalidad de trabajo.",
   anio_inicio: Object.freeze({
     vacio: "Escribe el año en que empezaste.",
     formato: "Escribe el año con números, por ejemplo 2018.",
@@ -170,11 +172,11 @@ function enlaceMiFicha(valor) {
 function normalizarMiFicha(valores) {
   const origen = valores && typeof valores === "object" ? valores : {};
   return {
-    rol: textoMiFicha(origen.rol),
-    especialidad: textoMiFicha(origen.especialidad),
+    puesto: textoMiFicha(origen.puesto),
+    sector: textoMiFicha(origen.sector),
     ubicacion: textoMiFicha(origen.ubicacion),
     stack: normalizarStackMiFicha(origen.stack),
-    disponibilidad: textoMiFicha(origen.disponibilidad),
+    modalidad_trabajo: textoMiFicha(origen.modalidad_trabajo),
     anio_inicio: anioMiFicha(origen.anio_inicio),
     bio: textoMiFicha(origen.bio),
     linkedin: enlaceMiFicha(origen.linkedin),
@@ -258,11 +260,11 @@ function validarMiFicha(valores, anioActual) {
   const ficha = normalizarMiFicha(origen);
 
   const errores = {
-    rol: errorDeTextoMiFicha("rol", ficha.rol),
-    especialidad: errorDeTextoMiFicha("especialidad", ficha.especialidad),
+    puesto: errorDeTextoMiFicha("puesto", ficha.puesto),
+    sector: errorDeTextoMiFicha("sector", ficha.sector),
     ubicacion: errorDeTextoMiFicha("ubicacion", ficha.ubicacion),
     stack: errorDeStackMiFicha(ficha.stack),
-    disponibilidad: DISPONIBILIDADES_MI_FICHA.includes(ficha.disponibilidad) ? null : MENSAJES_MI_FICHA.disponibilidad,
+    modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(ficha.modalidad_trabajo) ? null : MENSAJES_MI_FICHA.modalidad_trabajo,
     anio_inicio: errorDeAnioMiFicha(origen.anio_inicio, ficha.anio_inicio, anioActual),
     bio: errorDeTextoMiFicha("bio", ficha.bio, { conSaltos: true }),
     linkedin: errorDeEnlaceMiFicha("linkedin", ficha.linkedin),
@@ -287,11 +289,11 @@ function valoresFormularioMiFicha(ficha) {
   const origen = ficha && typeof ficha === "object" ? ficha : {};
   const texto = (valor) => (typeof valor === "string" ? valor : "");
   return {
-    rol: texto(origen.rol),
-    especialidad: texto(origen.especialidad),
+    puesto: texto(origen.puesto),
+    sector: texto(origen.sector),
     ubicacion: texto(origen.ubicacion),
     stack: Array.isArray(origen.stack) ? [...origen.stack] : [],
-    disponibilidad: DISPONIBILIDADES_MI_FICHA.includes(origen.disponibilidad) ? origen.disponibilidad : "",
+    modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(origen.modalidad_trabajo) ? origen.modalidad_trabajo : "",
     anio_inicio: Number.isInteger(origen.anio_inicio) ? String(origen.anio_inicio) : "",
     bio: texto(origen.bio),
     linkedin: texto(origen.linkedin),
@@ -315,7 +317,7 @@ function rutaPerfilPublicoMiFicha(slug) {
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     CAMPOS_MI_FICHA,
-    DISPONIBILIDADES_MI_FICHA,
+    MODALIDADES_TRABAJO_MI_FICHA,
     LIMITES_MI_FICHA,
     MENSAJES_MI_FICHA,
     PATRONES_ENLACE_MI_FICHA,

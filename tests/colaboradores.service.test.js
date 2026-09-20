@@ -48,16 +48,16 @@ function plano(valor) {
 }
 
 /*
-  Los campos de la ficha (0039), con los nombres de la base. Quien todavía no
-  llenó la suya los trae en null: el RPC hace left join. Una fila que ni
-  siquiera trae la columna (el RPC de la 0038) queda igual, en null.
+  Los campos de la ficha (0039/0040), con los nombres de la base. Quien
+  todavía no llenó la suya los trae en null: el RPC hace left join. Una fila
+  que ni siquiera trae la columna (el RPC de la 0038) queda igual, en null.
 */
 const SIN_FICHA = Object.freeze({
-  rol: null,
-  especialidad: null,
+  puesto: null,
+  sector: null,
   ubicacion: null,
   stack: null,
-  disponibilidad: null,
+  modalidad_trabajo: null,
   anio_inicio: null,
   bio: null,
   linkedin: null,
@@ -67,16 +67,16 @@ const SIN_FICHA = Object.freeze({
 const sinFicha = (identidad) => ({ ...identidad, ...SIN_FICHA });
 const CAMPOS_PUBLICOS = ["nombre", "corto", "slug", ...Object.keys(SIN_FICHA)].sort();
 
-// Una fila completa como la entrega `listar_colaboradores()` de la 0039.
+// Una fila completa como la entrega `listar_colaboradores()` de la 0040.
 const FILA_CON_FICHA = Object.freeze({
   nombre: "Valeria",
   apellidos: "Ortiz",
   slug: "valeria",
-  rol: "Arquitectura de datos",
-  especialidad: "Data warehousing",
+  puesto: "Arquitectura de datos",
+  sector: "Data warehousing",
   ubicacion: "Querétaro, MX",
   stack: ["PostgreSQL", "Python", "GCP"],
-  disponibilidad: "Parcial",
+  modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
   linkedin: "https://www.linkedin.com/in/ejemplo-valeria-ortiz",
@@ -157,11 +157,11 @@ test("passes the card fields through under their database names", async () => {
       nombre: "Valeria Ortiz",
       corto: "Valeria",
       slug: "valeria",
-      rol: "Arquitectura de datos",
-      especialidad: "Data warehousing",
+      puesto: "Arquitectura de datos",
+      sector: "Data warehousing",
       ubicacion: "Querétaro, MX",
       stack: ["PostgreSQL", "Python", "GCP"],
-      disponibilidad: "Parcial",
+      modalidad_trabajo: "Híbrido",
       anio_inicio: 2018,
       bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
       linkedin: "https://www.linkedin.com/in/ejemplo-valeria-ortiz",

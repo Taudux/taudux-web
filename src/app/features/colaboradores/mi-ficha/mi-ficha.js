@@ -40,13 +40,13 @@
   const CLASE_ETIQUETA_DUPLICADA = "mi-ficha__etiqueta--duplicada";
 
   // Los campos de texto de la ficha y su input. Cada uno tiene su ayuda en
-  // `${id}Ayuda` y su error en `${id}Error`. La disponibilidad va aparte: es un
-  // grupo de radios. El stack es un tercer caso: su input es un combobox y su
-  // valor no vive en `.value`, sino en el arreglo que arma el editor de
-  // etiquetas (ver la sección "Stack" más abajo).
+  // `${id}Ayuda` y su error en `${id}Error`. La modalidad de trabajo va
+  // aparte: es un grupo de radios. El stack es un tercer caso: su input es un
+  // combobox y su valor no vive en `.value`, sino en el arreglo que arma el
+  // editor de etiquetas (ver la sección "Stack" más abajo).
   const IDS_DE_CAMPO = Object.freeze({
-    rol: "miFichaRol",
-    especialidad: "miFichaEspecialidad",
+    puesto: "miFichaPuesto",
+    sector: "miFichaSector",
     ubicacion: "miFichaUbicacion",
     stack: "miFichaStack",
     anio_inicio: "miFichaAnioInicio",
@@ -66,8 +66,8 @@
     form: "formMiFicha",
     estado: "miFichaStatus",
     nombre: "miFichaNombre",
-    disponibilidad: "miFichaDisponibilidad",
-    disponibilidadError: "miFichaDisponibilidadError",
+    modalidadTrabajo: "miFichaModalidadTrabajo",
+    modalidadTrabajoError: "miFichaModalidadTrabajoError",
     verPerfil: "miFichaVerPerfil",
     stackOpciones: "miFichaStackOpciones",
     stackLista: "miFichaStackLista",
@@ -130,16 +130,16 @@
       };
     }
 
-    const radios = Array.from(elementos.disponibilidad.querySelectorAll('input[type="radio"]'));
+    const radios = Array.from(elementos.modalidadTrabajo.querySelectorAll('input[type="radio"]'));
     if (radios.length === 0) return null;
     elementos.radios = radios;
     // En el grupo, aria-describedby va en el fieldset (se anuncia al entrar) y
     // aria-invalid en cada opción.
-    elementos.campos.disponibilidad = {
+    elementos.campos.modalidad_trabajo = {
       controles: radios,
-      describe: elementos.disponibilidad,
-      error: elementos.disponibilidadError,
-      ayuda: elementos.disponibilidad.getAttribute("aria-describedby") || "",
+      describe: elementos.modalidadTrabajo,
+      error: elementos.modalidadTrabajoError,
+      ayuda: elementos.modalidadTrabajo.getAttribute("aria-describedby") || "",
     };
     return elementos;
   }
@@ -227,10 +227,10 @@
     function llenarFormulario(ficha) {
       const valores = valoresFormularioMiFicha(ficha);
       for (const [campo, { controles }] of Object.entries(campos)) {
-        if (campo === "disponibilidad" || campo === "stack") continue;
+        if (campo === "modalidad_trabajo" || campo === "stack") continue;
         controles[0].value = valores[campo];
       }
-      radios.forEach((radio) => { radio.checked = radio.value === valores.disponibilidad; });
+      radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
       establecerStack(valores.stack);
       limpiarErrores();
       ocultarEstado();
@@ -239,10 +239,10 @@
     function leerFormulario() {
       const valores = {};
       for (const [campo, { controles }] of Object.entries(campos)) {
-        if (campo === "disponibilidad" || campo === "stack") continue;
+        if (campo === "modalidad_trabajo" || campo === "stack") continue;
         valores[campo] = controles[0].value;
       }
-      valores.disponibilidad = radios.find((radio) => radio.checked)?.value ?? "";
+      valores.modalidad_trabajo = radios.find((radio) => radio.checked)?.value ?? "";
       valores.stack = [...stack];
       return valores;
     }
@@ -640,7 +640,7 @@
     /* ---------- Formulario ---------- */
 
     for (const [campo, { controles }] of Object.entries(campos)) {
-      const evento = campo === "disponibilidad" ? "change" : "input";
+      const evento = campo === "modalidad_trabajo" ? "change" : "input";
       controles.forEach((control) => control.addEventListener(evento, () => limpiarError(campo)));
     }
 

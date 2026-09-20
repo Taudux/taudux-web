@@ -18,7 +18,7 @@ const CSS = read(`${CARPETA}/mi-ficha.css`);
 const JS = read(`${CARPETA}/mi-ficha.js`);
 const LOGICA = read(`${CARPETA}/mi-ficha.logica.js`);
 
-const { CAMPOS_MI_FICHA, DISPONIBILIDADES_MI_FICHA } = require(`../${CARPETA}/mi-ficha.logica.js`);
+const { CAMPOS_MI_FICHA, MODALIDADES_TRABAJO_MI_FICHA } = require(`../${CARPETA}/mi-ficha.logica.js`);
 
 const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
@@ -267,7 +267,7 @@ test("every control has a label tied by for", () => {
 });
 
 test("every text control describes its hint and has a hidden error slot", () => {
-  const campos = CAMPOS_MI_FICHA.filter((campo) => campo !== "disponibilidad");
+  const campos = CAMPOS_MI_FICHA.filter((campo) => campo !== "modalidad_trabajo");
   for (const campo of campos) {
     const control = MARCADO.match(new RegExp(`<(?:input|textarea)\\b[^>]*\\sname="${campo}"[^>]*>`));
     assert.ok(control, `falta el control ${campo}`);
@@ -285,7 +285,7 @@ test("every text control describes its hint and has a hidden error slot", () => 
 test("the bio is a textarea and the texts are plain text inputs, with the right input types for links", () => {
   assert.match(MARCADO, /<textarea\b[^>]*\sclass="field field--textarea"[^>]*\sname="bio"/);
   const tipoDe = (campo) => atributo(MARCADO.match(new RegExp(`<input\\b[^>]*\\sname="${campo}"[^>]*>`))[0], "type");
-  for (const campo of ["rol", "especialidad", "ubicacion", "stack"]) assert.equal(tipoDe(campo), "text", campo);
+  for (const campo of ["puesto", "sector", "ubicacion", "stack"]) assert.equal(tipoDe(campo), "text", campo);
   assert.equal(tipoDe("anio_inicio"), "text", "type=number cambia con la rueda del mouse y acepta 1e3");
   assert.equal(atributo(MARCADO.match(/<input\b[^>]*\sname="anio_inicio"[^>]*>/)[0], "inputmode"), "numeric");
   assert.equal(tipoDe("linkedin"), "url");
@@ -316,18 +316,26 @@ test("the stack field is a combobox wired to a listbox of suggestions and a tag 
   assert.equal(atributo(porId("miFichaStatus"), "role"), "alert");
 });
 
-test("availability is a radio group in a fieldset with a legend, with exactly the card values", () => {
-  const fieldset = MARCADO.match(/<fieldset\b[^>]*\sid="miFichaDisponibilidad"[^>]*>([\s\S]*?)<\/fieldset>/);
-  assert.ok(fieldset, "falta el fieldset de disponibilidad");
-  assert.match(fieldset[1], /<legend\b[^>]*>[^<]*Disponibilidad/);
+test("work modality is a radio group in a fieldset with a legend, with exactly the card values", () => {
+  const fieldset = MARCADO.match(/<fieldset\b[^>]*\sid="miFichaModalidadTrabajo"[^>]*>([\s\S]*?)<\/fieldset>/);
+  assert.ok(fieldset, "falta el fieldset de modalidad de trabajo");
+  assert.match(fieldset[1], /<legend\b[^>]*>[^<]*Modalidad de trabajo/);
 
   const radios = [...fieldset[1].matchAll(/<input\b[^>]*>/g)].map(([etiqueta]) => etiqueta);
   assert.deepEqual(radios.map((radio) => atributo(radio, "type")), radios.map(() => "radio"));
-  assert.deepEqual(radios.map((radio) => atributo(radio, "name")), radios.map(() => "disponibilidad"));
-  assert.deepEqual(radios.map((radio) => atributo(radio, "value")), [...DISPONIBILIDADES_MI_FICHA]);
+  assert.deepEqual(radios.map((radio) => atributo(radio, "name")), radios.map(() => "modalidad_trabajo"));
+  assert.deepEqual(radios.map((radio) => atributo(radio, "value")), [...MODALIDADES_TRABAJO_MI_FICHA]);
   assert.ok(radios.every((radio) => !tieneAtributo(radio, "checked")), "ninguna opción arranca marcada");
 
-  assert.ok(tieneAtributo(porId("miFichaDisponibilidadError"), "hidden"));
+  // Los value del HTML tienen que coincidir byte a byte con la constante: si
+  // "Híbrido" quedara en NFD (i + U+0301) se vería idéntico en pantalla, pero
+  // dejaría de ser el mismo texto que espera la base (ver la 0040).
+  for (const radio of radios) {
+    const valor = atributo(radio, "value");
+    assert.equal(valor, valor.normalize("NFC"), `el value "${valor}" no está en NFC`);
+  }
+
+  assert.ok(tieneAtributo(porId("miFichaModalidadTrabajoError"), "hidden"));
 });
 
 test("Proyectos is a disabled field with a note, and it is never sent", () => {

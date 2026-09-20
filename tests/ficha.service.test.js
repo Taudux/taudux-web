@@ -11,13 +11,13 @@ const MENSAJE_GUARDAR = "No se pudo guardar tu ficha. Intenta de nuevo.";
 
 const USUARIO = "123e4567-e89b-42d3-a456-426614174000";
 
-// Las diez columnas de la ficha (0039) que el dueño puede escribir.
+// Las diez columnas de la ficha (0039/0040) que el dueño puede escribir.
 const COLUMNAS = Object.freeze([
-  "rol",
-  "especialidad",
+  "puesto",
+  "sector",
   "ubicacion",
   "stack",
-  "disponibilidad",
+  "modalidad_trabajo",
   "anio_inicio",
   "bio",
   "linkedin",
@@ -26,11 +26,11 @@ const COLUMNAS = Object.freeze([
 ]);
 
 const FICHA = Object.freeze({
-  rol: "Arquitectura de datos",
-  especialidad: "Data warehousing",
+  puesto: "Arquitectura de datos",
+  sector: "Data warehousing",
   ubicacion: "Querétaro, MX",
   stack: ["PostgreSQL", "Python", "GCP"],
-  disponibilidad: "Parcial",
+  modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
   linkedin: "https://www.linkedin.com/in/ejemplo-valeria-ortiz",
@@ -353,7 +353,7 @@ const ERRORES = [
   },
   {
     caso: "23502 on the insert",
-    respuestas: [{ data: null }, { error: { code: "23502", message: "null value in column \"rol\"" } }],
+    respuestas: [{ data: null }, { error: { code: "23502", message: "null value in column \"puesto\"" } }],
     consultas: 2,
     mensaje: "Faltan datos obligatorios en tu ficha.",
   },

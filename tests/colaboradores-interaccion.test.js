@@ -22,7 +22,7 @@ const leer = (archivo) => fs.readFileSync(path.join(ROOT, CARPETA, archivo), "ut
 // muestra que le sirve el servicio falso: es el lado "esperado" de cada
 // comparación.
 const {
-  DISPONIBILIDADES,
+  MODALIDADES_TRABAJO,
   numeroDeFicha,
   indicePorSlug,
   experienciaDesde,
@@ -32,14 +32,14 @@ const { COLABORADORES_MUESTRA: MUESTRA } = require("./fixtures/colaboradores.mue
 
 const rutaDe = (indice) => `#/${MUESTRA[indice].slug}`;
 
-// Los campos de ficha (0039) de quien todavía no la llenó: el RPC hace left
-// join y el servicio los entrega en null.
+// Los campos de ficha (0039/0040) de quien todavía no la llenó: el RPC hace
+// left join y el servicio los entrega en null.
 const FICHA_EN_NULL = Object.freeze({
-  rol: null,
-  especialidad: null,
+  puesto: null,
+  sector: null,
   ubicacion: null,
   stack: null,
-  disponibilidad: null,
+  modalidad_trabajo: null,
   anio_inicio: null,
   bio: null,
   linkedin: null,
@@ -443,7 +443,7 @@ function assertVistaPreviaVacia(pagina) {
 function assertVistaPreviaDe(pagina, indice, lista = MUESTRA) {
   const ficha = lista[indice];
   assert.equal(pagina.texto("previaNombre"), ficha.nombre);
-  assert.equal(pagina.texto("previaRol"), ficha.rol);
+  assert.equal(pagina.texto("previaRol"), ficha.puesto);
   assert.equal(pagina.porId("previaRol").hidden, false);
   assert.equal(pagina.texto("previaBio"), ficha.bio);
   assert.equal(pagina.porId("previaBio").classList.contains("colaboradores__bio--vacia"), false);
@@ -503,11 +503,11 @@ function assertPerfilDe(pagina, indice, lista = MUESTRA) {
   assert.equal(pagina.porId("colaboradoresPerfil").hidden, false);
   assert.equal(pagina.texto("perfilNombre"), ficha.nombre);
   assert.equal(pagina.texto("perfilNumero"), numeroDeFicha(indice));
-  assert.equal(pagina.texto("perfilRol"), ficha.rol);
-  assert.equal(pagina.texto("perfilEspecialidad"), ficha.especialidad);
+  assert.equal(pagina.texto("perfilPuesto"), ficha.puesto);
+  assert.equal(pagina.texto("perfilSector"), ficha.sector);
   assert.equal(pagina.texto("perfilUbicacion"), ficha.ubicacion);
   assert.equal(pagina.texto("perfilExperiencia"), experienciaDe(ficha));
-  assert.equal(pagina.texto("perfilDisponibilidad"), ficha.disponibilidad);
+  assert.equal(pagina.texto("perfilModalidadTrabajo"), ficha.modalidad_trabajo);
   assert.deepEqual(
     porClase(pagina.porId("perfilStack"), "colaboradores__stack-etiqueta").map((etiqueta) => etiqueta.textContent),
     ficha.stack,
@@ -547,7 +547,7 @@ test("renders one tile button per collaborator, named with full name and role", 
     assert.equal(boton.type, "button");
     const nombreAccesible = boton.getAttribute("aria-label");
     assert.ok(nombreAccesible.includes(MUESTRA[indice].nombre), nombreAccesible);
-    assert.ok(nombreAccesible.includes(MUESTRA[indice].rol), nombreAccesible);
+    assert.ok(nombreAccesible.includes(MUESTRA[indice].puesto), nombreAccesible);
     assert.equal(boton.getAttribute("aria-current"), null);
   });
 
@@ -651,7 +651,7 @@ test("clicking a tile puts its profile in the hash as a new history entry and mo
 
   assert.equal(pagina.hash(), rutaDe(2));
   assert.equal(pagina.historial(), 2, "abrir un perfil agrega UNA entrada: la que el botón atrás deshace");
-  // Índice 2 es "Parcial": cubre también un valor de disponibilidad distinto de "Disponible".
+  // Índice 2 es "Híbrido": cubre también un valor de modalidad distinto de "Remoto".
   assertPerfilDe(pagina, 2);
   // La ficha que tenía el foco se ocultó con el roster.
   assertFocoEn(pagina, pagina.porId("perfilNombre"));
@@ -791,23 +791,23 @@ test("a technology name that contains a middle dot stays as a single tag", async
 });
 
 /*
-  La disponibilidad va a pasar a ser modalidad de trabajo, y la modalidad no
-  tiene bueno ni malo: remoto no es peor que presencial. Por eso el valor se
-  escribe tal cual, como texto plano, y ningún valor le agrega una clase de
-  estado al nodo (nada de semáforo por color).
+  La modalidad de trabajo no tiene bueno ni malo: remoto no es peor que
+  presencial. Por eso el valor se escribe tal cual, como texto plano, y
+  ningún valor le agrega una clase de estado al nodo (nada de semáforo por
+  color).
 */
-test("the availability value is written as plain text and the node gains no class per value", async () => {
+test("the work modality value is written as plain text and the node gains no class per value", async () => {
   const pagina = await cargarPagina();
-  const nodo = pagina.porId("perfilDisponibilidad");
+  const nodo = pagina.porId("perfilModalidadTrabajo");
   const clasesOriginales = nodo.className;
 
-  for (const disponibilidad of DISPONIBILIDADES) {
-    const indice = MUESTRA.findIndex((persona) => persona.disponibilidad === disponibilidad);
-    assert.notEqual(indice, -1, `premisa: la muestra tiene a alguien "${disponibilidad}"`);
+  for (const modalidad_trabajo of MODALIDADES_TRABAJO) {
+    const indice = MUESTRA.findIndex((persona) => persona.modalidad_trabajo === modalidad_trabajo);
+    assert.notEqual(indice, -1, `premisa: la muestra tiene a alguien "${modalidad_trabajo}"`);
 
     pagina.irA(rutaDe(indice));
-    assert.equal(pagina.texto("perfilDisponibilidad"), disponibilidad);
-    assert.equal(nodo.className, clasesOriginales, `${disponibilidad} no debe agregar una clase de estado`);
+    assert.equal(pagina.texto("perfilModalidadTrabajo"), modalidad_trabajo);
+    assert.equal(nodo.className, clasesOriginales, `${modalidad_trabajo} no debe agregar una clase de estado`);
   }
 });
 
@@ -1163,7 +1163,7 @@ test("in a mixed list the profile card shows and stays while the preview follows
   const resumen = pagina.porId("colaboradoresResumen");
 
   assert.equal(resumen.hidden, false);
-  assert.equal(conPerfil.getAttribute("aria-label"), `${MUESTRA[0].nombre}, ${MUESTRA[0].rol}`);
+  assert.equal(conPerfil.getAttribute("aria-label"), `${MUESTRA[0].nombre}, ${MUESTRA[0].puesto}`);
   assert.equal(sinPerfil.getAttribute("aria-label"), SAMAEL.nombre);
 
   sinPerfil.disparar("mouseenter");
@@ -1183,7 +1183,7 @@ test("in a mixed list the profile card shows and stays while the preview follows
 
 /*
   De punta a punta, con el servicio real: las filas tal como las devuelve
-  `listar_colaboradores()` de la 0039. Quien no llenó su ficha trae los campos
+  `listar_colaboradores()` de la 0040. Quien no llenó su ficha trae los campos
   en null (left join) y sólo se elige; quien la llenó abre su perfil pintado
   con los nombres de la base.
 */
@@ -1195,11 +1195,11 @@ test("rows from the service: a collaborator whose card fields are null only gets
       nombre: "Renata",
       apellidos: "Solís",
       slug: conFicha.slug,
-      rol: conFicha.rol,
-      especialidad: conFicha.especialidad,
+      puesto: conFicha.puesto,
+      sector: conFicha.sector,
       ubicacion: conFicha.ubicacion,
       stack: [...conFicha.stack],
-      disponibilidad: conFicha.disponibilidad,
+      modalidad_trabajo: conFicha.modalidad_trabajo,
       anio_inicio: conFicha.anio_inicio,
       bio: conFicha.bio,
       linkedin: null,
@@ -1225,7 +1225,7 @@ test("rows from the service: a collaborator whose card fields are null only gets
   renata.disparar("click");
   assert.equal(pagina.hash(), `#/${conFicha.slug}`);
   assertPerfilDe(pagina, 1, [SAMAEL, conFicha]);
-  assert.equal(conFicha.disponibilidad, "No disponible", "premisa: cubre también el valor \"No disponible\"");
+  assert.equal(conFicha.modalidad_trabajo, "Presencial", "premisa: cubre también el valor \"Presencial\"");
   assert.ok(!pagina.raiz.textContent.includes("442"), "el teléfono no llega a la página");
 });
 /* ---------- "Editar" en la ficha propia ---------- */

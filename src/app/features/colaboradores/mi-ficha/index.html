@@ -72,17 +72,17 @@
           </div>
 
           <div class="mi-ficha__grupo">
-            <label class="mi-ficha__etiqueta" for="miFichaRol">Rol</label>
-            <input class="field" type="text" id="miFichaRol" name="rol" autocomplete="organization-title" aria-describedby="miFichaRolAyuda">
-            <small class="mi-ficha__ayuda" id="miFichaRolAyuda">De 2 a 60 caracteres. Por ejemplo: Desarrolladora backend.</small>
-            <p class="mi-ficha__error" id="miFichaRolError" hidden></p>
+            <label class="mi-ficha__etiqueta" for="miFichaPuesto">Puesto</label>
+            <input class="field" type="text" id="miFichaPuesto" name="puesto" autocomplete="organization-title" aria-describedby="miFichaPuestoAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaPuestoAyuda">De 2 a 60 caracteres. Por ejemplo: Desarrolladora backend.</small>
+            <p class="mi-ficha__error" id="miFichaPuestoError" hidden></p>
           </div>
 
           <div class="mi-ficha__grupo">
-            <label class="mi-ficha__etiqueta" for="miFichaEspecialidad">Especialidad</label>
-            <input class="field" type="text" id="miFichaEspecialidad" name="especialidad" autocomplete="off" aria-describedby="miFichaEspecialidadAyuda">
-            <small class="mi-ficha__ayuda" id="miFichaEspecialidadAyuda">De 2 a 80 caracteres. Por ejemplo: Bases de datos.</small>
-            <p class="mi-ficha__error" id="miFichaEspecialidadError" hidden></p>
+            <label class="mi-ficha__etiqueta" for="miFichaSector">Sector</label>
+            <input class="field" type="text" id="miFichaSector" name="sector" autocomplete="off" aria-describedby="miFichaSectorAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaSectorAyuda">El sector en el que trabajas. Por ejemplo: Fintech, Salud, Educación.</small>
+            <p class="mi-ficha__error" id="miFichaSectorError" hidden></p>
           </div>
 
           <div class="mi-ficha__grupo">
@@ -105,22 +105,22 @@
           </div>
 
           <!-- Sin aria-describedby de partida: sólo apunta al error cuando lo
-               hay. Los valores son los del CHECK de la 0039. -->
-          <fieldset class="mi-ficha__grupo mi-ficha__opciones" id="miFichaDisponibilidad">
-            <legend class="mi-ficha__etiqueta">Disponibilidad</legend>
-            <p class="mi-ficha__error" id="miFichaDisponibilidadError" hidden></p>
+               hay. Los valores son los del CHECK de la 0040. -->
+          <fieldset class="mi-ficha__grupo mi-ficha__opciones" id="miFichaModalidadTrabajo">
+            <legend class="mi-ficha__etiqueta">Modalidad de trabajo</legend>
+            <p class="mi-ficha__error" id="miFichaModalidadTrabajoError" hidden></p>
             <div class="mi-ficha__radios">
-              <label class="mi-ficha__radio" for="miFichaDisponible">
-                <input type="radio" id="miFichaDisponible" name="disponibilidad" value="Disponible">
-                <span>Disponible</span>
+              <label class="mi-ficha__radio" for="miFichaPresencial">
+                <input type="radio" id="miFichaPresencial" name="modalidad_trabajo" value="Presencial">
+                <span>Presencial</span>
               </label>
-              <label class="mi-ficha__radio" for="miFichaParcial">
-                <input type="radio" id="miFichaParcial" name="disponibilidad" value="Parcial">
-                <span>Parcial</span>
+              <label class="mi-ficha__radio" for="miFichaHibrido">
+                <input type="radio" id="miFichaHibrido" name="modalidad_trabajo" value="Híbrido">
+                <span>Híbrido</span>
               </label>
-              <label class="mi-ficha__radio" for="miFichaNoDisponible">
-                <input type="radio" id="miFichaNoDisponible" name="disponibilidad" value="No disponible">
-                <span>No disponible</span>
+              <label class="mi-ficha__radio" for="miFichaRemoto">
+                <input type="radio" id="miFichaRemoto" name="modalidad_trabajo" value="Remoto">
+                <span>Remoto</span>
               </label>
             </div>
           </fieldset>

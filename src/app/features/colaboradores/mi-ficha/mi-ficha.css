@@ -253,7 +253,7 @@
     outline-offset: var(--focus-ring-offset);
   }
 
-  /* El fieldset de disponibilidad se ve como un grupo más, sin marco. */
+  /* El fieldset de modalidad de trabajo se ve como un grupo más, sin marco. */
   .mi-ficha__opciones {
     margin: 0;
     padding: 0;
