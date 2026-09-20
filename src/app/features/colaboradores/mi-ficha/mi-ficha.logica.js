@@ -310,6 +310,7 @@ if (typeof module === "object" && module.exports) {
     CAMPOS_MI_FICHA,
     DISPONIBILIDADES_MI_FICHA,
     LIMITES_MI_FICHA,
+    MENSAJES_MI_FICHA,
     PATRONES_ENLACE_MI_FICHA,
     separarStack,
     errorDeElementoStackMiFicha,
