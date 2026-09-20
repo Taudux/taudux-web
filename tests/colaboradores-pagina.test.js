@@ -266,20 +266,23 @@ test("the roster card and the profile detail lost their attributes column", () =
 });
 
 /*
-  colaboradores.js le pone al punto de disponibilidad una clase por estado. Sin
-  la regla en la hoja, ese estado se vería en silencio como el punto por
-  defecto; y con un estilo en línea, el color dejaría de vivir en la hoja.
+  La disponibilidad va a pasar a ser modalidad de trabajo (presencial /
+  híbrido / remoto), y la modalidad no tiene bueno ni malo: remoto no es peor
+  que presencial. Un semáforo de color ahí se leería como una calificación de
+  la persona, así que el punto se quita y el valor queda como texto plano,
+  igual que cualquier otro <dd> de la ficha.
 */
-test("the availability dot stays decorative and each of its states has its own rule", () => {
-  const punto = sinComentariosHtml(HTML).match(/<span[^>]*id="perfilPunto"[^>]*>/);
-  assert.ok(punto, "falta el punto de disponibilidad");
-  assert.match(punto[0], /\saria-hidden="true"/, "el valor accesible es el texto, no el punto");
+test("the availability value is plain text, with no status dot", () => {
+  const html = sinComentariosHtml(HTML);
+  assert.doesNotMatch(html, /id="perfilPunto"/, "el punto de disponibilidad ya no debe existir");
 
   const css = sinComentariosCss(CSS);
-  for (const estado of ["disponible", "parcial", "no-disponible"]) {
-    assert.match(css, new RegExp(`\\.colaboradores__punto--${estado}\\s*\\{`), `falta la regla del estado ${estado}`);
-  }
-  assert.doesNotMatch(sinComentariosJs(JS), /\.style\b/, "el punto cambia por clase, no con estilos en línea");
+  assert.doesNotMatch(css, /\.colaboradores__punto\b/, "no debe quedar ninguna regla del punto");
+  assert.doesNotMatch(css, /\.colaboradores__disponibilidad\b/, "no debe quedar el flex que alineaba punto y texto");
+
+  const dd = html.match(/<dd[^>]*id="perfilDisponibilidad"[^>]*>/);
+  assert.ok(dd, "falta el <dd> de disponibilidad");
+  assert.doesNotMatch(dd[0], /class="[^"]*colaboradores__(disponibilidad|punto)[^"]*"/, "el <dd> no debe traer clase de estado");
 });
 
 test("the page script never writes markup from data", () => {
@@ -288,6 +291,9 @@ test("the page script never writes markup from data", () => {
   // Las fichas son botones de verdad, con nombre accesible propio.
   assert.match(js, /createElement\("button"\)/);
   assert.match(js, /aria-label/);
+  // Ningún estado visual (como el extinto punto de disponibilidad) se pinta
+  // con estilos en línea: el color siempre vive en la hoja, vía clases.
+  assert.doesNotMatch(js, /\.style\b/, "el script cambia de estado por clase, no con estilos en línea");
 });
 
 test("the stylesheet lives in the features layer", () => {

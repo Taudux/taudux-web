@@ -26,15 +26,6 @@
   // no está en ningún menú; cuelga de la ficha de quien mira.
   const RUTA_MI_FICHA = "/app/features/colaboradores/mi-ficha/";
 
-  // Un estado del punto por disponibilidad (verde, ámbar, apagado). Los
-  // colores viven en colaboradores.css; el valor accesible es el texto de al
-  // lado, el punto es decorado.
-  const ESTADOS_DEL_PUNTO = {
-    Disponible: "colaboradores__punto--disponible",
-    Parcial: "colaboradores__punto--parcial",
-    "No disponible": "colaboradores__punto--no-disponible",
-  };
-
   const VACIA = {
     inicial: "?",
     nombre: "¿Quién?",
@@ -76,7 +67,6 @@
       perfilEspecialidad: porId("perfilEspecialidad"),
       perfilUbicacion: porId("perfilUbicacion"),
       perfilExperiencia: porId("perfilExperiencia"),
-      perfilPunto: porId("perfilPunto"),
       perfilDisponibilidad: porId("perfilDisponibilidad"),
       perfilStack: porId("perfilStack"),
       perfilBio: porId("perfilBio"),
@@ -499,12 +489,6 @@
       escribir(el.perfilDisponibilidad, ficha.disponibilidad);
       pintarStack(el.perfilStack, ficha.stack);
       escribir(el.perfilBio, ficha.bio);
-
-      // Sólo la clase del estado actual: al pasar de un perfil a otro, la del
-      // anterior se apaga. tienePerfil() ya garantiza un valor conocido.
-      for (const [disponibilidad, clase] of Object.entries(ESTADOS_DEL_PUNTO)) {
-        el.perfilPunto.classList.toggle(clase, ficha.disponibilidad === disponibilidad);
-      }
 
       pintarEnlaces(el.perfilEnlaces, ficha);
     }

@@ -51,14 +51,6 @@ const FICHA_EN_NULL = Object.freeze({
 // ficha en null.
 const SAMAEL = Object.freeze({ nombre: "Samael Flores", corto: "Samael", slug: "samael", ...FICHA_EN_NULL });
 
-// Un estado del punto por valor de disponibilidad; el texto de al lado es el
-// valor accesible, el punto es decorado.
-const CLASES_DEL_PUNTO = Object.freeze({
-  Disponible: "colaboradores__punto--disponible",
-  Parcial: "colaboradores__punto--parcial",
-  "No disponible": "colaboradores__punto--no-disponible",
-});
-
 // La experiencia se calcula con el año en curso, igual que la página.
 const experienciaDe = (ficha) => experienciaDesde(ficha.anio_inicio, new Date().getFullYear());
 
@@ -521,13 +513,6 @@ function assertPerfilDe(pagina, indice, lista = MUESTRA) {
     ficha.stack,
   );
   assert.equal(pagina.texto("perfilBio"), ficha.bio);
-  assert.deepEqual(estadosDelPunto(pagina), [CLASES_DEL_PUNTO[ficha.disponibilidad]]);
-}
-
-// Las clases de estado que tiene puestas el punto de disponibilidad.
-function estadosDelPunto(pagina) {
-  const punto = pagina.porId("perfilPunto");
-  return Object.values(CLASES_DEL_PUNTO).filter((clase) => punto.classList.contains(clase));
 }
 
 /*
@@ -666,7 +651,7 @@ test("clicking a tile puts its profile in the hash as a new history entry and mo
 
   assert.equal(pagina.hash(), rutaDe(2));
   assert.equal(pagina.historial(), 2, "abrir un perfil agrega UNA entrada: la que el botón atrás deshace");
-  // Índice 2 es "Parcial": cubre también el punto de disponibilidad ámbar.
+  // Índice 2 es "Parcial": cubre también un valor de disponibilidad distinto de "Disponible".
   assertPerfilDe(pagina, 2);
   // La ficha que tenía el foco se ocultó con el roster.
   assertFocoEn(pagina, pagina.porId("perfilNombre"));
@@ -806,23 +791,23 @@ test("a technology name that contains a middle dot stays as a single tag", async
 });
 
 /*
-  Un estado del punto por valor: verde, ámbar o apagado. El punto es decorado
-  (aria-hidden) y el valor accesible es el texto de al lado. De un perfil a
-  otro sin pasar por el roster, el estado anterior no se queda pegado.
+  La disponibilidad va a pasar a ser modalidad de trabajo, y la modalidad no
+  tiene bueno ni malo: remoto no es peor que presencial. Por eso el valor se
+  escribe tal cual, como texto plano, y ningún valor le agrega una clase de
+  estado al nodo (nada de semáforo por color).
 */
-test("the availability dot takes one state class per value and the text stays the accessible value", async () => {
+test("the availability value is written as plain text and the node gains no class per value", async () => {
   const pagina = await cargarPagina();
-  const punto = pagina.porId("perfilPunto");
+  const nodo = pagina.porId("perfilDisponibilidad");
+  const clasesOriginales = nodo.className;
 
   for (const disponibilidad of DISPONIBILIDADES) {
     const indice = MUESTRA.findIndex((persona) => persona.disponibilidad === disponibilidad);
     assert.notEqual(indice, -1, `premisa: la muestra tiene a alguien "${disponibilidad}"`);
 
     pagina.irA(rutaDe(indice));
-    assert.deepEqual(estadosDelPunto(pagina), [CLASES_DEL_PUNTO[disponibilidad]], disponibilidad);
     assert.equal(pagina.texto("perfilDisponibilidad"), disponibilidad);
-    assert.equal(punto.getAttribute("aria-hidden"), "true");
-    assert.equal(punto.textContent, "", "el punto no lleva texto: lo dice el de al lado");
+    assert.equal(nodo.className, clasesOriginales, `${disponibilidad} no debe agregar una clase de estado`);
   }
 });
 
@@ -1240,7 +1225,7 @@ test("rows from the service: a collaborator whose card fields are null only gets
   renata.disparar("click");
   assert.equal(pagina.hash(), `#/${conFicha.slug}`);
   assertPerfilDe(pagina, 1, [SAMAEL, conFicha]);
-  assert.equal(conFicha.disponibilidad, "No disponible", "premisa: cubre el punto apagado");
+  assert.equal(conFicha.disponibilidad, "No disponible", "premisa: cubre también el valor \"No disponible\"");
   assert.ok(!pagina.raiz.textContent.includes("442"), "el teléfono no llega a la página");
 });
 /* ---------- "Editar" en la ficha propia ---------- */
