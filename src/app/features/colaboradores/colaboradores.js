@@ -35,9 +35,6 @@
     "No disponible": "colaboradores__punto--no-disponible",
   };
 
-  // El stack se muestra en una línea, como lo mostraba el prototipo.
-  const SEPARADOR_DEL_STACK = " · ";
-
   const VACIA = {
     inicial: "?",
     nombre: "¿Quién?",
@@ -500,7 +497,7 @@
       // La base guarda el año de inicio; los años se cuentan al pintar.
       escribir(el.perfilExperiencia, experienciaDesde(ficha.anio_inicio, new Date().getFullYear()));
       escribir(el.perfilDisponibilidad, ficha.disponibilidad);
-      escribir(el.perfilStack, ficha.stack.join(SEPARADOR_DEL_STACK));
+      pintarStack(el.perfilStack, ficha.stack);
       escribir(el.perfilBio, ficha.bio);
 
       // Sólo la clase del estado actual: al pasar de un perfil a otro, la del
@@ -510,6 +507,28 @@
       }
 
       pintarEnlaces(el.perfilEnlaces, ficha);
+    }
+
+    /*
+      El stack en píldoras, una por tecnología: calcada de pintarEnlaces(), sin
+      enlace porque acá no hay nada a donde ir. El separador " · " no sirve de
+      límite cuando una tecnología lo trae adentro de su propio nombre (por
+      ejemplo "System Architecture (GCloud · Supabase)"); cada elemento del
+      arreglo es una etiqueta propia y no se vuelve a partir por texto.
+
+      La lista queda `hidden` si el stack viene vacío: una <ul> vacía igual
+      ocupa su hueco en el flex y se anuncia como "lista, 0 elementos".
+    */
+    function pintarStack(lista, stack) {
+      const tecnologias = stack || [];
+
+      lista.replaceChildren(...tecnologias.map((tecnologia) => {
+        const item = document.createElement("li");
+        item.className = "colaboradores__stack-etiqueta";
+        item.textContent = tecnologia;
+        return item;
+      }));
+      lista.hidden = tecnologias.length === 0;
     }
 
     // La lista queda `hidden` si no hay ninguno: una <ul> vacía igual ocupa su

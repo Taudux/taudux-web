@@ -516,7 +516,10 @@ function assertPerfilDe(pagina, indice, lista = MUESTRA) {
   assert.equal(pagina.texto("perfilUbicacion"), ficha.ubicacion);
   assert.equal(pagina.texto("perfilExperiencia"), experienciaDe(ficha));
   assert.equal(pagina.texto("perfilDisponibilidad"), ficha.disponibilidad);
-  assert.equal(pagina.texto("perfilStack"), ficha.stack.join(" · "));
+  assert.deepEqual(
+    porClase(pagina.porId("perfilStack"), "colaboradores__stack-etiqueta").map((etiqueta) => etiqueta.textContent),
+    ficha.stack,
+  );
   assert.equal(pagina.texto("perfilBio"), ficha.bio);
   assert.deepEqual(estadosDelPunto(pagina), [CLASES_DEL_PUNTO[ficha.disponibilidad]]);
 }
@@ -768,16 +771,38 @@ test("the profile shows the experience computed from anio_inicio and the current
   }
 });
 
-test("the profile shows the stack as one line joined with middle dots", async () => {
+// El texto de las etiquetas de stack pintadas, en orden.
+const etiquetasDeStack = (pagina) => porClase(pagina.porId("perfilStack"), "colaboradores__stack-etiqueta")
+  .map((etiqueta) => etiqueta.textContent);
+
+test("the profile shows the stack as one tag per technology", async () => {
   const pagina = await cargarPagina();
 
   pagina.fichas()[0].disparar("click");
-  assert.equal(pagina.texto("perfilStack"), "PostgreSQL · Python · GCP");
+  assert.deepEqual(etiquetasDeStack(pagina), ["PostgreSQL", "Python", "GCP"]);
 
-  // Un solo elemento no lleva separador.
+  // Un solo elemento sigue siendo una sola etiqueta.
   const conUno = await cargarPagina({ retoques: { 0: { stack: ["Python"] } } });
   conUno.fichas()[0].disparar("click");
-  assert.equal(conUno.texto("perfilStack"), "Python");
+  assert.deepEqual(etiquetasDeStack(conUno), ["Python"]);
+});
+
+/*
+  El bug que motivó el cambio: con el separador " · " era imposible saber si
+  un punto medio separaba tecnologías o era parte del nombre de una. Una
+  tecnología que TRAE un punto medio en su propio texto tiene que quedar como
+  UNA sola etiqueta, no partirse en dos.
+*/
+test("a technology name that contains a middle dot stays as a single tag", async () => {
+  const conPuntoMedio = await cargarPagina({
+    retoques: { 0: { stack: ["System Architecture (GCloud · Supabase)", "Python"] } },
+  });
+
+  conPuntoMedio.fichas()[0].disparar("click");
+  assert.deepEqual(
+    etiquetasDeStack(conPuntoMedio),
+    ["System Architecture (GCloud · Supabase)", "Python"],
+  );
 });
 
 /*

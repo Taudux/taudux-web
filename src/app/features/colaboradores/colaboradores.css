@@ -573,8 +573,30 @@
     overflow-wrap: anywhere;
   }
 
-  .colaboradores__dato-valor--ligero {
-    font-weight: 500;
+  /* Píldoras del stack, en la ficha de perfil. Mismo patrón que
+     .colaboradores__enlace(s) (arriba), con una diferencia deliberada: SIN
+     white-space: nowrap. "LinkedIn" y "GitHub" son etiquetas cortas y fijas;
+     un elemento del stack es texto libre de hasta 40 caracteres (por ejemplo
+     "System Architecture (GCloud · Supabase)") y tiene que poder envolver
+     DENTRO de su propia píldora, o a 390px de ancho mete scroll horizontal y
+     rompe el invariante de layout. */
+  .colaboradores__stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    list-style: none;
+  }
+
+  .colaboradores__stack-etiqueta {
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    padding: 0.5625rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-pill);
+    color: var(--color-text-muted);
+    font: 500 0.8125rem var(--font-body);
+    overflow-wrap: anywhere;
   }
 
   .colaboradores__disponibilidad {
