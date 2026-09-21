@@ -132,6 +132,23 @@
                 <ul class="colaboradores__etiquetas" id="perfilHerramientas" aria-label="Herramientas"></ul>
               </dd>
             </div>
+            <!-- Habilidades e idiomas son opcionales: la celda ENTERA se
+                 oculta cuando la lista viene vacía, no sólo la <ul>, o
+                 quedaría el rótulo en versalitas con nada debajo. Van como
+                 filas anchas igual que Herramientas, aunque la de idiomas
+                 sea corta: son la misma cosa y se leen mejor alineadas. -->
+            <div class="colaboradores__dato colaboradores__dato--ancho" id="perfilHabilidadesCelda" hidden>
+              <dt class="colaboradores__dato-etiqueta">Habilidades</dt>
+              <dd class="colaboradores__dato-valor">
+                <ul class="colaboradores__etiquetas" id="perfilHabilidades" aria-label="Habilidades"></ul>
+              </dd>
+            </div>
+            <div class="colaboradores__dato colaboradores__dato--ancho" id="perfilIdiomasCelda" hidden>
+              <dt class="colaboradores__dato-etiqueta">Idiomas</dt>
+              <dd class="colaboradores__dato-valor">
+                <ul class="colaboradores__etiquetas" id="perfilIdiomas" aria-label="Idiomas"></ul>
+              </dd>
+            </div>
           </dl>
 
           <div class="colaboradores__detalle panel">

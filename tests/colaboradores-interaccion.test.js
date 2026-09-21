@@ -508,11 +508,18 @@ function assertPerfilDe(pagina, indice, lista = MUESTRA) {
   assert.equal(pagina.texto("perfilUbicacion"), ficha.ubicacion);
   assert.equal(pagina.texto("perfilExperiencia"), experienciaDe(ficha));
   assert.equal(pagina.texto("perfilModalidadTrabajo"), ficha.modalidad_trabajo);
-  assert.deepEqual(
-    porClase(pagina.porId("perfilHerramientas"), "colaboradores__etiquetas-item").map((etiqueta) => etiqueta.textContent),
-    ficha.herramientas,
-  );
+  for (const campo of ["herramientas", "habilidades", "idiomas"]) {
+    assert.deepEqual(etiquetasDe(pagina, campo), ficha[campo], campo);
+  }
   assert.equal(pagina.texto("perfilBio"), ficha.bio);
+}
+
+// El texto de las etiquetas pintadas de una de las tres listas, en orden.
+// Los ids del perfil siguen el nombre del campo: #perfilHerramientas,
+// #perfilHabilidades, #perfilIdiomas.
+function etiquetasDe(pagina, campo) {
+  const id = `perfil${campo[0].toUpperCase()}${campo.slice(1)}`;
+  return porClase(pagina.porId(id), "colaboradores__etiquetas-item").map((etiqueta) => etiqueta.textContent);
 }
 
 /*
@@ -756,20 +763,18 @@ test("the profile shows the experience computed from anio_inicio and the current
   }
 });
 
-// El texto de las etiquetas de herramientas pintadas, en orden.
-const etiquetasDeHerramientas = (pagina) => porClase(pagina.porId("perfilHerramientas"), "colaboradores__etiquetas-item")
-  .map((etiqueta) => etiqueta.textContent);
+
 
 test("the profile shows the tools as one tag per technology", async () => {
   const pagina = await cargarPagina();
 
   pagina.fichas()[0].disparar("click");
-  assert.deepEqual(etiquetasDeHerramientas(pagina), ["PostgreSQL", "Python", "GCP"]);
+  assert.deepEqual(etiquetasDe(pagina, "herramientas"), ["PostgreSQL", "Python", "GCP"]);
 
   // Un solo elemento sigue siendo una sola etiqueta.
   const conUno = await cargarPagina({ retoques: { 0: { herramientas: ["Python"] } } });
   conUno.fichas()[0].disparar("click");
-  assert.deepEqual(etiquetasDeHerramientas(conUno), ["Python"]);
+  assert.deepEqual(etiquetasDe(conUno, "herramientas"), ["Python"]);
 });
 
 /*
@@ -785,9 +790,44 @@ test("a technology name that contains a middle dot stays as a single tag", async
 
   conPuntoMedio.fichas()[0].disparar("click");
   assert.deepEqual(
-    etiquetasDeHerramientas(conPuntoMedio),
+    etiquetasDe(conPuntoMedio, "herramientas"),
     ["System Architecture (GCloud · Supabase)", "Python"],
   );
+});
+
+/*
+  Habilidades e idiomas son opcionales (0041: `between 0 and 12`). Con la
+  lista vacía se oculta la CELDA ENTERA, no sólo la <ul>: si se ocultara nada
+  más la lista, quedaría el rótulo "HABILIDADES" en versalitas flotando sobre
+  el vacío.
+
+  Que el `hidden` gane depende de que la hoja traiga
+  `.colaboradores [hidden] { display: none }`: la <ul> declara `display: flex`
+  y se lo comería. La celda no tiene display propio, pero la regla igual hace
+  falta para la <ul> de adentro, así que se fija acá.
+*/
+test("optional tag rows hide the whole cell when the list is empty", async () => {
+  const pagina = await cargarPagina({
+    retoques: { 0: { habilidades: [], idiomas: ["Español"] } },
+  });
+
+  pagina.fichas()[0].disparar("click");
+
+  assert.equal(pagina.porId("perfilHabilidadesCelda").hidden, true, "sin habilidades, la celda no se ve");
+  assert.equal(pagina.porId("perfilIdiomasCelda").hidden, false, "con idiomas, la celda se ve");
+  // La <ul> vacía también se oculta, aunque su celda ya lo esté: sin eso
+  // seguiría ocupando su hueco en el flex y anunciándose como "lista, 0
+  // elementos" el día que alguien muestre la celda por otro motivo.
+  assert.equal(pagina.porId("perfilHabilidades").hidden, true);
+  assert.equal(pagina.porId("perfilIdiomas").hidden, false);
+  assert.deepEqual(etiquetasDe(pagina, "idiomas"), ["Español"]);
+
+  // Y vuelve a aparecer al abrir un perfil que sí las tiene: el pintado no
+  // deja pegado el estado del anterior.
+  pagina.irA("#/");
+  pagina.fichas()[1].disparar("click");
+  assert.equal(pagina.porId("perfilHabilidadesCelda").hidden, false);
+  assert.deepEqual(etiquetasDe(pagina, "habilidades"), ["Microservicios"]);
 });
 
 /*

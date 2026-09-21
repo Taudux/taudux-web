@@ -49,12 +49,14 @@ const PERFIL = Object.freeze({
 });
 const NO_COLABORADOR = Object.freeze({ ...PERFIL, es_colaborador: false, slug: null });
 
-// Una ficha como la devuelve obtenerMiFicha(): las diez columnas.
+// Una ficha como la devuelve obtenerMiFicha(): las doce columnas.
 const FICHA = Object.freeze({
   puesto: "Desarrolladora backend",
   sector: "Bases de datos",
   ubicacion: "Querétaro, México",
   herramientas: Object.freeze(["PostgreSQL", "Python", "GCP"]),
+  habilidades: Object.freeze(["Modelado de datos", "ETL"]),
+  idiomas: Object.freeze(["Español", "Inglés"]),
   modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -73,6 +75,8 @@ const ID_DE = Object.freeze({
   sector: "miFichaSector",
   ubicacion: "miFichaUbicacion",
   herramientas: "miFichaHerramientas",
+  habilidades: "miFichaHabilidades",
+  idiomas: "miFichaIdiomas",
   anio_inicio: "miFichaAnioInicio",
   bio: "miFichaBio",
   linkedin: "miFichaLinkedin",
@@ -80,6 +84,14 @@ const ID_DE = Object.freeze({
   correo: "miFichaCorreo",
 });
 const RADIOS = Object.freeze({ Presencial: "miFichaPresencial", Híbrido: "miFichaHibrido", Remoto: "miFichaRemoto" });
+
+/*
+  Los tres campos que son listas de etiquetas. Su valor no vive en el .value
+  del combobox (que sólo lleva lo que se está escribiendo) sino en las
+  etiquetas pintadas, así que los ayudantes de esta suite los tratan aparte.
+  Herramientas es obligatoria; habilidades e idiomas se pueden guardar vacías.
+*/
+const LISTAS_DE_ETIQUETAS = Object.freeze(["herramientas", "habilidades", "idiomas"]);
 
 /* ---------- Servicios falsos ---------- */
 
@@ -327,7 +339,9 @@ function montarEsqueleto(documento, html) {
     perfil        el obtenerPerfil() falso (por defecto, una colaboradora).
     ficha         el obtenerMiFicha() falso (por defecto, sin ficha todavía).
     guardar       el guardarMiFicha() falso (por defecto, devuelve lo que recibe).
-    catalogo      arreglo de etiquetas para el cargarCatalogoDeEtiquetas()
+    catalogo      sugerencias para el cargarCatalogoDeEtiquetas() falso: un
+                  arreglo (sólo herramientas) o un objeto por nombre de
+                  catálogo. Es el
                   falso; sin pasarlo, la función no existe (el script no
                   llegó), como en la mayoría de las páginas de verdad.
     sin           nombres de funciones globales que NO se inyectan (un script
@@ -379,10 +393,14 @@ function abrirPagina({
     obtenerDestinoAuth: () => "",
   };
   // Sin `catalogo`, cargarCatalogoDeEtiquetas no existe: el script del
-  // catálogo no llegó, y el editor de etiquetas se degrada solo a texto libre.
+  // catálogo no llegó, y los tres editores se degradan solos a texto libre.
+  // Un arreglo suelto es el catálogo de herramientas y los otros dos quedan
+  // sin sugerencias, que es lo que le hace falta a casi toda la suite.
   if (catalogo !== undefined) {
-    globales.cargarCatalogoDeEtiquetas = async (nombre) =>
-      (nombre === "herramientas" ? { ok: true, etiquetas: structuredClone(catalogo) } : { ok: false });
+    const porNombre = Array.isArray(catalogo) ? { herramientas: catalogo } : catalogo;
+    globales.cargarCatalogoDeEtiquetas = async (nombre) => (porNombre[nombre]
+      ? { ok: true, etiquetas: structuredClone(porNombre[nombre]) }
+      : { ok: false, mensaje: `El catálogo de ${nombre} está vacío.` });
   }
   for (const nombre of sin) delete globales[nombre];
 
@@ -453,17 +471,17 @@ function abrirPagina({
       radio.disparar("input");
       radio.disparar("change");
     },
-    // Quien agrega una tecnología a las herramientas: la escribe y confirma
-    // con Enter, como haría alguien de verdad con el combobox.
-    agregarHerramienta(texto) {
-      const control = porId("miFichaHerramientas");
+    // Quien agrega una etiqueta a una de las tres listas: la escribe y
+    // confirma con Enter, como haría alguien de verdad con el combobox.
+    agregarEtiqueta(campo, texto) {
+      const control = porId(ID_DE[campo]);
       control.value = texto;
       control.disparar("input");
       control.disparar("keydown", { key: "Enter" });
     },
-    // Las tecnologías tal como quedaron pintadas en la lista de etiquetas.
-    herramientasEnPantalla() {
-      return porId("miFichaHerramientasLista").children.map((item) => item.children[1].textContent);
+    // Las etiquetas de un campo tal como quedaron pintadas en su lista.
+    etiquetasEnPantalla(campo) {
+      return porId(`${ID_DE[campo]}Lista`).children.map((item) => item.children[1].textContent);
     },
     // Envía el formulario; la promesa se cumple cuando termina el guardado.
     enviar() {
@@ -516,8 +534,8 @@ function valoresEnPantalla(pagina) {
   for (const campo of CAMPOS_MI_FICHA) {
     if (campo === "modalidad_trabajo") {
       valores[campo] = Object.keys(RADIOS).find((valor) => pagina.porId(RADIOS[valor]).checked) ?? "";
-    } else if (campo === "herramientas") {
-      valores[campo] = pagina.herramientasEnPantalla();
+    } else if (LISTAS_DE_ETIQUETAS.includes(campo)) {
+      valores[campo] = pagina.etiquetasEnPantalla(campo);
     } else {
       valores[campo] = pagina.porId(ID_DE[campo]).value;
     }
@@ -525,12 +543,12 @@ function valoresEnPantalla(pagina) {
   return valores;
 }
 
-// Las herramientas se llenan de a una tecnología por vez, como en el widget:
-// cada elemento del arreglo se escribe y se confirma con Enter.
+// Las listas de etiquetas se llenan de a una por vez, como en el widget: cada
+// elemento del arreglo se escribe y se confirma con Enter.
 function llenar(pagina, valores) {
   for (const [campo, valor] of Object.entries(valores)) {
     if (campo === "modalidad_trabajo") pagina.elegir(valor);
-    else if (campo === "herramientas") valor.forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
+    else if (LISTAS_DE_ETIQUETAS.includes(campo)) valor.forEach((etiqueta) => pagina.agregarEtiqueta(campo, etiqueta));
     else pagina.escribir(campo, valor);
   }
 }
@@ -540,6 +558,8 @@ const VALORES_VALIDOS = Object.freeze({
   sector: "Bases de datos",
   ubicacion: "Querétaro, México",
   herramientas: Object.freeze(["PostgreSQL", "Python", "GCP"]),
+  habilidades: Object.freeze(["Modelado de datos", "ETL"]),
+  idiomas: Object.freeze(["Español", "Inglés"]),
   modalidad_trabajo: "Híbrido",
   anio_inicio: "2018",
   bio: "\nDiseño esquemas y migraciones.\nMe gusta que los datos cuadren.\n",
@@ -710,7 +730,10 @@ test("a collaborator without a card gets an empty form with their name, and no p
 
   assertFormularioVisible(pagina);
   assert.deepEqual(pagina.obtenerMiFicha.llamadas, [["u-1"]]);
-  assert.deepEqual(valoresEnPantalla(pagina), Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "herramientas" ? [] : ""])));
+  assert.deepEqual(
+    valoresEnPantalla(pagina),
+    Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, LISTAS_DE_ETIQUETAS.includes(campo) ? [] : ""])),
+  );
   assert.equal(pagina.texto("miFichaNombre"), "Valeria Ortiz");
   assert.equal(pagina.porId("miFichaVerPerfil").hidden, true);
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
@@ -727,6 +750,8 @@ test("a collaborator with a card gets it prefilled, with the tools shown as tags
     sector: "Bases de datos",
     ubicacion: "Querétaro, México",
     herramientas: ["PostgreSQL", "Python", "GCP"],
+    habilidades: ["Modelado de datos", "ETL"],
+    idiomas: ["Español", "Inglés"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -823,6 +848,8 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
     sector: "Bases de datos",
     ubicacion: "Querétaro, México",
     herramientas: ["PostgreSQL", "Python", "GCP"],
+    habilidades: ["Modelado de datos", "ETL"],
+    idiomas: ["Español", "Inglés"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -838,7 +865,7 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
   assert.equal(verPerfil.textContent, "Ver mi perfil");
 
   // El formulario queda con lo que devolvió la base, ya normalizado.
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["PostgreSQL", "Python", "GCP"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["PostgreSQL", "Python", "GCP"]);
   assert.equal(pagina.porId("miFichaPuesto").value, "Desarrolladora backend");
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
   for (const campo of Object.keys(ID_DE)) assertCampoSinError(pagina, campo);
@@ -869,7 +896,7 @@ test("a service failure shows its message in the alert, focused, with no toast a
   assert.deepEqual(pagina.toasts, []);
   assert.equal(pagina.porId("miFichaVerPerfil").hidden, true);
   // Lo escrito no se pierde.
-  assert.deepEqual(pagina.herramientasEnPantalla(), [...VALORES_VALIDOS.herramientas]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), [...VALORES_VALIDOS.herramientas]);
   assert.equal(pagina.porId("formMiFicha").getAttribute("aria-busy"), "false");
 
   // El siguiente intento esconde el aviso anterior antes de validar.
@@ -1041,7 +1068,7 @@ test("Enter without a highlighted option adds the typed text and clears the inpu
 
   pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter" });
 
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["Rust"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Rust"]);
   assert.equal(pagina.porId("miFichaHerramientas").value, "");
   assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true);
 });
@@ -1054,7 +1081,7 @@ test("Enter with a highlighted suggestion confirms that suggestion, not the type
 
   input.disparar("keydown", { key: "Enter" });
 
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["PostgreSQL"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["PostgreSQL"]);
 });
 
 test("a comma confirms the entry, just like Enter", async () => {
@@ -1063,7 +1090,7 @@ test("a comma confirms the entry, just like Enter", async () => {
 
   pagina.porId("miFichaHerramientas").disparar("keydown", { key: "," });
 
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["Go"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Go"]);
 });
 
 test("Escape closes the listbox without touching the text or the tools", async () => {
@@ -1075,78 +1102,78 @@ test("Escape closes the listbox without touching the text or the tools", async (
 
   assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true);
   assert.equal(input.value, "pos");
-  assert.deepEqual(pagina.herramientasEnPantalla(), []);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
 });
 
 test("adding a duplicate announces it, highlights the existing tag and does not grow the tools list", async () => {
   const pagina = await cargarPagina();
-  pagina.agregarHerramienta("PostgreSQL");
+  pagina.agregarEtiqueta("herramientas", "PostgreSQL");
 
-  pagina.agregarHerramienta("  POSTGRESQL  ");
+  pagina.agregarEtiqueta("herramientas", "  POSTGRESQL  ");
 
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["PostgreSQL"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["PostgreSQL"]);
   assert.equal(pagina.texto("miFichaHerramientasEstado"), "PostgreSQL ya está en tus herramientas.");
   assert.ok(manijaHerramienta(pagina, 0).parent.classList.contains("mi-ficha__etiqueta--duplicada"));
 });
 
 test("the twelfth technology disables the input and the help says so; removing one re-enables it", async () => {
   const pagina = await cargarPagina();
-  for (let i = 0; i < 12; i += 1) pagina.agregarHerramienta(`T${i}`);
+  for (let i = 0; i < 12; i += 1) pagina.agregarEtiqueta("herramientas", `T${i}`);
 
-  assert.equal(pagina.herramientasEnPantalla().length, 12);
+  assert.equal(pagina.etiquetasEnPantalla("herramientas").length, 12);
   assert.equal(pagina.porId("miFichaHerramientas").disabled, true);
   assert.match(pagina.texto("miFichaHerramientasAyuda"), /12/);
 
   quitarHerramienta(pagina, 0).disparar("click");
 
-  assert.equal(pagina.herramientasEnPantalla().length, 11);
+  assert.equal(pagina.etiquetasEnPantalla("herramientas").length, 11);
   assert.equal(pagina.porId("miFichaHerramientas").disabled, false);
 });
 
 test("removing a tag moves focus to the handle at the same index, then the previous one, then the input when the list empties", async () => {
   const pagina = await cargarPagina();
-  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
+  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarEtiqueta("herramientas", tecnologia));
 
   // Quita "B" (índice 1): el foco va a la manija que ocupa ese índice ahora ("C").
   quitarHerramienta(pagina, 1).disparar("click");
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["A", "C"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "C"]);
   assert.equal(pagina.activo(), manijaHerramienta(pagina, 1));
 
   // Quita "C", que ahora es la última (índice 1 de 2): el foco va a la anterior.
   quitarHerramienta(pagina, 1).disparar("click");
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["A"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A"]);
   assert.equal(pagina.activo(), manijaHerramienta(pagina, 0));
 
   // Quita la última que queda: la lista se vacía y el foco va al input.
   quitarHerramienta(pagina, 0).disparar("click");
-  assert.deepEqual(pagina.herramientasEnPantalla(), []);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
   assertFocoEn(pagina, "miFichaHerramientas");
 });
 
 test("Backspace on an empty input removes the last tag and keeps focus on the input", async () => {
   const pagina = await cargarPagina();
-  ["A", "B"].forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
+  ["A", "B"].forEach((tecnologia) => pagina.agregarEtiqueta("herramientas", tecnologia));
   const input = pagina.porId("miFichaHerramientas");
   input.focus();
 
   input.disparar("keydown", { key: "Backspace" });
 
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["A"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A"]);
   assertFocoEn(pagina, "miFichaHerramientas");
 });
 
 test("keyboard reordering from the handle moves the tag and focus follows it", async () => {
   const pagina = await cargarPagina();
-  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
+  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarEtiqueta("herramientas", tecnologia));
 
   manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
 
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["B", "A", "C"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
   assert.equal(pagina.activo(), manijaHerramienta(pagina, 1));
   assert.equal(pagina.texto("miFichaHerramientasEstado"), "A, posición 2 de 3.");
 
   manijaHerramienta(pagina, 1).disparar("keydown", { key: "End" });
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["B", "C", "A"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "C", "A"]);
   assert.equal(pagina.activo(), manijaHerramienta(pagina, 2));
 });
 
@@ -1157,7 +1184,7 @@ test("a missing technology catalog script degrades silently: no suggestions, but
   assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true, "sin catálogo no hay nada que sugerir");
 
   pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter" });
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["cualquier cosa"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["cualquier cosa"]);
   assert.equal(pagina.errores.length, 0, "la ausencia del catálogo no se avisa ni se reintenta");
 });
 
@@ -1167,5 +1194,199 @@ test("preloading a card with a technology outside the catalog keeps it exactly a
     ficha: enSecuencia(exito({ ...structuredClone(FICHA), herramientas: ["Un framework rarísimo"] })),
   });
 
-  assert.deepEqual(pagina.herramientasEnPantalla(), ["Un framework rarísimo"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Un framework rarísimo"]);
+});
+
+/* ---------- Las tres listas de etiquetas ---------- */
+
+/*
+  La fábrica del editor se instancia tres veces sobre el mismo documento. Todo
+  lo que sigue existe porque, hasta que entraron habilidades e idiomas, había
+  UNA sola instancia: la parametrización por `campo` se podía romper entera
+  sin que ningún test se enterara (mutante verificado: volver a fijar
+  "herramientas" adentro de la fábrica sobrevivía).
+*/
+
+// La manija (hijo 0) y el botón de quitar (hijo 2) de la etiqueta en el
+// índice dado, para cualquiera de las tres listas.
+function manijaDeEtiqueta(pagina, campo, indice) {
+  return pagina.porId(`${ID_DE[campo]}Lista`).children[indice].children[0];
+}
+
+function quitarDeEtiqueta(pagina, campo, indice) {
+  return pagina.porId(`${ID_DE[campo]}Lista`).children[indice].children[2];
+}
+
+test("the three tag lists are independent: adding, removing and reordering one leaves the others alone", async () => {
+  const pagina = await cargarPagina();
+
+  ["Python", "Docker"].forEach((etiqueta) => pagina.agregarEtiqueta("herramientas", etiqueta));
+  ["TDD", "Scrum"].forEach((etiqueta) => pagina.agregarEtiqueta("habilidades", etiqueta));
+  pagina.agregarEtiqueta("idiomas", "Español");
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Python", "Docker"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("habilidades"), ["TDD", "Scrum"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("idiomas"), ["Español"]);
+
+  // Quitar en habilidades no toca a las otras dos.
+  quitarDeEtiqueta(pagina, "habilidades", 0).disparar("click");
+  assert.deepEqual(pagina.etiquetasEnPantalla("habilidades"), ["Scrum"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Python", "Docker"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("idiomas"), ["Español"]);
+
+  // Reordenar en herramientas tampoco: el arrastre y el teclado de cada
+  // instancia capturan sobre SU <ul>, no sobre el documento.
+  manijaDeEtiqueta(pagina, "herramientas", 0).disparar("keydown", { key: "ArrowRight" });
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Docker", "Python"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("habilidades"), ["Scrum"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("idiomas"), ["Español"]);
+
+  // Y cada una anuncia por SU región aria-live.
+  assert.equal(pagina.texto("miFichaHerramientasEstado"), "Python, posición 2 de 2.");
+  assert.equal(pagina.texto("miFichaHabilidadesEstado"), "");
+  assert.equal(pagina.texto("miFichaIdiomasEstado"), "");
+});
+
+/*
+  La misma etiqueta en dos listas distintas NO es un duplicado: "Docker" puede
+  ser herramienta de una persona y no estar en sus habilidades. La dedupe es
+  por lista, nunca entre listas.
+*/
+test("the same text can live in two different lists without being a duplicate", async () => {
+  const pagina = await cargarPagina();
+
+  pagina.agregarEtiqueta("herramientas", "Docker");
+  pagina.agregarEtiqueta("habilidades", "Docker");
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Docker"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("habilidades"), ["Docker"]);
+  assert.equal(pagina.texto("miFichaHabilidadesEstado"), "", "no se anunció ningún duplicado");
+});
+
+// Cada editor pide SU catálogo y se queda con el suyo: si compartieran la
+// lista, escribir "e" en idiomas sugeriría herramientas.
+test("each editor suggests from its own catalog", async () => {
+  const pagina = await cargarPagina({
+    catalogo: {
+      herramientas: ["Elixir", "Express"],
+      habilidades: ["Estadística"],
+      idiomas: ["Español", "Euskera"],
+    },
+  });
+  const opcionesDe = (campo) => pagina.porId(`${ID_DE[campo]}Opciones`).children.map((opcion) => opcion.textContent);
+
+  pagina.escribir("herramientas", "e");
+  pagina.escribir("habilidades", "e");
+  pagina.escribir("idiomas", "e");
+
+  assert.deepEqual(opcionesDe("herramientas"), ["Elixir", "Express"]);
+  assert.deepEqual(opcionesDe("habilidades"), ["Estadística"]);
+  assert.deepEqual(opcionesDe("idiomas"), ["Español", "Euskera"]);
+});
+
+/*
+  Un catálogo que falla no se lleva a los otros dos: se piden en paralelo y
+  cada promesa resuelve su propio { ok }.
+*/
+test("a catalog that fails to load leaves the other two suggesting", async () => {
+  const pagina = await cargarPagina({ catalogo: { herramientas: ["Python"], idiomas: ["Español"] } });
+
+  pagina.escribir("herramientas", "p");
+  pagina.escribir("habilidades", "p");
+  pagina.escribir("idiomas", "e");
+
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, false);
+  assert.equal(pagina.porId("miFichaHabilidadesOpciones").hidden, true, "sin catálogo no hay nada que sugerir");
+  assert.equal(pagina.porId("miFichaIdiomasOpciones").hidden, false);
+  assert.equal(pagina.errores.length, 0, "un catálogo que no carga no se avisa");
+});
+
+/*
+  Habilidades e idiomas son OPCIONALES: la 0041 les pone `between 0 and 12` y
+  las declara `not null default '{}'`. Una ficha sin ellas se guarda, y lo que
+  viaja es el arreglo vacío, nunca null.
+*/
+test("a card saves with empty skills and languages: both are optional", async () => {
+  const pagina = await cargarPagina();
+  llenar(pagina, { ...VALORES_VALIDOS, habilidades: [], idiomas: [] });
+
+  const evento = await pagina.enviar();
+
+  assert.equal(evento.defaultPrevented, true);
+  assert.equal(pagina.guardarMiFicha.llamadas.length, 1, "se llamó al servicio: no hubo error de validación");
+  const [, ficha] = pagina.guardarMiFicha.llamadas[0];
+  assert.deepEqual(ficha.habilidades, []);
+  assert.deepEqual(ficha.idiomas, []);
+  assert.deepEqual(ficha.herramientas, ["PostgreSQL", "Python", "GCP"]);
+  assert.equal(pagina.porId("miFichaHabilidadesError").hidden, true);
+  assert.equal(pagina.porId("miFichaIdiomasError").hidden, true);
+});
+
+/*
+  Al revés que herramientas, que sí es obligatoria: un envío con las tres
+  vacías marca SÓLO herramientas. Es el error que se cometería copiando el
+  mínimo de una lista a las otras.
+*/
+test("submitting with the three lists empty marks tools only", async () => {
+  const pagina = await cargarPagina();
+  llenar(pagina, { ...VALORES_VALIDOS, herramientas: [], habilidades: [], idiomas: [] });
+
+  await pagina.enviar();
+
+  assert.equal(pagina.texto("miFichaHerramientasError"), "Escribe al menos una herramienta.");
+  assert.equal(pagina.porId("miFichaHabilidadesError").hidden, true);
+  assert.equal(pagina.porId("miFichaIdiomasError").hidden, true);
+  assert.equal(pagina.guardarMiFicha.llamadas.length, 0);
+});
+
+// El tope de 12 y el largo de 40 caracteres valen igual en las tres, con el
+// mensaje de SU campo.
+test("the per-field limits speak in the name of the field that broke them", async () => {
+  const pagina = await cargarPagina();
+
+  pagina.agregarEtiqueta("habilidades", "a".repeat(41));
+  assert.equal(pagina.texto("miFichaHabilidadesError"), "Cada habilidad puede tener hasta 40 caracteres.");
+
+  pagina.agregarEtiqueta("idiomas", "b".repeat(41));
+  assert.equal(pagina.texto("miFichaIdiomasError"), "Cada idioma puede tener hasta 40 caracteres.");
+
+  for (let i = 0; i < 12; i += 1) pagina.agregarEtiqueta("idiomas", `Idioma ${i}`);
+  assert.equal(pagina.porId("miFichaIdiomas").disabled, true, "con 12 no se puede escribir otro");
+  assert.equal(
+    pagina.texto("miFichaIdiomasAyuda"),
+    "Ya tienes 12 idiomas, el máximo. Quita alguno para escribir otro.",
+  );
+  // Y el tope de una lista no desactiva las otras.
+  assert.equal(pagina.porId("miFichaHabilidades").disabled, false);
+  assert.equal(pagina.porId("miFichaHerramientas").disabled, false);
+});
+
+/*
+  EL error más probable al instanciar la fábrica tres veces: el prefijo de los
+  id de opción. Las opciones nunca reciben foco —el resaltado se lleva con
+  aria-activedescendant en el input—, así que si dos instancias generaran el
+  mismo id, dos listbox abiertos escribirían el mismo y el lector de pantalla
+  anunciaría la opción de la OTRA lista.
+
+  Los ids distintos en el HTML no alcanzan para verlo: los de las opciones los
+  crea la fábrica en tiempo de ejecución, uno por sugerencia pintada.
+*/
+test("two open listboxes point at option ids of their own, never at each other's", async () => {
+  const pagina = await cargarPagina({
+    catalogo: { herramientas: ["Python"], habilidades: ["Pair programming"], idiomas: ["Portugués"] },
+  });
+
+  for (const campo of LISTAS_DE_ETIQUETAS) {
+    pagina.escribir(campo, "p");
+    pagina.porId(ID_DE[campo]).disparar("keydown", { key: "ArrowDown" });
+  }
+
+  const activos = LISTAS_DE_ETIQUETAS.map((campo) => pagina.porId(ID_DE[campo]).getAttribute("aria-activedescendant"));
+  assert.deepEqual(activos, ["miFichaHerramientasOpcion0", "miFichaHabilidadesOpcion0", "miFichaIdiomasOpcion0"]);
+
+  // Y el id apuntado existe DENTRO del desplegable de su propio campo.
+  for (const [indice, campo] of LISTAS_DE_ETIQUETAS.entries()) {
+    const opciones = pagina.porId(`${ID_DE[campo]}Opciones`).children;
+    assert.deepEqual(opciones.map((opcion) => opcion.attributes.id), [activos[indice]], campo);
+  }
 });

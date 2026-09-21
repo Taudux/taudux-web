@@ -5,9 +5,9 @@
   Acá NO hay personas. La lista sale de la base con listarColaboradores()
   (core/colaboradores/colaboradores.service.js), que entrega de cada una
   nombre, corto y slug, más los campos de su ficha (migraciones 0039, 0040 y
-  0041) con los nombres de la base: puesto, sector, ubicacion, herramientas
-  (arreglo de textos), modalidad_trabajo, anio_inicio (un año entero), bio,
-  linkedin, github y correo. Las fichas de muestra del prototipo viven en
+  0041) con los nombres de la base: puesto, sector, ubicacion, herramientas,
+  habilidades e idiomas (arreglos de textos), modalidad_trabajo, anio_inicio
+  (un año entero), bio, linkedin, github y correo. Las fichas de muestra del prototipo viven en
   tests/fixtures/colaboradores.muestra.js y sólo las usan los tests.
 
   Quien todavía no llenó su ficha trae esos campos en null: está en el roster
@@ -15,6 +15,11 @@
 
   Campos opcionales de contacto: `linkedin`, `github` (URL https a ese sitio)
   y `correo`. Los que falten no se pintan; ver enlacesDisponibles().
+
+  `habilidades` e `idiomas` también son opcionales, y por eso NO entran en
+  tienePerfil(): si contaran, quien no las llenó se quedaría sin perfil
+  abrible. Vienen siempre como arreglo (la 0041 las declara not null default
+  '{}'), y vacías esconden su celda entera en la vista de perfil.
 */
 
 // Los mismos valores, en el mismo orden, que el CHECK

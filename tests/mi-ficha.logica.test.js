@@ -6,8 +6,8 @@
   avisa campo por campo antes de enviarlo.
 
   Los límites y las expresiones de los enlaces se leen de la 0039; las
-  modalidades de trabajo, de la 0040; el tope de herramientas y el largo de
-  cada etiqueta, de la 0041 (ahí se partió el stack original en herramientas,
+  modalidades de trabajo, de la 0040; los topes de las TRES listas de
+  etiquetas y el largo de cada etiqueta, de la 0041 (ahí se partió el stack original en herramientas,
   habilidades e idiomas, y el CHECK por elemento se movió con él). Todo se
   compara contra el SQL: una copia sin vigilancia se desfasa en silencio.
 */
@@ -49,6 +49,18 @@ const ANIO = 2026;
 // no Cc: `[[:cntrl:]]` no los cubre y `btrim` no los quita).
 const BIDI = ["‎", "‏", "‪", "‫", "‬", "‭", "‮", "⁦", "⁧", "⁨", "⁩"];
 
+/*
+  Los tres campos que son listas de etiquetas, en el orden de la ficha. Las
+  tres comparten toda la maquinaria (normalización, veredicto por elemento y
+  veredicto de la lista entera): lo único que cambia es el mínimo
+  —herramientas exige 1, habilidades e idiomas admiten 0— y los textos de sus
+  mensajes. Los casos que valen para las tres se parametrizan sobre esta
+  lista: con una sola instancia, la parametrización por campo se podía romper
+  sin que ningún test lo notara.
+*/
+const LISTAS_DE_ETIQUETAS = Object.freeze(["herramientas", "habilidades", "idiomas"]);
+const LISTAS_OPCIONALES = Object.freeze(["habilidades", "idiomas"]);
+
 // Una ficha de formulario válida, tal como la entregan los inputs (todo texto).
 function valoresValidos(cambios = {}) {
   return {
@@ -56,6 +68,8 @@ function valoresValidos(cambios = {}) {
     sector: "Bases de datos",
     ubicacion: "Querétaro, México",
     herramientas: ["PostgreSQL", "Python", "GCP"],
+    habilidades: ["Modelado de datos", "ETL"],
+    idiomas: ["Español", "Inglés"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -99,12 +113,12 @@ test("the card keys are exactly the columns the service writes, in the same orde
 
   assert.deepEqual([...CAMPOS_MI_FICHA], columnas);
   assert.deepEqual([...CAMPOS_MI_FICHA], [
-    "puesto", "sector", "ubicacion", "herramientas", "modalidad_trabajo",
-    "anio_inicio", "bio", "linkedin", "github", "correo",
+    "puesto", "sector", "ubicacion", "herramientas", "habilidades", "idiomas",
+    "modalidad_trabajo", "anio_inicio", "bio", "linkedin", "github", "correo",
   ]);
 });
 
-test("normalizing always returns exactly the ten card keys", () => {
+test("normalizing always returns exactly the twelve card keys", () => {
   for (const valores of [valoresValidos(), {}, undefined, null]) {
     assert.deepEqual(Object.keys(normalizarMiFicha(valores)), [...CAMPOS_MI_FICHA]);
   }
@@ -116,6 +130,8 @@ test("normalizing trims texts, trims each tool item and drops the empty ones, pa
     sector: "\tBases de datos\n",
     ubicacion: " Querétaro ",
     herramientas: [" PostgreSQL ", "Python", "", "  ", " GCP "],
+    habilidades: [" ETL ", "", " Modelado de datos"],
+    idiomas: ["  Español  ", "   "],
     modalidad_trabajo: "Híbrido",
     anio_inicio: " 2018 ",
     bio: "\n\n  Primera línea.\nSegunda línea.  \n",
@@ -129,6 +145,8 @@ test("normalizing trims texts, trims each tool item and drops the empty ones, pa
     sector: "Bases de datos",
     ubicacion: "Querétaro",
     herramientas: ["PostgreSQL", "Python", "GCP"],
+    habilidades: ["ETL", "Modelado de datos"],
+    idiomas: ["Español"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Primera línea.\nSegunda línea.",
@@ -152,6 +170,8 @@ test("normalizing an empty form gives empty texts, an empty tools list, no year 
     sector: "",
     ubicacion: "",
     herramientas: [],
+    habilidades: [],
+    idiomas: [],
     modalidad_trabajo: "",
     anio_inicio: null,
     bio: "",
@@ -490,7 +510,18 @@ test("the length limits are the ones each CHECK declares today: 0039 for most fi
   assert.deepEqual(LIMITES_MI_FICHA.sector, entre("char_length\\(especialidad\\)", SQL, "0039"));
   assert.deepEqual(LIMITES_MI_FICHA.ubicacion, entre("char_length\\(ubicacion\\)", SQL, "0039"));
   assert.deepEqual(LIMITES_MI_FICHA.bio, entre("char_length\\(bio\\)", SQL_0040, "0040"));
-  assert.deepEqual(LIMITES_MI_FICHA.herramientas, entre("cardinality\\(herramientas\\)", SQL_0041, "0041"));
+  /*
+    Las tres listas, cada una contra SU cardinality. Si alguien copiara el
+    rango de herramientas a habilidades, el mínimo dejaría de ser 0 y una
+    ficha sin habilidades sería inválida en el front y válida en la base.
+  */
+  for (const campo of LISTAS_DE_ETIQUETAS) {
+    assert.deepEqual(LIMITES_MI_FICHA[campo], entre(`cardinality\\(${campo}\\)`, SQL_0041, "0041"), campo);
+  }
+  assert.equal(LIMITES_MI_FICHA.herramientas.min, 1, "herramientas es obligatoria");
+  for (const campo of LISTAS_OPCIONALES) {
+    assert.equal(LIMITES_MI_FICHA[campo].min, 0, `${campo} es opcional`);
+  }
   assert.deepEqual(LIMITES_MI_FICHA.etiqueta, entre("char_length\\(elemento\\)", SQL_0041, "0041"));
   assert.deepEqual(LIMITES_MI_FICHA.anio_inicio, entre("anio_inicio", SQL, "0039"));
   assert.equal(LIMITES_MI_FICHA.linkedin, hasta("linkedin"));
@@ -533,6 +564,9 @@ test("errors follow the card order and each field reports only one message", () 
 test("error messages speak in tuteo, never voseo", () => {
   const { errores } = validarMiFicha({
     puesto: "a", sector: "", ubicacion: "\u202e", herramientas: [], modalidad_trabajo: "x",
+    // Vacías no fallarían: son opcionales. El motivo tiene que salir del
+    // contenido, no de la cantidad.
+    habilidades: ["‮"], idiomas: ["‮"],
     anio_inicio: "abc", bio: "", linkedin: "x", github: "x", correo: "x",
   }, ANIO);
   assert.equal(errores.length, CAMPOS_MI_FICHA.length, "premisa: todos los campos fallan");
@@ -546,12 +580,18 @@ test("error messages speak in tuteo, never voseo", () => {
 /* ---------- Del perfil y la ficha guardada al formulario ---------- */
 
 test("a saved card becomes form values: texts as is, tools as a copied array, year as text, null links empty", () => {
-  const herramientasGuardadas = ["PostgreSQL", "Python", "GCP"];
+  const guardadas = {
+    herramientas: ["PostgreSQL", "Python", "GCP"],
+    habilidades: ["Modelado de datos", "ETL"],
+    idiomas: ["Español"],
+  };
   const valores = valoresFormularioMiFicha({
     puesto: "Desarrolladora backend",
     sector: "Bases de datos",
     ubicacion: "Querétaro",
-    herramientas: herramientasGuardadas,
+    herramientas: guardadas.herramientas,
+    habilidades: guardadas.habilidades,
+    idiomas: guardadas.idiomas,
     modalidad_trabajo: "Remoto",
     anio_inicio: 2018,
     bio: "Primera.\nSegunda.",
@@ -565,6 +605,8 @@ test("a saved card becomes form values: texts as is, tools as a copied array, ye
     sector: "Bases de datos",
     ubicacion: "Querétaro",
     herramientas: ["PostgreSQL", "Python", "GCP"],
+    habilidades: ["Modelado de datos", "ETL"],
+    idiomas: ["Español"],
     modalidad_trabajo: "Remoto",
     anio_inicio: "2018",
     bio: "Primera.\nSegunda.",
@@ -572,13 +614,18 @@ test("a saved card becomes form values: texts as is, tools as a copied array, ye
     github: "",
     correo: "",
   });
-  // Una COPIA: el editor de etiquetas muta el arreglo del formulario, y eso
-  // no tiene que tocar la ficha guardada.
-  assert.notEqual(valores.herramientas, herramientasGuardadas);
+  // Una COPIA, y cada lista la suya: el editor de etiquetas muta el arreglo
+  // del formulario, y eso no tiene que tocar la ficha guardada.
+  for (const campo of LISTAS_DE_ETIQUETAS) {
+    assert.notEqual(valores[campo], guardadas[campo], `${campo} tiene que ser una copia`);
+    assert.deepEqual(valores[campo], guardadas[campo], `${campo} tiene que traer lo mismo`);
+  }
 });
 
 test("no card yet (null) becomes an empty form", () => {
-  const vacio = Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "herramientas" ? [] : ""]));
+  const vacio = Object.fromEntries(
+    CAMPOS_MI_FICHA.map((campo) => [campo, LISTAS_DE_ETIQUETAS.includes(campo) ? [] : ""]),
+  );
   assert.deepEqual(valoresFormularioMiFicha(null), vacio);
   assert.deepEqual(valoresFormularioMiFicha(undefined), vacio);
   // Un valor fuera de la lista no marca ninguna opción.

@@ -96,12 +96,41 @@
             <label class="mi-ficha__etiqueta" for="miFichaHerramientas">Herramientas</label>
             <div class="mi-ficha__etiquetas">
               <input class="field" type="text" id="miFichaHerramientas" name="herramientas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHerramientasOpciones" autocomplete="off" aria-describedby="miFichaHerramientasAyuda">
-              <ul class="mi-ficha__etiquetas-opciones" id="miFichaHerramientasOpciones" role="listbox" aria-label="Sugerencias de tecnologías" hidden></ul>
+              <ul class="mi-ficha__etiquetas-opciones" id="miFichaHerramientasOpciones" role="listbox" aria-label="Sugerencias de herramientas" hidden></ul>
               <ul class="mi-ficha__etiquetas-lista" id="miFichaHerramientasLista"></ul>
             </div>
             <p class="u-visually-hidden" id="miFichaHerramientasEstado" role="status" aria-live="polite"></p>
             <small class="mi-ficha__ayuda" id="miFichaHerramientasAyuda">Los lenguajes, frameworks y productos con los que trabajas. Por ejemplo: Python, PostgreSQL, Figma. Hasta 12.</small>
             <p class="mi-ficha__error" id="miFichaHerramientasError" hidden></p>
+          </div>
+
+          <!-- Habilidades e idiomas son la MISMA pieza que Herramientas: el
+               mismo marcado, con su propio id de listbox y de opciones. El
+               aria-label de cada listbox nombra su campo, porque con tres
+               desplegables en la página "Sugerencias" a secas no distingue
+               nada. Las dos son opcionales: se pueden guardar vacías. -->
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaHabilidades">Habilidades</label>
+            <div class="mi-ficha__etiquetas">
+              <input class="field" type="text" id="miFichaHabilidades" name="habilidades" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHabilidadesOpciones" autocomplete="off" aria-describedby="miFichaHabilidadesAyuda">
+              <ul class="mi-ficha__etiquetas-opciones" id="miFichaHabilidadesOpciones" role="listbox" aria-label="Sugerencias de habilidades" hidden></ul>
+              <ul class="mi-ficha__etiquetas-lista" id="miFichaHabilidadesLista"></ul>
+            </div>
+            <p class="u-visually-hidden" id="miFichaHabilidadesEstado" role="status" aria-live="polite"></p>
+            <small class="mi-ficha__ayuda" id="miFichaHabilidadesAyuda">Lo que sabes hacer: prácticas, disciplinas y metodologías. Por ejemplo: TDD, REST API, Scrum. Opcional, hasta 12.</small>
+            <p class="mi-ficha__error" id="miFichaHabilidadesError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaIdiomas">Idiomas</label>
+            <div class="mi-ficha__etiquetas">
+              <input class="field" type="text" id="miFichaIdiomas" name="idiomas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaIdiomasOpciones" autocomplete="off" aria-describedby="miFichaIdiomasAyuda">
+              <ul class="mi-ficha__etiquetas-opciones" id="miFichaIdiomasOpciones" role="listbox" aria-label="Sugerencias de idiomas" hidden></ul>
+              <ul class="mi-ficha__etiquetas-lista" id="miFichaIdiomasLista"></ul>
+            </div>
+            <p class="u-visually-hidden" id="miFichaIdiomasEstado" role="status" aria-live="polite"></p>
+            <small class="mi-ficha__ayuda" id="miFichaIdiomasAyuda">Los idiomas que hablas, sin nivel. Por ejemplo: Español, Inglés. Opcional, hasta 12.</small>
+            <p class="mi-ficha__error" id="miFichaIdiomasError" hidden></p>
           </div>
 
           <!-- Sin aria-describedby de partida: sólo apunta al error cuando lo

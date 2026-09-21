@@ -69,6 +69,10 @@
       perfilExperiencia: porId("perfilExperiencia"),
       perfilModalidadTrabajo: porId("perfilModalidadTrabajo"),
       perfilHerramientas: porId("perfilHerramientas"),
+      perfilHabilidades: porId("perfilHabilidades"),
+      perfilHabilidadesCelda: porId("perfilHabilidadesCelda"),
+      perfilIdiomas: porId("perfilIdiomas"),
+      perfilIdiomasCelda: porId("perfilIdiomasCelda"),
       perfilBio: porId("perfilBio"),
     };
 
@@ -488,33 +492,43 @@
       escribir(el.perfilExperiencia, experienciaDesde(ficha.anio_inicio, new Date().getFullYear()));
       escribir(el.perfilModalidadTrabajo, ficha.modalidad_trabajo);
       pintarEtiquetas(el.perfilHerramientas, ficha.herramientas);
+      // Herramientas no lleva celda: es obligatoria, su fila siempre tiene
+      // algo que mostrar. Las otras dos son opcionales y se ocultan enteras.
+      pintarEtiquetas(el.perfilHabilidades, ficha.habilidades, el.perfilHabilidadesCelda);
+      pintarEtiquetas(el.perfilIdiomas, ficha.idiomas, el.perfilIdiomasCelda);
       escribir(el.perfilBio, ficha.bio);
 
       pintarEnlaces(el.perfilEnlaces, ficha);
     }
 
     /*
-      Las herramientas en píldoras, una por elemento: calcada de
-      pintarEnlaces(), sin enlace porque acá no hay nada a donde ir. El
-      separador " · " no sirve de límite cuando una herramienta lo trae
-      adentro de su propio nombre (por ejemplo "System Architecture (GCloud ·
-      Supabase)"); cada elemento del arreglo es una etiqueta propia y no se
-      vuelve a partir por texto.
+      Una lista de etiquetas en píldoras, una por elemento: calcada de
+      pintarEnlaces(), sin enlace porque acá no hay nada a donde ir. La usan
+      las tres (herramientas, habilidades e idiomas). El separador " · " no
+      sirve de límite cuando una etiqueta lo trae adentro de su propio nombre
+      (por ejemplo "System Architecture (GCloud · Supabase)"); cada elemento
+      del arreglo es una etiqueta propia y no se vuelve a partir por texto.
 
-      La lista queda `hidden` si las herramientas vienen vacías: una <ul>
-      vacía igual ocupa su hueco en el flex y se anuncia como "lista, 0
-      elementos".
+      La lista queda `hidden` si viene vacía: una <ul> vacía igual ocupa su
+      hueco en el flex y se anuncia como "lista, 0 elementos".
+
+      `celda` es opcional y sólo la pasan las listas opcionales: con ella se
+      oculta la celda ENTERA, porque esconder nada más la <ul> dejaría su
+      rótulo ("HABILIDADES", en versalitas) flotando sobre el vacío. El
+      `hidden` gana gracias a `.colaboradores [hidden] { display: none }` de
+      la hoja: sin esa regla, el `display: flex` de la <ul> se lo comería.
     */
-    function pintarEtiquetas(lista, herramientas) {
-      const elementos = herramientas || [];
+    function pintarEtiquetas(lista, etiquetas, celda) {
+      const elementos = etiquetas || [];
 
-      lista.replaceChildren(...elementos.map((herramienta) => {
+      lista.replaceChildren(...elementos.map((etiqueta) => {
         const item = document.createElement("li");
         item.className = "colaboradores__etiquetas-item";
-        item.textContent = herramienta;
+        item.textContent = etiqueta;
         return item;
       }));
       lista.hidden = elementos.length === 0;
+      if (celda) celda.hidden = elementos.length === 0;
     }
 
     // La lista queda `hidden` si no hay ninguno: una <ul> vacía igual ocupa su

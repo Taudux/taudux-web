@@ -171,6 +171,17 @@ test("a single missing, blank or unknown field is enough to have no profile", ()
     assert.equal(tienePerfil({ ...base, herramientas }), false, `herramientas = ${JSON.stringify(herramientas)}`);
   }
 
+  /*
+    Habilidades e idiomas NO cuentan, y es deliberado: son opcionales en la
+    0041 (`between 0 and 12`) y si decidieran "tiene ficha", quien no las
+    llenó se quedaría sin perfil abrible. Su celda se oculta, el perfil abre.
+  */
+  for (const campo of ["habilidades", "idiomas"]) {
+    for (const valor of [undefined, null, [], ["   "], [7], "Español"]) {
+      assert.equal(tienePerfil({ ...base, [campo]: valor }), true, `${campo} = ${JSON.stringify(valor)}`);
+    }
+  }
+
   for (const modalidad_trabajo of [undefined, null, "", "Ocupado", "remoto", " Remoto"]) {
     assert.equal(tienePerfil({ ...base, modalidad_trabajo }), false, `modalidad_trabajo = ${JSON.stringify(modalidad_trabajo)}`);
   }

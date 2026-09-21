@@ -17,7 +17,12 @@
   Sin clase, atributos ni proyectos: la página los retiró (2026-09-19) y una
   ficha que todavía los trajera escondería que tienePerfil() ya no los pide.
 
-  Congeladas a fondo, herramientas incluidas: un test que quiera retocar una ficha
+  Las tres primeras estrenan habilidades e idiomas y el resto los deja
+  vacíos: son opcionales (0041, `between 0 and 12`), no entran en
+  tienePerfil() y con la lista vacía el perfil oculta su celda ENTERA. Hace
+  falta tener de los dos casos.
+
+  Congeladas a fondo, sus tres listas de etiquetas incluidas: un test que quiera retocar una ficha
   trabaja sobre structuredClone(COLABORADORES_MUESTRA). Un Object.assign o un
   push directo lanza, en vez de ensuciar en silencio los datos del test
   siguiente.
@@ -30,6 +35,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Valeria Ortiz", corto: "Valeria", slug: "valeria",
     puesto: "Arquitectura de datos", sector: "Data warehousing", ubicacion: "Querétaro, MX",
     herramientas: ["PostgreSQL", "Python", "GCP"], modalidad_trabajo: "Remoto", anio_inicio: 2018,
+    habilidades: ["Modelado de datos", "ETL"], idiomas: ["Español", "Inglés"],
     bio: "Diseña pipelines y modelos de datos que aguantan crecimiento. Convierte tablas desordenadas en decisiones.",
     linkedin: null, github: null, correo: null,
   },
@@ -37,6 +43,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Diego Ramírez", corto: "Diego", slug: "diego",
     puesto: "Backend & APIs", sector: "Sistemas distribuidos", ubicacion: "CDMX, MX",
     herramientas: ["Node.js", "Docker", "AWS"], modalidad_trabajo: "Presencial", anio_inicio: 2016,
+    habilidades: ["Microservicios"], idiomas: ["Español"],
     bio: "Servicios estables bajo carga. Si el sistema no se cae, probablemente él lo construyó.",
     linkedin: null, github: null, correo: null,
   },
@@ -44,6 +51,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Mariana Cruz", corto: "Mariana", slug: "mariana",
     puesto: "Frontend & UX", sector: "Design systems", ubicacion: "Guadalajara, MX",
     herramientas: ["HTML/CSS", "JavaScript", "Figma"], modalidad_trabajo: "Híbrido", anio_inicio: 2020,
+    habilidades: [], idiomas: ["Español", "Inglés", "Portugués"],
     bio: "Interfaces rápidas que la gente entiende sin manual. Detalle obsesivo en animación y accesibilidad.",
     linkedin: null, github: null, correo: null,
   },
@@ -51,6 +59,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Iván Torres", corto: "Iván", slug: "ivan",
     puesto: "Modelos de IA", sector: "ML aplicado", ubicacion: "Querétaro, MX",
     herramientas: ["Python", "R", "Vertex AI"], modalidad_trabajo: "Remoto", anio_inicio: 2019,
+    habilidades: [], idiomas: [],
     bio: "Predicción de demanda, clasificación, LLMs aplicados. Traduce el negocio a features y las features a resultados.",
     linkedin: null, github: "https://github.com/ejemplo-ivan-torres", correo: null,
   },
@@ -58,6 +67,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Renata Solís", corto: "Renata", slug: "renata",
     puesto: "Cloud & DevOps", sector: "IaC y observabilidad", ubicacion: "Monterrey, MX",
     herramientas: ["Docker", "Git", "AWS"], modalidad_trabajo: "Presencial", anio_inicio: 2017,
+    habilidades: [], idiomas: [],
     bio: "Infraestructura como código, despliegues sin sustos y facturas de nube que sí cierran.",
     linkedin: null, github: null, correo: null,
   },
@@ -65,6 +75,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Emilio Vega", corto: "Emilio", slug: "emilio",
     puesto: "Capacitación técnica", sector: "Formación técnica", ubicacion: "Querétaro, MX",
     herramientas: ["Python", "SQL", "Docencia"], modalidad_trabajo: "Híbrido", anio_inicio: 2014,
+    habilidades: [], idiomas: [],
     bio: "Cursos y talleres para equipos que quieren dejar de depender de terceros. Explica lo difícil sin simplificarlo de más.",
     linkedin: null, github: null, correo: null,
   },
@@ -72,6 +83,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Camila Ruiz", corto: "Camila", slug: "camila",
     puesto: "Analítica de negocio", sector: "BI y forecasting", ubicacion: "Puebla, MX",
     herramientas: ["Power BI", "SQL", "Python"], modalidad_trabajo: "Remoto", anio_inicio: 2020,
+    habilidades: [], idiomas: [],
     bio: "Tableros que responden preguntas, no que las generan. KPIs, forecasting y storytelling con datos.",
     linkedin: "https://www.linkedin.com/in/ejemplo-camila-ruiz", github: null, correo: "camila@example.com",
   },
@@ -79,6 +91,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Sebastián Lara", corto: "Sebastián", slug: "sebastian",
     puesto: "Apps móviles", sector: "Apps nativas", ubicacion: "CDMX, MX",
     herramientas: ["Java", "C++", "APIs"], modalidad_trabajo: "Presencial", anio_inicio: 2021,
+    habilidades: [], idiomas: [],
     bio: "Del prototipo a la tienda. Apps que se sienten nativas y hablan con el backend sin fricción.",
     linkedin: null, github: null, correo: null,
   },
@@ -86,6 +99,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Lucía Herrera", corto: "Lucía", slug: "lucia",
     puesto: "QA & Automatización", sector: "Testing automatizado", ubicacion: "León, MX",
     herramientas: ["Cypress", "Jest", "CI/CD"], modalidad_trabajo: "Híbrido", anio_inicio: 2019,
+    habilidades: [], idiomas: [],
     bio: "Pruebas que atrapan el bug antes que el cliente. Pipelines de CI que no dejan pasar nada roto.",
     linkedin: null, github: null, correo: null,
   },
@@ -93,6 +107,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Andrés Molina", corto: "Andrés", slug: "andres",
     puesto: "Gestión de proyectos", sector: "Delivery ágil", ubicacion: "Querétaro, MX",
     herramientas: ["Scrum", "Jira", "Notion"], modalidad_trabajo: "Remoto", anio_inicio: 2015,
+    habilidades: [], idiomas: [],
     bio: "Alcance claro, entregas a tiempo y cero sorpresas. Traduce entre negocio y equipo técnico.",
     linkedin: null, github: null, correo: null,
   },
@@ -100,6 +115,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Paola Núñez", corto: "Paola", slug: "paola",
     puesto: "Ciencia de datos", sector: "Estadística aplicada", ubicacion: "Mérida, MX",
     herramientas: ["Python", "R", "SQL"], modalidad_trabajo: "Presencial", anio_inicio: 2020,
+    habilidades: [], idiomas: [],
     bio: "Estadística aplicada, experimentos A/B y modelos que explican por qué, no solo qué.",
     linkedin: null, github: null, correo: null,
   },
@@ -107,6 +123,7 @@ const COLABORADORES_MUESTRA = [
     nombre: "Jorge Castillo", corto: "Jorge", slug: "jorge",
     puesto: "Seguridad", sector: "Ciberseguridad", ubicacion: "CDMX, MX",
     herramientas: ["Pentesting", "SIEM", "IAM"], modalidad_trabajo: "Híbrido", anio_inicio: 2017,
+    habilidades: [], idiomas: [],
     bio: "Auditorías, hardening y respuesta a incidentes. Que lo tuyo siga siendo tuyo.",
     linkedin: "https://mx.linkedin.com/in/ejemplo-jorge-castillo",
     github: "https://github.com/ejemplo-jorge-castillo",
@@ -115,7 +132,9 @@ const COLABORADORES_MUESTRA = [
 ];
 
 COLABORADORES_MUESTRA.forEach((persona) => {
-  Object.freeze(persona.herramientas);
+  // Las tres listas, no sólo herramientas: una que quedara sin congelar
+  // dejaría que un test ensuciara en silencio los datos del siguiente.
+  ["herramientas", "habilidades", "idiomas"].forEach((campo) => Object.freeze(persona[campo]));
   Object.freeze(persona);
 });
 Object.freeze(COLABORADORES_MUESTRA);

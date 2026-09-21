@@ -315,27 +315,57 @@ test("the bio has a countdown counter wired to its aria-describedby, and no maxl
   assert.equal(atributo(contador, "aria-live"), "off");
 });
 
-test("the tools field is a combobox wired to a listbox of suggestions and a tag list, with its own live region", () => {
-  const herramientasInput = MARCADO.match(/<input\b[^>]*\sname="herramientas"[^>]*>/)[0];
-  assert.equal(atributo(herramientasInput, "role"), "combobox");
-  assert.equal(atributo(herramientasInput, "aria-autocomplete"), "list");
-  assert.equal(atributo(herramientasInput, "aria-expanded"), "false");
-  assert.equal(atributo(herramientasInput, "aria-controls"), "miFichaHerramientasOpciones");
+/*
+  Los TRES campos de etiquetas, no sólo herramientas: son la misma pieza
+  instanciada tres veces, y un marcado a medias en cualquiera de ellas deja su
+  editor sin nodos. `prefijoIds` es el mismo que usa mi-ficha.js.
+*/
+const CAMPOS_DE_ETIQUETAS = Object.freeze([
+  Object.freeze({ campo: "herramientas", prefijoIds: "miFichaHerramientas", etiquetaListbox: "Sugerencias de herramientas" }),
+  Object.freeze({ campo: "habilidades", prefijoIds: "miFichaHabilidades", etiquetaListbox: "Sugerencias de habilidades" }),
+  Object.freeze({ campo: "idiomas", prefijoIds: "miFichaIdiomas", etiquetaListbox: "Sugerencias de idiomas" }),
+]);
 
-  const opciones = porId("miFichaHerramientasOpciones");
-  assert.match(opciones, /^<ul\b/);
-  assert.equal(atributo(opciones, "role"), "listbox");
-  assert.ok(tieneAtributo(opciones, "hidden"), "el desplegable arranca oculto");
+for (const { campo, prefijoIds, etiquetaListbox } of CAMPOS_DE_ETIQUETAS) {
+  test(`the ${campo} field is a combobox wired to a listbox of suggestions and a tag list, with its own live region`, () => {
+    const entrada = MARCADO.match(new RegExp(`<input\\b[^>]*\\sname="${campo}"[^>]*>`))[0];
+    assert.equal(atributo(entrada, "role"), "combobox");
+    assert.equal(atributo(entrada, "aria-autocomplete"), "list");
+    assert.equal(atributo(entrada, "aria-expanded"), "false");
+    assert.equal(atributo(entrada, "aria-controls"), `${prefijoIds}Opciones`);
 
-  const lista = porId("miFichaHerramientasLista");
-  assert.match(lista, /^<ul\b/);
+    const opciones = porId(`${prefijoIds}Opciones`);
+    assert.match(opciones, /^<ul\b/);
+    assert.equal(atributo(opciones, "role"), "listbox");
+    assert.ok(tieneAtributo(opciones, "hidden"), "el desplegable arranca oculto");
+    // Con tres desplegables en la página, "Sugerencias" a secas no distingue
+    // ninguno: cada uno nombra su campo.
+    assert.equal(atributo(opciones, "aria-label"), etiquetaListbox);
 
-  // Región propia del widget, distinta de la de errores del servidor
-  // (#miFichaStatus, que sigue existiendo con su propio role="alert").
-  const estado = porId("miFichaHerramientasEstado");
-  assert.equal(atributo(estado, "role"), "status");
-  assert.equal(atributo(estado, "aria-live"), "polite");
-  assert.equal(atributo(porId("miFichaStatus"), "role"), "alert");
+    const lista = porId(`${prefijoIds}Lista`);
+    assert.match(lista, /^<ul\b/);
+
+    // Región propia del widget, distinta de la de errores del servidor
+    // (#miFichaStatus, que sigue existiendo con su propio role="alert").
+    const estado = porId(`${prefijoIds}Estado`);
+    assert.equal(atributo(estado, "role"), "status");
+    assert.equal(atributo(estado, "aria-live"), "polite");
+    assert.equal(atributo(porId("miFichaStatus"), "role"), "alert");
+  });
+}
+
+/*
+  Tres instancias del mismo widget no pueden compartir ids: el prefijo de los
+  id de cada opción sale de `prefijoIds`, y dos listbox abiertos que generaran
+  el mismo id escribirían el mismo aria-activedescendant — el lector de
+  pantalla anunciaría la opción equivocada.
+*/
+test("the three tag fields use different ids for every node they own", () => {
+  const ids = CAMPOS_DE_ETIQUETAS.flatMap(({ prefijoIds }) => (
+    ["", "Opciones", "Lista", "Estado", "Ayuda", "Error"].map((sufijo) => `${prefijoIds}${sufijo}`)
+  ));
+  assert.equal(new Set(ids).size, ids.length, "hay un id repetido entre los tres campos");
+  for (const id of ids) assert.ok(porId(id), `el index.html no tiene #${id}`);
 });
 
 test("work modality is a radio group in a fieldset with a legend, with exactly the card values", () => {
@@ -460,5 +490,25 @@ test("the wiring never calls array methods on a live HTMLCollection", () => {
       ["map", "filter", "forEach", "slice", "reduce", "some", "every", "find", "findIndex", "flatMap", "includes", "indexOf", "sort", "reverse", "at", "join"].includes(metodo),
     );
     assert.deepEqual(deArreglo, [], "copia la colección con Array.from(...) antes de recorrerla");
+  }
+});
+
+/*
+  La ayuda de cada campo de etiquetas está escrita DOS veces: en el HTML, que
+  es lo que se ve antes de que corra el script, y en CAMPOS_DE_ETIQUETAS de
+  mi-ficha.js, que la reescribe en cuanto el editor se establece (y la cambia
+  por la versión "ya llegaste al máximo" cuando la lista se llena). Un desfase
+  entre las dos no lo nota nadie: el texto del HTML aparece un instante y lo
+  tapa el del script. Por eso se comparan acá.
+*/
+test("each tag field's hint is written the same in the markup and in the script", () => {
+  for (const { campo, prefijoIds } of CAMPOS_DE_ETIQUETAS) {
+    const enElScript = JS.match(new RegExp(`campo: "${campo}",[\\s\\S]*?ayuda: "([^"]*)"`));
+    assert.ok(enElScript, `mi-ficha.js no declara la ayuda de ${campo}`);
+
+    const enElMarcado = HTML.match(new RegExp(`<small[^>]*\\sid="${prefijoIds}Ayuda"[^>]*>([^<]*)</small>`));
+    assert.ok(enElMarcado, `el index.html no tiene la ayuda de ${campo}`);
+
+    assert.equal(enElMarcado[1], enElScript[1], `la ayuda de ${campo} dice dos cosas distintas`);
   }
 });

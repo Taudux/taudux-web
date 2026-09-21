@@ -11,12 +11,14 @@ const MENSAJE_GUARDAR = "No se pudo guardar tu ficha. Intenta de nuevo.";
 
 const USUARIO = "123e4567-e89b-42d3-a456-426614174000";
 
-// Las diez columnas de la ficha (0039/0040/0041) que el dueño puede escribir.
+// Las doce columnas de la ficha (0039/0040/0041) que el dueño puede escribir.
 const COLUMNAS = Object.freeze([
   "puesto",
   "sector",
   "ubicacion",
   "herramientas",
+  "habilidades",
+  "idiomas",
   "modalidad_trabajo",
   "anio_inicio",
   "bio",
@@ -30,6 +32,8 @@ const FICHA = Object.freeze({
   sector: "Data warehousing",
   ubicacion: "Querétaro, MX",
   herramientas: ["PostgreSQL", "Python", "GCP"],
+  habilidades: ["Modelado de datos", "ETL"],
+  idiomas: ["Español", "Inglés"],
   modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
@@ -241,7 +245,7 @@ for (const [caso, opciones] of SIN_CLIENTE) {
 
 // === guardarMiFicha ==========================================================
 
-test("guardarMiFicha updates an existing card with only the ten card columns and never sends id", async () => {
+test("guardarMiFicha updates an existing card with only the twelve card columns and never sends id", async () => {
   const { consultas, logs, guardarMiFicha } = createHarness([{ data: FICHA }]);
   const result = await guardarMiFicha(USUARIO, FICHA_CON_EXTRAS);
 
@@ -276,7 +280,7 @@ test("guardarMiFicha never calls upsert", async () => {
   }
 });
 
-test("guardarMiFicha inserts id plus the ten card columns when the update finds no row", async () => {
+test("guardarMiFicha inserts id plus the twelve card columns when the update finds no row", async () => {
   const { consultas, logs, guardarMiFicha } = createHarness([{ data: null }, { data: FICHA }]);
   const result = await guardarMiFicha(USUARIO, FICHA_CON_EXTRAS);
 

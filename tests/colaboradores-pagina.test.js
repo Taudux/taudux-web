@@ -454,3 +454,37 @@ test("scripts load in dependency order", () => {
   assert.ok(particulas < fondo, "tsParticles va antes del fondo que lo usa");
   assert.ok(datos < pagina, "la lógica del roster va antes de la página que la usa");
 });
+
+/*
+  Las tres filas de etiquetas del perfil. Herramientas es obligatoria y su
+  fila siempre tiene algo que mostrar; habilidades e idiomas son opcionales y
+  su celda arranca `hidden` en el HTML estático —así una página sin JS, o el
+  instante anterior al primer pintado, no muestra un rótulo vacío— y
+  colaboradores.js la enciende cuando la lista trae algo.
+*/
+test("the profile has one wide row per tag list, and only the optional ones start hidden", () => {
+  const celda = (id) => HTML.match(new RegExp(`<div[^>]*\\sid="${id}"[^>]*>`));
+
+  for (const id of ["perfilHabilidadesCelda", "perfilIdiomasCelda"]) {
+    const encontrada = celda(id);
+    assert.ok(encontrada, `falta la celda #${id}`);
+    assert.match(encontrada[0], /colaboradores__dato--ancho/, `#${id} tiene que ser fila ancha`);
+    assert.match(encontrada[0], /\shidden[\s>]/, `#${id} tiene que arrancar oculta`);
+  }
+
+  // Herramientas no lleva celda con id: no hay nada que ocultar.
+  assert.equal(HTML.includes("perfilHerramientasCelda"), false);
+
+  // Las tres listas comparten la misma clase de píldoras, y cada una se
+  // nombra a sí misma para el lector de pantalla.
+  for (const [id, etiqueta] of [
+    ["perfilHerramientas", "Herramientas"],
+    ["perfilHabilidades", "Habilidades"],
+    ["perfilIdiomas", "Idiomas"],
+  ]) {
+    const lista = HTML.match(new RegExp(`<ul[^>]*\\sid="${id}"[^>]*>`));
+    assert.ok(lista, `falta la lista #${id}`);
+    assert.match(lista[0], /class="colaboradores__etiquetas"/, `#${id} no usa la clase compartida`);
+    assert.match(lista[0], new RegExp(`aria-label="${etiqueta}"`), `#${id} no se nombra`);
+  }
+});

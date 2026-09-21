@@ -23,6 +23,8 @@ const CAMPOS_MI_FICHA = Object.freeze([
   "sector",
   "ubicacion",
   "herramientas",
+  "habilidades",
+  "idiomas",
   "modalidad_trabajo",
   "anio_inicio",
   "bio",
@@ -39,13 +41,20 @@ const CAMPOS_MI_FICHA = Object.freeze([
 const MODALIDADES_TRABAJO_MI_FICHA = Object.freeze(["Presencial", "Híbrido", "Remoto"]);
 
 // Largos en caracteres (puntos de código, como `char_length`), cantidad de
-// elementos de herramientas y rango de años que admite la base.
+// elementos de cada lista de etiquetas y rango de años que admite la base.
+//
+// El `min` de las tres listas es el de su CHECK en la 0041: herramientas
+// arranca en 1 (obligatoria) y habilidades e idiomas en 0 (opcionales). `max`
+// es 12 en las tres. `etiqueta` es aparte: es el largo de UN elemento, y sale
+// de etiquetas_colaborador_validas(), que juzga a las tres por igual.
 const LIMITES_MI_FICHA = Object.freeze({
   puesto: Object.freeze({ min: 2, max: 60 }),
   sector: Object.freeze({ min: 2, max: 80 }),
   ubicacion: Object.freeze({ min: 2, max: 80 }),
   bio: Object.freeze({ min: 10, max: 240 }),
   herramientas: Object.freeze({ min: 1, max: 12 }),
+  habilidades: Object.freeze({ min: 0, max: 12 }),
+  idiomas: Object.freeze({ min: 0, max: 12 }),
   etiqueta: Object.freeze({ min: 1, max: 40 }),
   anio_inicio: Object.freeze({ min: 1950, max: 2100 }),
   linkedin: 200,
@@ -102,6 +111,22 @@ const MENSAJES_MI_FICHA = Object.freeze({
     largo: "Cada herramienta puede tener hasta 40 caracteres.",
     caracteres: "Alguna herramienta tiene caracteres no permitidos.",
   }),
+  /*
+    Habilidades e idiomas NO tienen mensaje `vacio`: su mínimo es 0, así que
+    la rama que lo devolvería en errorDeListaDeEtiquetasMiFicha() no se
+    alcanza nunca. Agregarlo por simetría sería escribir un texto que la
+    página no puede mostrar.
+  */
+  habilidades: Object.freeze({
+    muchas: "Escribe como máximo 12 habilidades.",
+    largo: "Cada habilidad puede tener hasta 40 caracteres.",
+    caracteres: "Alguna habilidad tiene caracteres no permitidos.",
+  }),
+  idiomas: Object.freeze({
+    muchas: "Escribe como máximo 12 idiomas.",
+    largo: "Cada idioma puede tener hasta 40 caracteres.",
+    caracteres: "Algún idioma tiene caracteres no permitidos.",
+  }),
   modalidad_trabajo: "Elige tu modalidad de trabajo.",
   anio_inicio: Object.freeze({
     vacio: "Escribe el año en que empezaste.",
@@ -136,7 +161,7 @@ function tieneCaracteresProhibidosMiFicha(texto) {
 }
 
 /*
-  Las herramientas ya llegan como arreglo: lo arma el editor de etiquetas
+  Las listas de etiquetas ya llegan como arreglo: las arma el editor de etiquetas
   (mi-ficha.etiquetas.logica.js), no un campo de texto separado por comas. Lo que
   no es arreglo se trata como vacío, y cada elemento se recorta con el mismo
   criterio que cualquier otro texto de la ficha; lo que queda en blanco se
@@ -162,9 +187,9 @@ function enlaceMiFicha(valor) {
 
 /*
   De los valores del formulario (todo texto) a la ficha que se guarda: textos
-  recortados, herramientas separadas, año numérico y enlaces vacíos en null.
-  Siempre las diez llaves, válida o no; decidir si sirve es cosa de
-  validarMiFicha().
+  recortados, las tres listas de etiquetas separadas, año numérico y enlaces
+  vacíos en null. Siempre las doce llaves, válida o no; decidir si sirve es
+  cosa de validarMiFicha().
 
   El recorte de la bio también quita los saltos de línea de los bordes: la
   base exige `bio = btrim(bio, E' \n')`, y un salto al final no es un error
@@ -177,6 +202,8 @@ function normalizarMiFicha(valores) {
     sector: textoMiFicha(origen.sector),
     ubicacion: textoMiFicha(origen.ubicacion),
     herramientas: normalizarEtiquetasMiFicha(origen.herramientas),
+    habilidades: normalizarEtiquetasMiFicha(origen.habilidades),
+    idiomas: normalizarEtiquetasMiFicha(origen.idiomas),
     modalidad_trabajo: textoMiFicha(origen.modalidad_trabajo),
     anio_inicio: anioMiFicha(origen.anio_inicio),
     bio: textoMiFicha(origen.bio),
@@ -200,8 +227,8 @@ function errorDeTextoMiFicha(campo, texto, { conSaltos = false } = {}) {
 }
 
 /*
-  El veredicto de UN elemento de una lista de etiquetas (hoy sólo
-  herramientas): los dos motivos que la 0041 revisa elemento por elemento con
+  El veredicto de UN elemento de una lista de etiquetas (herramientas,
+  habilidades o idiomas): los dos motivos que la 0041 revisa elemento por elemento con
   etiquetas_colaborador_validas(). No mira el mínimo de un carácter porque
   quien arma la lista ya descarta lo vacío antes de llegar acá; el editor de
   etiquetas avisa ese caso por su cuenta.
@@ -271,6 +298,8 @@ function validarMiFicha(valores, anioActual) {
     sector: errorDeTextoMiFicha("sector", ficha.sector),
     ubicacion: errorDeTextoMiFicha("ubicacion", ficha.ubicacion),
     herramientas: errorDeListaDeEtiquetasMiFicha("herramientas", ficha.herramientas),
+    habilidades: errorDeListaDeEtiquetasMiFicha("habilidades", ficha.habilidades),
+    idiomas: errorDeListaDeEtiquetasMiFicha("idiomas", ficha.idiomas),
     modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(ficha.modalidad_trabajo) ? null : MENSAJES_MI_FICHA.modalidad_trabajo,
     anio_inicio: errorDeAnioMiFicha(origen.anio_inicio, ficha.anio_inicio, anioActual),
     bio: errorDeTextoMiFicha("bio", ficha.bio, { conSaltos: true }),
@@ -288,7 +317,7 @@ function validarMiFicha(valores, anioActual) {
 
 /*
   De la ficha guardada (o null, si todavía no hay) a los valores del
-  formulario: las herramientas como una COPIA del arreglo (el editor de
+  formulario: cada lista de etiquetas como una COPIA del arreglo (el editor de
   etiquetas es quien lo muta; nunca el arreglo de la ficha cargada), el año
   como texto y los enlaces ausentes como campo vacío.
 */
@@ -300,6 +329,8 @@ function valoresFormularioMiFicha(ficha) {
     sector: texto(origen.sector),
     ubicacion: texto(origen.ubicacion),
     herramientas: Array.isArray(origen.herramientas) ? [...origen.herramientas] : [],
+    habilidades: Array.isArray(origen.habilidades) ? [...origen.habilidades] : [],
+    idiomas: Array.isArray(origen.idiomas) ? [...origen.idiomas] : [],
     modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(origen.modalidad_trabajo) ? origen.modalidad_trabajo : "",
     anio_inicio: Number.isInteger(origen.anio_inicio) ? String(origen.anio_inicio) : "",
     bio: texto(origen.bio),

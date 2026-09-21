@@ -3,7 +3,8 @@
   formulario que la guarda.
 
   La normalización y la validación viven en mi-ficha.logica.js; el editor de
-  etiquetas de las herramientas, en mi-ficha.etiquetas.js
+  etiquetas —instanciado tres veces: herramientas, habilidades e idiomas—, en
+  mi-ficha.etiquetas.js
   (crearEditorDeEtiquetas), con su lógica pura de agregar/quitar/mover/sugerir en
   mi-ficha.etiquetas.logica.js; la lectura y el guardado, en
   core/colaboradores/ficha.service.js. Todos se
@@ -12,7 +13,7 @@
 
   Arranque: requerirSesion() (sin sesión ya navegó al login y acá no se hace
   nada más) → obtenerPerfil() → sólo si la cuenta está marcada como
-  colaboradora, obtenerMiFicha() (en paralelo con el catálogo de tecnologías)
+  colaboradora, obtenerMiFicha() (en paralelo con los catálogos de etiquetas)
   → formulario lleno, o vacío si todavía no hay ficha. Cualquier fallo de
   carga queda en el aviso con "Reintentar"; a quien no colabora se le dice,
   sin redirigirlo en silencio.
@@ -32,9 +33,50 @@
   const SOLO_COLABORADORES = "Esta sección es sólo para colaboradores.";
   const SIN_NOMBRE = "Tu cuenta todavía no tiene nombre.";
 
-  // El texto de la ayuda de herramientas cambia según si todavía se puede escribir.
-  const AYUDA_HERRAMIENTAS = "Los lenguajes, frameworks y productos con los que trabajas. Por ejemplo: Python, PostgreSQL, Figma. Hasta 12.";
-  const AYUDA_HERRAMIENTAS_LLENA = "Ya tienes 12 herramientas, el máximo. Quita alguna para escribir otra.";
+  /*
+    Los tres campos que son listas de etiquetas. Una tabla y no tres bloques
+    de cableado: lo único que cambia entre ellos son los textos y el prefijo
+    de sus ids, y tres copias del mismo `crearEditorDeEtiquetas({...})` se
+    desincronizan solas.
+
+    `prefijoIds` es la raíz de TODOS los ids del campo en el HTML: el control
+    (`miFichaHabilidades`), sus nodos (`…Opciones`, `…Lista`, `…Estado`,
+    `…Ayuda`, `…Error`) y el prefijo de los id de cada opción del listbox, que
+    TIENE que ser distinto por instancia: con tres listbox en la misma página,
+    dos que generaran el mismo id escribirían el mismo aria-activedescendant.
+
+    `nombreCatalogo` es el del catálogo estático que sugiere (catalogo.service.js);
+    coincide con el campo en los tres, pero se nombra igual de explícito para
+    que no sea una coincidencia de la que dependa nadie.
+
+    El texto de ayuda cambia según si todavía se puede escribir una más.
+  */
+  const CAMPOS_DE_ETIQUETAS = Object.freeze([
+    Object.freeze({
+      campo: "herramientas",
+      prefijoIds: "miFichaHerramientas",
+      nombreCatalogo: "herramientas",
+      nombrePlural: "herramientas",
+      ayuda: "Los lenguajes, frameworks y productos con los que trabajas. Por ejemplo: Python, PostgreSQL, Figma. Hasta 12.",
+      ayudaLlena: "Ya tienes 12 herramientas, el máximo. Quita alguna para escribir otra.",
+    }),
+    Object.freeze({
+      campo: "habilidades",
+      prefijoIds: "miFichaHabilidades",
+      nombreCatalogo: "habilidades",
+      nombrePlural: "habilidades",
+      ayuda: "Lo que sabes hacer: prácticas, disciplinas y metodologías. Por ejemplo: TDD, REST API, Scrum. Opcional, hasta 12.",
+      ayudaLlena: "Ya tienes 12 habilidades, el máximo. Quita alguna para escribir otra.",
+    }),
+    Object.freeze({
+      campo: "idiomas",
+      prefijoIds: "miFichaIdiomas",
+      nombreCatalogo: "idiomas",
+      nombrePlural: "idiomas",
+      ayuda: "Los idiomas que hablas, sin nivel. Por ejemplo: Español, Inglés. Opcional, hasta 12.",
+      ayudaLlena: "Ya tienes 12 idiomas, el máximo. Quita alguno para escribir otro.",
+    }),
+  ]);
 
   // El contador de la bio sólo se anuncia con aria-live cerca del tope: una
   // región que hablara en cada tecla sería insoportable con lector de
@@ -44,15 +86,17 @@
 
   // Los campos de texto de la ficha y su input. Cada uno tiene su ayuda en
   // `${id}Ayuda` y su error en `${id}Error`. La modalidad de trabajo va
-  // aparte: es un grupo de radios. Herramientas es un tercer caso: su input
-  // es un combobox y su valor no vive en `.value`, sino en el arreglo que
-  // gestiona el editor de etiquetas de mi-ficha.etiquetas.js (ver
-  // editorHerramientas).
+  // aparte: es un grupo de radios. Los tres campos de CAMPOS_DE_ETIQUETAS son
+  // un tercer caso: su input es un combobox y su valor no vive en `.value`,
+  // sino en el arreglo que gestiona su editor de etiquetas
+  // (mi-ficha.etiquetas.js; ver `editores`).
   const IDS_DE_CAMPO = Object.freeze({
     puesto: "miFichaPuesto",
     sector: "miFichaSector",
     ubicacion: "miFichaUbicacion",
     herramientas: "miFichaHerramientas",
+    habilidades: "miFichaHabilidades",
+    idiomas: "miFichaIdiomas",
     anio_inicio: "miFichaAnioInicio",
     bio: "miFichaBio",
     linkedin: "miFichaLinkedin",
@@ -77,6 +121,14 @@
     herramientasLista: "miFichaHerramientasLista",
     herramientasEstado: "miFichaHerramientasEstado",
     herramientasAyuda: "miFichaHerramientasAyuda",
+    habilidadesOpciones: "miFichaHabilidadesOpciones",
+    habilidadesLista: "miFichaHabilidadesLista",
+    habilidadesEstado: "miFichaHabilidadesEstado",
+    habilidadesAyuda: "miFichaHabilidadesAyuda",
+    idiomasOpciones: "miFichaIdiomasOpciones",
+    idiomasLista: "miFichaIdiomasLista",
+    idiomasEstado: "miFichaIdiomasEstado",
+    idiomasAyuda: "miFichaIdiomasAyuda",
     bioContador: "miFichaBioContador",
   });
 
@@ -85,9 +137,9 @@
     un error de sintaxis), se dice de entrada y no a mitad de un guardado.
     `typeof` sobre una función no declarada da "undefined", no lanza.
 
-    El catálogo de tecnologías queda AFUERA a propósito: es una sugerencia,
-    no una dependencia. Sin él el editor de etiquetas sigue vivo, sólo sin
-    autocompletar (ver cargarCatalogoHerramientas).
+    Los catálogos de etiquetas quedan AFUERA a propósito: son una sugerencia,
+    no una dependencia. Sin ellos los editores siguen vivos, sólo sin
+    autocompletar (ver cargarCatalogos).
   */
   function dependenciasFaltantes() {
     const disponibles = {
@@ -155,10 +207,8 @@
 
     const {
       aviso, avisoMensaje, reintentar, irColaboradores, contenido, publico,
-      form, estado, nombre, verPerfil, campos, radios,
-      herramientasOpciones, herramientasLista, herramientasEstado, herramientasAyuda, bioContador,
+      form, estado, nombre, verPerfil, campos, radios, bioContador,
     } = elementos;
-    const herramientasInput = campos.herramientas.controles[0];
     const bioInput = campos.bio.controles[0];
 
     // Lo que el arranque deja para el guardado.
@@ -251,11 +301,11 @@
     function llenarFormulario(ficha) {
       const valores = valoresFormularioMiFicha(ficha);
       for (const [campo, { controles }] of Object.entries(campos)) {
-        if (campo === "modalidad_trabajo" || campo === "herramientas") continue;
+        if (campo === "modalidad_trabajo" || campo in editores) continue;
         controles[0].value = valores[campo];
       }
       radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
-      editorHerramientas.establecer(valores.herramientas);
+      for (const [campo, editor] of Object.entries(editores)) editor.establecer(valores[campo]);
       actualizarContadorBio();
       limpiarErrores();
       ocultarEstado();
@@ -264,18 +314,19 @@
     function leerFormulario() {
       const valores = {};
       for (const [campo, { controles }] of Object.entries(campos)) {
-        if (campo === "modalidad_trabajo" || campo === "herramientas") continue;
+        if (campo === "modalidad_trabajo" || campo in editores) continue;
         valores[campo] = controles[0].value;
       }
       valores.modalidad_trabajo = radios.find((radio) => radio.checked)?.value ?? "";
-      valores.herramientas = editorHerramientas.leer();
+      for (const [campo, editor] of Object.entries(editores)) valores[campo] = editor.leer();
       return valores;
     }
 
     /*
       establecerFormularioOcupado (auth-ui.js) recorre button, input y select:
       la bio es un textarea y quedaría editable mientras se guarda. El input
-      de herramientas y los botones de cada etiqueta ya son input/button, así
+      de cada lista de etiquetas y los botones de sus etiquetas ya son
+      input/button, así
       que quedan cubiertos sin nada extra acá.
     */
     function ocuparFormulario(ocupado) {
@@ -284,24 +335,32 @@
     }
 
     /*
-      El editor de etiquetas de herramientas (mi-ficha.etiquetas.js) se
-      instancia más abajo, después de dependenciasFaltantes():
+      Los tres editores de etiquetas (mi-ficha.etiquetas.js), por campo. Se
+      instancian más abajo, después de dependenciasFaltantes():
       crearEditorDeEtiquetas() se LLAMA acá (no sólo se referencia dentro de
       un callback), así que si el script no llegó tiene que fallar por el
       mismo camino prolijo que cualquier otra dependencia faltante, con
       ERROR_DE_PAGINA y no con una excepción sin capturar.
+
+      Hasta entonces es un objeto vacío y no `undefined`: llenarFormulario() y
+      leerFormulario() preguntan `campo in editores`, y con undefined eso
+      lanzaría antes de llegar al aviso.
     */
-    let editorHerramientas;
+    let editores = {};
 
     /*
-      El catálogo es sólo para sugerir: si el script no llegó o la carga
-      falla, queda vacío y el editor se degrada en silencio a texto libre, sin
-      aviso ni reintento (a quien edita su ficha no le toca resolver eso).
+      Los catálogos son sólo para sugerir: si el script no llegó o una carga
+      falla, ese editor queda sin catálogo y se degrada en silencio a texto
+      libre, sin aviso ni reintento (a quien edita su ficha no le toca
+      resolver eso). Los tres se piden a la vez y uno que falle no se lleva a
+      los otros: cada promesa resuelve su propio { ok }.
     */
-    async function cargarCatalogoHerramientas() {
+    async function cargarCatalogos() {
       if (typeof cargarCatalogoDeEtiquetas !== "function") return;
-      const resultado = await cargarCatalogoDeEtiquetas("herramientas");
-      if (resultado?.ok) editorHerramientas.fijarCatalogo(resultado.etiquetas);
+      await Promise.all(CAMPOS_DE_ETIQUETAS.map(async ({ campo, nombreCatalogo }) => {
+        const resultado = await cargarCatalogoDeEtiquetas(nombreCatalogo);
+        if (resultado?.ok) editores[campo].fijarCatalogo(resultado.etiquetas);
+      }));
     }
 
     /* ---------- Arranque ---------- */
@@ -334,7 +393,7 @@
         // En paralelo: el catálogo no bloquea la ficha ni al revés.
         const [resultado] = await Promise.all([
           obtenerMiFicha(sesion.user.id),
-          cargarCatalogoHerramientas(),
+          cargarCatalogos(),
         ]);
         if (!resultado?.ok) {
           mostrarAviso(resultado?.mensaje || ERROR_DE_FICHA, { error: true, conReintento: true });
@@ -413,20 +472,25 @@
       return undefined;
     }
 
-    editorHerramientas = crearEditorDeEtiquetas({
-      campo: "herramientas",
-      input: herramientasInput,
-      opciones: herramientasOpciones,
-      lista: herramientasLista,
-      estado: herramientasEstado,
-      ayuda: herramientasAyuda,
-      prefijoIdOpcion: "miFichaHerramientasOpcion",
-      textoAyuda: AYUDA_HERRAMIENTAS,
-      textoAyudaLlena: AYUDA_HERRAMIENTAS_LLENA,
-      nombrePlural: "herramientas",
-      marcarError: (mensaje) => marcarError("herramientas", mensaje),
-      limpiarError: () => limpiarError("herramientas"),
-    });
+    // Una instancia por campo, con sus propios nodos y su propio prefijo de
+    // id de opción (ver CAMPOS_DE_ETIQUETAS). Ninguna sabe de las otras.
+    editores = Object.fromEntries(CAMPOS_DE_ETIQUETAS.map((definicion) => [
+      definicion.campo,
+      crearEditorDeEtiquetas({
+        campo: definicion.campo,
+        input: campos[definicion.campo].controles[0],
+        opciones: elementos[`${definicion.campo}Opciones`],
+        lista: elementos[`${definicion.campo}Lista`],
+        estado: elementos[`${definicion.campo}Estado`],
+        ayuda: elementos[`${definicion.campo}Ayuda`],
+        prefijoIdOpcion: `${definicion.prefijoIds}Opcion`,
+        textoAyuda: definicion.ayuda,
+        textoAyudaLlena: definicion.ayudaLlena,
+        nombrePlural: definicion.nombrePlural,
+        marcarError: (mensaje) => marcarError(definicion.campo, mensaje),
+        limpiarError: () => limpiarError(definicion.campo),
+      }),
+    ]));
 
     // Devuelve la promesa del arranque: el navegador la ignora, los tests la
     // esperan.
