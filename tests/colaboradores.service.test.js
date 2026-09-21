@@ -57,6 +57,10 @@ const SIN_FICHA = Object.freeze({
   sector: null,
   ubicacion: null,
   herramientas: null,
+  habilidades: null,
+  idiomas: null,
+  empresa: null,
+  empresa_enlace: null,
   modalidad_trabajo: null,
   anio_inicio: null,
   bio: null,
@@ -65,6 +69,7 @@ const SIN_FICHA = Object.freeze({
   correo: null,
 });
 const sinFicha = (identidad) => ({ ...identidad, ...SIN_FICHA });
+const LISTAS_DE_ETIQUETAS = Object.freeze(["herramientas", "habilidades", "idiomas"]);
 const CAMPOS_PUBLICOS = ["nombre", "corto", "slug", ...Object.keys(SIN_FICHA)].sort();
 
 // Una fila completa como la entrega `listar_colaboradores()` de la 0041.
@@ -76,6 +81,10 @@ const FILA_CON_FICHA = Object.freeze({
   sector: "Data warehousing",
   ubicacion: "Querétaro, MX",
   herramientas: ["PostgreSQL", "Python", "GCP"],
+  habilidades: ["Arquitectura de software", "TDD"],
+  idiomas: ["Español", "Inglés"],
+  empresa: "Datalab",
+  empresa_enlace: "https://datalab.example.com",
   modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
@@ -161,6 +170,10 @@ test("passes the card fields through under their database names", async () => {
       sector: "Data warehousing",
       ubicacion: "Querétaro, MX",
       herramientas: ["PostgreSQL", "Python", "GCP"],
+      habilidades: ["Arquitectura de software", "TDD"],
+      idiomas: ["Español", "Inglés"],
+      empresa: "Datalab",
+      empresa_enlace: "https://datalab.example.com",
       modalidad_trabajo: "Híbrido",
       anio_inicio: 2018,
       bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
@@ -185,23 +198,74 @@ test("a collaborator without a card yet keeps every card field null", async () =
 });
 
 /*
-  Las herramientas se pintan unidas con " · ": sólo pasan si son un arreglo de
-  textos. Cualquier otra forma (el texto suelto del prototipo, números, un
-  null adentro) llega como null. Si está completo o no lo decide
-  tienePerfil(), no el servicio: por eso el arreglo vacío pasa tal cual.
+  Las tres listas de etiquetas se pintan como píldoras: sólo pasan si son un
+  arreglo de textos. Cualquier otra forma (el texto suelto del prototipo,
+  números, un null adentro) llega como null. Si está completo o no lo decide
+  tienePerfil(), no el servicio: por eso el arreglo vacío pasa tal cual —y
+  habilidades e idiomas nacen vacías, así que es su caso normal.
 */
-test("tools only pass as an array of strings; anything else becomes null", async () => {
-  for (const herramientas of ["PostgreSQL · Python", [1, 2], ["Python", null], { 0: "Python" }, 7]) {
-    const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, herramientas }] });
-    const result = await listarColaboradores();
-    assert.equal(result.data[0].herramientas, null, `herramientas = ${JSON.stringify(herramientas)}`);
+test("tag lists only pass as an array of strings; anything else becomes null", async () => {
+  for (const campo of LISTAS_DE_ETIQUETAS) {
+    for (const valor of ["PostgreSQL · Python", [1, 2], ["Python", null], { 0: "Python" }, 7]) {
+      const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, [campo]: valor }] });
+      const result = await listarColaboradores();
+      assert.equal(result.data[0][campo], null, `${campo} = ${JSON.stringify(valor)}`);
+    }
+
+    for (const valor of [["Python"], []]) {
+      const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, [campo]: valor }] });
+      const result = await listarColaboradores();
+      assert.deepEqual(plano(result.data[0][campo]), valor);
+    }
+  }
+});
+
+/*
+  EL TEST QUE FALTABA. El mapper del servicio es una lista blanca campo por
+  campo, y agregar columnas al RPC no lo toca: la 0041 trajo habilidades,
+  idiomas, empresa y empresa_enlace, el pintado se escribió contra una muestra
+  que sí las tenía, y entre la base y la página se caían sin que nada fallara.
+  Por eso la forma esperada no se escribe a mano acá —quedaría igual de ciega—
+  sino que se lee del RETURNS TABLE de la migración que define el RPC.
+
+  `apellidos` es la única columna que no sale con su nombre: el servicio la
+  funde en `nombre` y `corto`.
+*/
+function columnasDelRpcDeColaboradores() {
+  const carpeta = "supabase/migrations";
+  const FIRMA = "create function public.listar_colaboradores()";
+  const definen = fs
+    .readdirSync(carpeta)
+    .filter((nombre) => nombre.endsWith(".sql"))
+    .sort()
+    .filter((nombre) => fs.readFileSync(`${carpeta}/${nombre}`, "utf8").includes(FIRMA));
+  assert.ok(definen.length > 0, "ninguna migración define listar_colaboradores()");
+
+  const fuente = fs.readFileSync(`${carpeta}/${definen[definen.length - 1]}`, "utf8");
+  const abre = fuente.indexOf("(", fuente.indexOf("returns table", fuente.indexOf(FIRMA)));
+  const cierra = fuente.indexOf(")", abre);
+  assert.ok(abre > 0 && cierra > abre, "no se pudo leer el RETURNS TABLE del RPC");
+
+  return fuente
+    .slice(abre + 1, cierra)
+    .split(",")
+    .map((declaracion) => declaracion.trim().split(/\s+/)[0])
+    .filter(Boolean);
+}
+
+test("every column the RPC returns reaches the page under its own name", async () => {
+  const columnas = columnasDelRpcDeColaboradores();
+  // Guarda de la guarda: si la lectura del SQL se rompe, el deepEqual de abajo
+  // pasaría a comparar contra casi nada y dejaría de probar algo.
+  for (const columna of ["nombre", "apellidos", "slug", "herramientas", "correo"]) {
+    assert.ok(columnas.includes(columna), `el RETURNS TABLE leído no trae ${columna}`);
   }
 
-  for (const herramientas of [["Python"], []]) {
-    const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, herramientas }] });
-    const result = await listarColaboradores();
-    assert.deepEqual(plano(result.data[0].herramientas), herramientas);
-  }
+  const esperadas = [...columnas.filter((columna) => columna !== "apellidos"), "corto"].sort();
+  const { listarColaboradores } = createHarness({ data: [FILA_CON_FICHA] });
+  const result = await listarColaboradores();
+
+  assert.deepEqual(Object.keys(result.data[0]).sort(), esperadas);
 });
 
 test("never lets extra RPC columns reach the result", async () => {

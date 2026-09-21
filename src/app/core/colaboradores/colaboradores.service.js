@@ -46,9 +46,9 @@ function tieneSlugDeColaborador(fila) {
   return typeof fila?.slug === "string" && PATRON_SLUG_COLABORADOR.test(fila.slug);
 }
 
-// La página une las herramientas con " · ": sólo pasa un arreglo de textos,
-// copiado para no compartirlo con la respuesta. Cualquier otra forma llega
-// como null.
+// Las tres listas de etiquetas —herramientas, habilidades e idiomas— pasan
+// por acá: sólo pasa un arreglo de textos, copiado para no compartirlo con la
+// respuesta. Cualquier otra forma llega como null.
 function etiquetasDeColaborador(valor) {
   const esListaDeTextos = Array.isArray(valor) && valor.every((elemento) => typeof elemento === "string");
   return esListaDeTextos ? [...valor] : null;
@@ -82,6 +82,10 @@ function aColaborador(fila) {
     sector: campoDeFichaColaborador(fila.sector),
     ubicacion: campoDeFichaColaborador(fila.ubicacion),
     herramientas: etiquetasDeColaborador(fila.herramientas),
+    habilidades: etiquetasDeColaborador(fila.habilidades),
+    idiomas: etiquetasDeColaborador(fila.idiomas),
+    empresa: campoDeFichaColaborador(fila.empresa),
+    empresa_enlace: campoDeFichaColaborador(fila.empresa_enlace),
     modalidad_trabajo: campoDeFichaColaborador(fila.modalidad_trabajo),
     anio_inicio: campoDeFichaColaborador(fila.anio_inicio),
     bio: campoDeFichaColaborador(fila.bio),
