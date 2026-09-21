@@ -3,10 +3,11 @@
   formulario que la guarda.
 
   La normalización y la validación viven en mi-ficha.logica.js; el editor de
-  etiquetas del stack, en mi-ficha.stack.logica.js; la lectura y el guardado,
-  en core/colaboradores/ficha.service.js. Todos se cargan antes y dejan sus
-  funciones en el ámbito global. establecerFormularioOcupado sale de
-  features/auth/auth-ui.js.
+  etiquetas del stack, en mi-ficha.etiquetas.js (crearEditorDeEtiquetas), con
+  su lógica pura de agregar/quitar/mover/sugerir en mi-ficha.stack.logica.js;
+  la lectura y el guardado, en core/colaboradores/ficha.service.js. Todos se
+  cargan antes y dejan sus funciones en el ámbito global.
+  establecerFormularioOcupado sale de features/auth/auth-ui.js.
 
   Arranque: requerirSesion() (sin sesión ya navegó al login y acá no se hace
   nada más) → obtenerPerfil() → sólo si la cuenta está marcada como
@@ -34,11 +35,6 @@
   const AYUDA_STACK = "Escribe una tecnología y presiona Enter para agregarla. Por ejemplo: Python, PostgreSQL, GCP. Hasta 12.";
   const AYUDA_STACK_LLENA = "Ya tienes 12 tecnologías, el máximo. Quita alguna para escribir otra.";
 
-  // Cuánto dura resaltada la etiqueta que ya estaba, cuando se intenta
-  // repetirla. El mismo criterio que el aviso de guardado del extractor.
-  const DURACION_RESALTADO_DUPLICADO_MS = 1200;
-  const CLASE_ETIQUETA_DUPLICADA = "mi-ficha__etiqueta--duplicada";
-
   // El contador de la bio sólo se anuncia con aria-live cerca del tope: una
   // región que hablara en cada tecla sería insoportable con lector de
   // pantalla. "Cerca" son los últimos 20 caracteres disponibles.
@@ -48,8 +44,8 @@
   // Los campos de texto de la ficha y su input. Cada uno tiene su ayuda en
   // `${id}Ayuda` y su error en `${id}Error`. La modalidad de trabajo va
   // aparte: es un grupo de radios. El stack es un tercer caso: su input es un
-  // combobox y su valor no vive en `.value`, sino en el arreglo que arma el
-  // editor de etiquetas (ver la sección "Stack" más abajo).
+  // combobox y su valor no vive en `.value`, sino en el arreglo que gestiona
+  // el editor de etiquetas de mi-ficha.etiquetas.js (ver editorStack).
   const IDS_DE_CAMPO = Object.freeze({
     puesto: "miFichaPuesto",
     sector: "miFichaSector",
@@ -105,11 +101,7 @@
       valoresFormularioMiFicha: typeof valoresFormularioMiFicha,
       nombreVisibleMiFicha: typeof nombreVisibleMiFicha,
       rutaPerfilPublicoMiFicha: typeof rutaPerfilPublicoMiFicha,
-      agregarTecnologiaAlStack: typeof agregarTecnologiaAlStack,
-      quitarTecnologiaDelStack: typeof quitarTecnologiaDelStack,
-      moverTecnologiaEnStack: typeof moverTecnologiaEnStack,
-      sugerenciasDeTecnologia: typeof sugerenciasDeTecnologia,
-      indiceMasCercano: typeof indiceMasCercano,
+      crearEditorDeEtiquetas: typeof crearEditorDeEtiquetas,
     };
     return Object.keys(disponibles).filter((nombre) => disponibles[nombre] !== "function");
   }
@@ -170,14 +162,6 @@
     // Lo que el arranque deja para el guardado.
     let sesion = null;
     let perfil = null;
-
-    // El estado del editor de etiquetas: vive acá y no en el DOM, porque el
-    // DOM (el input y las dos listas) es sólo su pintura.
-    let stack = [];
-    let catalogo = [];
-    let sugerenciasActuales = [];
-    let resaltadaSugerencia = -1;
-    let arrastreStack = null;
 
     /* ---------- Aviso de carga ---------- */
 
@@ -269,7 +253,7 @@
         controles[0].value = valores[campo];
       }
       radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
-      establecerStack(valores.stack);
+      editorStack.establecer(valores.stack);
       actualizarContadorBio();
       limpiarErrores();
       ocultarEstado();
@@ -282,7 +266,7 @@
         valores[campo] = controles[0].value;
       }
       valores.modalidad_trabajo = radios.find((radio) => radio.checked)?.value ?? "";
-      valores.stack = [...stack];
+      valores.stack = editorStack.leer();
       return valores;
     }
 
@@ -297,312 +281,15 @@
       campos.bio.controles[0].disabled = ocupado;
     }
 
-    /* ---------- Stack (editor de etiquetas) ---------- */
-
     /*
-      Reemplaza el stack entero (al cargar la ficha, o al guardarla y recibir
-      de vuelta la versión normalizada). Nunca conserva el arreglo que llega:
-      lo que se muta acá es siempre una copia.
+      El editor de etiquetas del stack (mi-ficha.etiquetas.js) se instancia
+      más abajo, después de dependenciasFaltantes(): crearEditorDeEtiquetas()
+      se LLAMA acá (no sólo se referencia dentro de un callback), así que si
+      el script no llegó tiene que fallar por el mismo camino prolijo que
+      cualquier otra dependencia faltante, con ERROR_DE_PAGINA y no con una
+      excepción sin capturar.
     */
-    function establecerStack(nuevoStack) {
-      stack = Array.isArray(nuevoStack) ? [...nuevoStack] : [];
-      stackInput.value = "";
-      cerrarListboxStack();
-      pintarStackLista();
-      actualizarLimiteStack();
-    }
-
-    // Con doce etiquetas no se puede escribir una treceava: se avisa en la
-    // misma ayuda que ya describe el campo.
-    function actualizarLimiteStack() {
-      const llena = stack.length >= LIMITES_MI_FICHA.stack.max;
-      stackInput.disabled = llena;
-      stackAyuda.textContent = llena ? AYUDA_STACK_LLENA : AYUDA_STACK;
-    }
-
-    function anunciarStack(mensaje) {
-      stackEstado.textContent = mensaje;
-    }
-
-    function pintarStackLista() {
-      stackLista.replaceChildren(...stack.map(crearEtiquetaStack));
-    }
-
-    /*
-      Una etiqueta: una manija para reordenar (por teclado o arrastrando), el
-      texto y un botón para quitarla. La manija y el botón de quitar son
-      texto plano (no un span decorativo adentro): así evento.target en un
-      clic o un pointerdown es siempre el botón, nunca un hijo suyo.
-    */
-    function crearEtiquetaStack(tecnologia, indice) {
-      const item = document.createElement("li");
-      item.className = "mi-ficha__etiqueta";
-
-      const manija = document.createElement("button");
-      manija.type = "button";
-      manija.className = "mi-ficha__etiqueta-manija";
-      manija.setAttribute("aria-label", `Reordenar ${tecnologia}`);
-      manija.setAttribute("data-indice-stack", String(indice));
-      manija.textContent = "⠿";
-      manija.addEventListener("keydown", (evento) => manejarTecladoManijaStack(evento, indice));
-      manija.addEventListener("pointerdown", (evento) => iniciarArrastreStack(evento, indice));
-
-      const texto = document.createElement("span");
-      texto.className = "mi-ficha__etiqueta-texto";
-      texto.textContent = tecnologia;
-
-      const quitar = document.createElement("button");
-      quitar.type = "button";
-      quitar.className = "mi-ficha__etiqueta-quitar";
-      quitar.setAttribute("aria-label", `Quitar ${tecnologia}`);
-      quitar.textContent = "×";
-      quitar.addEventListener("click", () => quitarTecnologiaEnIndice(indice));
-
-      item.append(manija, texto, quitar);
-      return item;
-    }
-
-    function enfocarManijaStack(indice) {
-      const item = stackLista.children[indice];
-      if (!item) return;
-      item.children[0].focus();
-    }
-
-    /*
-      Al quitar, el foco va a la manija que quedó en el mismo índice; si ya no
-      hay ninguna ahí (se quitó la última), a la anterior; si la lista quedó
-      vacía, al input. Cuando quita Backspace (con `gestionarFoco: false`) el
-      foco ya está en el input y se queda ahí: moverlo a una manija sería
-      sorprender a quien sigue escribiendo.
-    */
-    function enfocarTrasQuitar(indiceQuitado) {
-      if (stack.length === 0) { stackInput.focus(); return; }
-      enfocarManijaStack(Math.min(indiceQuitado, stack.length - 1));
-    }
-
-    function quitarTecnologiaEnIndice(indice, { gestionarFoco = true } = {}) {
-      const anterior = stack;
-      stack = quitarTecnologiaDelStack(stack, indice);
-      if (stack === anterior) return;
-      pintarStackLista();
-      actualizarLimiteStack();
-      if (gestionarFoco) enfocarTrasQuitar(indice);
-    }
-
-    function quitarUltimaTecnologia() {
-      if (stack.length === 0) return;
-      quitarTecnologiaEnIndice(stack.length - 1, { gestionarFoco: false });
-    }
-
-    // Reordenar desde la manija: el foco sigue a la etiqueta en su nueva
-    // posición, y se anuncia por la región aria-live del widget.
-    function moverTecnologiaStack(origen, destino) {
-      const anterior = stack;
-      stack = moverTecnologiaEnStack(stack, origen, destino);
-      if (stack === anterior) return;
-      const posicionFinal = Math.min(Math.max(destino, 0), stack.length - 1);
-      pintarStackLista();
-      enfocarManijaStack(posicionFinal);
-      anunciarStack(`${stack[posicionFinal]}, posición ${posicionFinal + 1} de ${stack.length}.`);
-    }
-
-    function manejarTecladoManijaStack(evento, indice) {
-      let destino;
-      if (evento.key === "ArrowLeft") destino = indice - 1;
-      else if (evento.key === "ArrowRight") destino = indice + 1;
-      else if (evento.key === "Home") destino = 0;
-      else if (evento.key === "End") destino = stack.length - 1;
-      else return;
-      evento.preventDefault();
-      moverTecnologiaStack(indice, destino);
-    }
-
-    /*
-      Arrastre con Pointer Events, como el recorte de portadas
-      (gestionar-curso.portada.js). La captura va en `stackLista` (el
-      contenedor, que nunca se recrea) y no en la manija que inició el
-      arrastre: cada movimiento repinta la lista entera, y una manija
-      capturada que desaparece del DOM perdería la captura a mitad de camino.
-    */
-    function iniciarArrastreStack(evento, indice) {
-      arrastreStack = { pointerId: evento.pointerId, actual: indice };
-      stackLista.setPointerCapture?.(evento.pointerId);
-    }
-
-    /*
-      `children` es una HTMLCollection, no un arreglo: no tiene .map, .filter
-      ni .forEach. Hay que copiarla. El DOM falso de los tests la finge con un
-      arreglo de verdad, así que acá la suite no avisa; lo cubre un test de
-      mi-ficha.pagina.test.js que lee este archivo.
-    */
-    function centrosDeEtiquetasStack() {
-      return Array.from(stackLista.children).map((item) => {
-        const rect = item.getBoundingClientRect();
-        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      });
-    }
-
-    function moverArrastreStack(evento) {
-      if (!arrastreStack || evento.pointerId !== arrastreStack.pointerId) return;
-      const destino = indiceMasCercano(centrosDeEtiquetasStack(), { x: evento.clientX, y: evento.clientY });
-      if (destino === -1 || destino === arrastreStack.actual) return;
-      const anterior = stack;
-      stack = moverTecnologiaEnStack(stack, arrastreStack.actual, destino);
-      if (stack === anterior) return;
-      arrastreStack.actual = Math.min(Math.max(destino, 0), stack.length - 1);
-      pintarStackLista();
-    }
-
-    function terminarArrastreStack(evento) {
-      if (!arrastreStack || evento.pointerId !== arrastreStack.pointerId) return;
-      stackLista.releasePointerCapture?.(evento.pointerId);
-      arrastreStack = null;
-    }
-
-    stackLista.addEventListener("pointermove", moverArrastreStack);
-    stackLista.addEventListener("pointerup", terminarArrastreStack);
-    stackLista.addEventListener("pointercancel", terminarArrastreStack);
-
-    /* ---------- Stack (sugerencias) ---------- */
-
-    function idDeOpcionStack(indice) {
-      return `miFichaStackOpcion${indice}`;
-    }
-
-    function cerrarListboxStack() {
-      sugerenciasActuales = [];
-      resaltadaSugerencia = -1;
-      stackOpciones.hidden = true;
-      stackOpciones.replaceChildren();
-      stackInput.setAttribute("aria-expanded", "false");
-      stackInput.removeAttribute("aria-activedescendant");
-    }
-
-    /*
-      Las opciones nunca reciben foco (role="option" sin tabindex): el
-      resaltado se lleva con aria-activedescendant en el input y aria-selected
-      en la opción, y se resuelve en mousedown con preventDefault() para que
-      el clic nunca le quite el foco al input.
-    */
-    function pintarOpcionesStack() {
-      if (sugerenciasActuales.length === 0) { cerrarListboxStack(); return; }
-
-      stackOpciones.replaceChildren(...sugerenciasActuales.map((tecnologia, indice) => {
-        const opcion = document.createElement("li");
-        opcion.setAttribute("id", idDeOpcionStack(indice));
-        opcion.setAttribute("role", "option");
-        opcion.setAttribute("aria-selected", String(indice === resaltadaSugerencia));
-        opcion.className = indice === resaltadaSugerencia
-          ? "mi-ficha__stack-opcion mi-ficha__stack-opcion--resaltada"
-          : "mi-ficha__stack-opcion";
-        opcion.textContent = tecnologia;
-        opcion.addEventListener("mousedown", (evento) => {
-          evento.preventDefault();
-          procesarConfirmacionStack(tecnologia);
-        });
-        return opcion;
-      }));
-
-      stackOpciones.hidden = false;
-      stackInput.setAttribute("aria-expanded", "true");
-      if (resaltadaSugerencia === -1) stackInput.removeAttribute("aria-activedescendant");
-      else stackInput.setAttribute("aria-activedescendant", idDeOpcionStack(resaltadaSugerencia));
-    }
-
-    function actualizarSugerenciasStack() {
-      sugerenciasActuales = sugerenciasDeTecnologia(catalogo, stackInput.value, stack);
-      resaltadaSugerencia = -1;
-      pintarOpcionesStack();
-    }
-
-    // Con tope en los extremos y sin dar la vuelta: abre el desplegable si
-    // hacía falta y, si ya había algo resaltado, se mueve un paso desde ahí.
-    function moverResaltadoStack(delta) {
-      if (sugerenciasActuales.length === 0) {
-        sugerenciasActuales = sugerenciasDeTecnologia(catalogo, stackInput.value, stack);
-        if (sugerenciasActuales.length === 0) return;
-        resaltadaSugerencia = delta > 0 ? 0 : sugerenciasActuales.length - 1;
-      } else if (resaltadaSugerencia === -1) {
-        resaltadaSugerencia = delta > 0 ? 0 : sugerenciasActuales.length - 1;
-      } else {
-        resaltadaSugerencia = Math.min(Math.max(resaltadaSugerencia + delta, 0), sugerenciasActuales.length - 1);
-      }
-      pintarOpcionesStack();
-    }
-
-    function resaltarEtiquetaDuplicada(indice) {
-      const item = stackLista.children[indice];
-      if (!item) return;
-      item.classList.add(CLASE_ETIQUETA_DUPLICADA);
-      setTimeout(() => item.classList.remove(CLASE_ETIQUETA_DUPLICADA), DURACION_RESALTADO_DUPLICADO_MS);
-    }
-
-    /*
-      Los motivos de agregarTecnologiaAlStack, traducidos: "vacio" no dice
-      nada (quien arma el stack ya lo descarta en silencio), "duplicado"
-      avisa por la región aria-live y resalta la etiqueta que ya estaba,
-      "muchas" avisa el tope y "largo"/"caracteres" son errores de campo como
-      cualquier otro, con el mismo marcarError() de siempre.
-    */
-    function procesarConfirmacionStack(texto) {
-      const resultado = agregarTecnologiaAlStack(stack, texto);
-      cerrarListboxStack();
-
-      if (resultado.ok) {
-        stack = resultado.stack;
-        stackInput.value = "";
-        pintarStackLista();
-        actualizarLimiteStack();
-        limpiarError("stack");
-        return;
-      }
-
-      if (resultado.motivo === "vacio") return;
-
-      if (resultado.motivo === "duplicado") {
-        anunciarStack(`${stack[resultado.indice]} ya está en tu stack.`);
-        resaltarEtiquetaDuplicada(resultado.indice);
-        return;
-      }
-
-      if (resultado.motivo === "muchas") {
-        anunciarStack(MENSAJES_MI_FICHA.stack.muchas);
-        return;
-      }
-
-      marcarError("stack", MENSAJES_MI_FICHA.stack[resultado.motivo]);
-    }
-
-    // Enter y "," confirman la opción resaltada; sin ninguna resaltada,
-    // confirman el texto libre.
-    function confirmarEntradaStack() {
-      const texto = resaltadaSugerencia >= 0 && resaltadaSugerencia < sugerenciasActuales.length
-        ? sugerenciasActuales[resaltadaSugerencia]
-        : stackInput.value;
-      procesarConfirmacionStack(texto);
-    }
-
-    stackInput.addEventListener("input", actualizarSugerenciasStack);
-
-    stackInput.addEventListener("keydown", (evento) => {
-      if (evento.key === "ArrowDown") {
-        evento.preventDefault();
-        moverResaltadoStack(1);
-      } else if (evento.key === "ArrowUp") {
-        evento.preventDefault();
-        moverResaltadoStack(-1);
-      } else if (evento.key === "Enter" || evento.key === ",") {
-        evento.preventDefault();
-        confirmarEntradaStack();
-      } else if (evento.key === "Escape") {
-        if (!stackOpciones.hidden) {
-          evento.preventDefault();
-          cerrarListboxStack();
-        }
-      } else if (evento.key === "Backspace") {
-        if (stackInput.value === "") quitarUltimaTecnologia();
-      }
-    });
+    let editorStack;
 
     /*
       El catálogo es sólo para sugerir: si el script no llegó o la carga
@@ -612,7 +299,7 @@
     async function cargarCatalogoStack() {
       if (typeof cargarCatalogoDeTecnologias !== "function") return;
       const resultado = await cargarCatalogoDeTecnologias();
-      if (resultado?.ok) catalogo = resultado.tecnologias;
+      if (resultado?.ok) editorStack.fijarCatalogo(resultado.tecnologias);
     }
 
     /* ---------- Arranque ---------- */
@@ -723,6 +410,21 @@
       mostrarAviso(ERROR_DE_PAGINA, { error: true });
       return undefined;
     }
+
+    editorStack = crearEditorDeEtiquetas({
+      campo: "stack",
+      input: stackInput,
+      opciones: stackOpciones,
+      lista: stackLista,
+      estado: stackEstado,
+      ayuda: stackAyuda,
+      prefijoIdOpcion: "miFichaStackOpcion",
+      textoAyuda: AYUDA_STACK,
+      textoAyudaLlena: AYUDA_STACK_LLENA,
+      nombrePlural: "stack",
+      marcarError: (mensaje) => marcarError("stack", mensaje),
+      limpiarError: () => limpiarError("stack"),
+    });
 
     // Devuelve la promesa del arranque: el navegador la ignora, los tests la
     // esperan.

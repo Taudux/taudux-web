@@ -22,6 +22,7 @@ const CARPETA = "src/app/features/colaboradores/mi-ficha";
 const HTML = leer(`${CARPETA}/index.html`);
 const LOGICA = leer(`${CARPETA}/mi-ficha.logica.js`);
 const LOGICA_STACK = leer(`${CARPETA}/mi-ficha.stack.logica.js`);
+const ETIQUETAS = leer(`${CARPETA}/mi-ficha.etiquetas.js`);
 const PAGINA = leer(`${CARPETA}/mi-ficha.js`);
 const AUTH_UI = leer("src/app/features/auth/auth-ui.js");
 
@@ -398,9 +399,22 @@ function abrirPagina({
   // Como en el navegador, `window` es el propio global.
   contexto.window = contexto;
 
+  /*
+    `sin` borra globales inyectadas, pero las que define un script de la propia
+    página no se inyectan: existen porque el script CORRE. Para fingir que uno
+    no llegó —un 404, un error de sintaxis— hay que no correrlo, que es
+    exactamente lo que pasa en el navegador.
+  */
+  const GLOBAL_DEL_SCRIPT = [
+    [LOGICA_STACK, "agregarTecnologiaAlStack"],
+    [ETIQUETAS, "crearEditorDeEtiquetas"],
+  ];
+
   vm.runInContext(LOGICA, contexto);
   vm.runInContext(AUTH_UI, contexto);
-  vm.runInContext(LOGICA_STACK, contexto);
+  for (const [fuente, global] of GLOBAL_DEL_SCRIPT) {
+    if (!sin.includes(global)) vm.runInContext(fuente, contexto);
+  }
   vm.runInContext(PAGINA, contexto);
   const iniciada = Promise.all(alCargar.map((manejador) => manejador()));
 
@@ -672,7 +686,15 @@ test("a failed card load shows the service message with a retry, and the retry f
 });
 
 test("a missing script shows a page error instead of throwing, and asks nothing", async () => {
-  for (const faltante of ["guardarMiFicha", "obtenerPerfil", "requerirSesion", "mostrarToast"]) {
+  // crearEditorDeEtiquetas va en la lista por un motivo que las otras no
+  // tienen: es lo único que se INVOCA al iniciar, no una referencia que se usa
+  // más tarde. Si la instanciación quedara antes del guardián de
+  // dependencias, un script ausente lanzaría un TypeError sin capturar en vez
+  // de mostrar el aviso de error con gracia.
+  for (const faltante of [
+    "guardarMiFicha", "obtenerPerfil", "requerirSesion", "mostrarToast",
+    "crearEditorDeEtiquetas",
+  ]) {
     const pagina = await cargarPagina({ sin: [faltante] });
 
     assertAviso(pagina, ERROR_DE_PAGINA, { error: true, reintentar: false, colaboradores: false });

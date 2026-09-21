@@ -16,6 +16,7 @@ const CARPETA = "src/app/features/colaboradores/mi-ficha";
 const HTML = read(`${CARPETA}/index.html`);
 const CSS = read(`${CARPETA}/mi-ficha.css`);
 const JS = read(`${CARPETA}/mi-ficha.js`);
+const ETIQUETAS = read(`${CARPETA}/mi-ficha.etiquetas.js`);
 const LOGICA = read(`${CARPETA}/mi-ficha.logica.js`);
 
 const { CAMPOS_MI_FICHA, MODALIDADES_TRABAJO_MI_FICHA } = require(`../${CARPETA}/mi-ficha.logica.js`);
@@ -83,6 +84,7 @@ test("scripts load in dependency order", () => {
     "/app/features/colaboradores/mi-ficha/mi-ficha.logica.js",
     "/app/core/tecnologias/catalogo.service.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.stack.logica.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.js",
   ];
   const posiciones = orden.map((src) => {
@@ -448,11 +450,15 @@ test("the disabled field style is scoped to this page, not to the shared .field"
   que un `.children.map(...)` pasa la suite en verde y revienta en el
   navegador — y justo el arrastre, que es lo único que los tests no ejercitan.
   Por eso el guardián se lee del código fuente y no de un comportamiento.
+  El arrastre del stack vive en mi-ficha.etiquetas.js, así que el guardián
+  cubre los dos archivos.
 */
 test("the wiring never calls array methods on a live HTMLCollection", () => {
-  const sospechosos = [...JS.matchAll(/\.children\s*\.\s*(\w+)/g)].map(([, metodo]) => metodo);
-  const deArreglo = sospechosos.filter((metodo) =>
-    ["map", "filter", "forEach", "slice", "reduce", "some", "every", "find", "findIndex", "flatMap", "includes", "indexOf", "sort", "reverse", "at", "join"].includes(metodo),
-  );
-  assert.deepEqual(deArreglo, [], "copia la colección con Array.from(...) antes de recorrerla");
+  for (const fuente of [JS, ETIQUETAS]) {
+    const sospechosos = [...fuente.matchAll(/\.children\s*\.\s*(\w+)/g)].map(([, metodo]) => metodo);
+    const deArreglo = sospechosos.filter((metodo) =>
+      ["map", "filter", "forEach", "slice", "reduce", "some", "every", "find", "findIndex", "flatMap", "includes", "indexOf", "sort", "reverse", "at", "join"].includes(metodo),
+    );
+    assert.deepEqual(deArreglo, [], "copia la colección con Array.from(...) antes de recorrerla");
+  }
 });
