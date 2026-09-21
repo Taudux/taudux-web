@@ -21,7 +21,7 @@ const leer = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
 const CARPETA = "src/app/features/colaboradores/mi-ficha";
 const HTML = leer(`${CARPETA}/index.html`);
 const LOGICA = leer(`${CARPETA}/mi-ficha.logica.js`);
-const LOGICA_STACK = leer(`${CARPETA}/mi-ficha.etiquetas.logica.js`);
+const LOGICA_ETIQUETAS = leer(`${CARPETA}/mi-ficha.etiquetas.logica.js`);
 const ETIQUETAS = leer(`${CARPETA}/mi-ficha.etiquetas.js`);
 const PAGINA = leer(`${CARPETA}/mi-ficha.js`);
 const AUTH_UI = leer("src/app/features/auth/auth-ui.js");
@@ -54,7 +54,7 @@ const FICHA = Object.freeze({
   puesto: "Desarrolladora backend",
   sector: "Bases de datos",
   ubicacion: "Querétaro, México",
-  stack: Object.freeze(["PostgreSQL", "Python", "GCP"]),
+  herramientas: Object.freeze(["PostgreSQL", "Python", "GCP"]),
   modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -72,7 +72,7 @@ const ID_DE = Object.freeze({
   puesto: "miFichaPuesto",
   sector: "miFichaSector",
   ubicacion: "miFichaUbicacion",
-  stack: "miFichaStack",
+  herramientas: "miFichaHerramientas",
   anio_inicio: "miFichaAnioInicio",
   bio: "miFichaBio",
   linkedin: "miFichaLinkedin",
@@ -180,8 +180,8 @@ class Nodo {
   appendChild(hijo) { this.append(hijo); return hijo; }
   replaceChildren(...hijos) { this.children = []; this.append(...hijos); }
 
-  // No-ops: el arrastre del stack los llama, pero no hay puntero real que
-  // capturar en este DOM falso.
+  // No-ops: el arrastre de las herramientas los llama, pero no hay puntero
+  // real que capturar en este DOM falso.
   setPointerCapture() {}
   releasePointerCapture() {}
 
@@ -406,7 +406,7 @@ function abrirPagina({
     exactamente lo que pasa en el navegador.
   */
   const GLOBAL_DEL_SCRIPT = [
-    [LOGICA_STACK, "agregarEtiqueta"],
+    [LOGICA_ETIQUETAS, "agregarEtiqueta"],
     [ETIQUETAS, "crearEditorDeEtiquetas"],
   ];
 
@@ -452,17 +452,17 @@ function abrirPagina({
       radio.disparar("input");
       radio.disparar("change");
     },
-    // Quien agrega una tecnología al stack: la escribe y confirma con Enter,
-    // como haría alguien de verdad con el combobox.
-    agregarStack(texto) {
-      const control = porId("miFichaStack");
+    // Quien agrega una tecnología a las herramientas: la escribe y confirma
+    // con Enter, como haría alguien de verdad con el combobox.
+    agregarHerramienta(texto) {
+      const control = porId("miFichaHerramientas");
       control.value = texto;
       control.disparar("input");
       control.disparar("keydown", { key: "Enter" });
     },
     // Las tecnologías tal como quedaron pintadas en la lista de etiquetas.
-    stackEnPantalla() {
-      return porId("miFichaStackLista").children.map((item) => item.children[1].textContent);
+    herramientasEnPantalla() {
+      return porId("miFichaHerramientasLista").children.map((item) => item.children[1].textContent);
     },
     // Envía el formulario; la promesa se cumple cuando termina el guardado.
     enviar() {
@@ -507,16 +507,16 @@ function assertFormularioVisible(pagina) {
   assert.equal(pagina.porId("miFichaAviso").getAttribute("aria-busy"), "false");
 }
 
-// Los valores que el formulario muestra, campo por campo. El stack ya no es
-// el .value del combobox (que sólo lleva lo que se está escribiendo): son las
-// tecnologías que quedaron pintadas como etiquetas.
+// Los valores que el formulario muestra, campo por campo. Las herramientas
+// ya no son el .value del combobox (que sólo lleva lo que se está
+// escribiendo): son las tecnologías que quedaron pintadas como etiquetas.
 function valoresEnPantalla(pagina) {
   const valores = {};
   for (const campo of CAMPOS_MI_FICHA) {
     if (campo === "modalidad_trabajo") {
       valores[campo] = Object.keys(RADIOS).find((valor) => pagina.porId(RADIOS[valor]).checked) ?? "";
-    } else if (campo === "stack") {
-      valores[campo] = pagina.stackEnPantalla();
+    } else if (campo === "herramientas") {
+      valores[campo] = pagina.herramientasEnPantalla();
     } else {
       valores[campo] = pagina.porId(ID_DE[campo]).value;
     }
@@ -524,12 +524,12 @@ function valoresEnPantalla(pagina) {
   return valores;
 }
 
-// El stack se llena de a una tecnología por vez, como en el widget: cada
-// elemento del arreglo se escribe y se confirma con Enter.
+// Las herramientas se llenan de a una tecnología por vez, como en el widget:
+// cada elemento del arreglo se escribe y se confirma con Enter.
 function llenar(pagina, valores) {
   for (const [campo, valor] of Object.entries(valores)) {
     if (campo === "modalidad_trabajo") pagina.elegir(valor);
-    else if (campo === "stack") valor.forEach((tecnologia) => pagina.agregarStack(tecnologia));
+    else if (campo === "herramientas") valor.forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
     else pagina.escribir(campo, valor);
   }
 }
@@ -538,7 +538,7 @@ const VALORES_VALIDOS = Object.freeze({
   puesto: "  Desarrolladora backend ",
   sector: "Bases de datos",
   ubicacion: "Querétaro, México",
-  stack: Object.freeze(["PostgreSQL", "Python", "GCP"]),
+  herramientas: Object.freeze(["PostgreSQL", "Python", "GCP"]),
   modalidad_trabajo: "Híbrido",
   anio_inicio: "2018",
   bio: "\nDiseño esquemas y migraciones.\nMe gusta que los datos cuadren.\n",
@@ -709,7 +709,7 @@ test("a collaborator without a card gets an empty form with their name, and no p
 
   assertFormularioVisible(pagina);
   assert.deepEqual(pagina.obtenerMiFicha.llamadas, [["u-1"]]);
-  assert.deepEqual(valoresEnPantalla(pagina), Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "stack" ? [] : ""])));
+  assert.deepEqual(valoresEnPantalla(pagina), Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "herramientas" ? [] : ""])));
   assert.equal(pagina.texto("miFichaNombre"), "Valeria Ortiz");
   assert.equal(pagina.porId("miFichaVerPerfil").hidden, true);
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
@@ -717,7 +717,7 @@ test("a collaborator without a card gets an empty form with their name, and no p
   assert.equal(pagina.activo(), null, "cargar la página no mueve el foco");
 });
 
-test("a collaborator with a card gets it prefilled, with the stack shown as tags", async () => {
+test("a collaborator with a card gets it prefilled, with the tools shown as tags", async () => {
   const pagina = await cargarPagina({ ficha: enSecuencia(exito(FICHA)) });
 
   assertFormularioVisible(pagina);
@@ -725,7 +725,7 @@ test("a collaborator with a card gets it prefilled, with the stack shown as tags
     puesto: "Desarrolladora backend",
     sector: "Bases de datos",
     ubicacion: "Querétaro, México",
-    stack: ["PostgreSQL", "Python", "GCP"],
+    herramientas: ["PostgreSQL", "Python", "GCP"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -736,7 +736,7 @@ test("a collaborator with a card gets it prefilled, with the stack shown as tags
   // Sólo una opción marcada.
   assert.deepEqual(pagina.radios().map((radio) => radio.checked), [false, true, false]);
   // El combobox arranca vacío: no repite lo que ya está en las etiquetas.
-  assert.equal(pagina.porId("miFichaStack").value, "");
+  assert.equal(pagina.porId("miFichaHerramientas").value, "");
 });
 
 /* ---------- Validación ---------- */
@@ -785,7 +785,7 @@ test("a malformed optional link is its own error, and the rest of the form stays
 
   const [{ mensaje }] = validarMiFicha({ ...VALORES_VALIDOS, github: "http://github.com/valeria" }, new Date().getFullYear()).errores;
   assertCampoConError(pagina, "github", mensaje);
-  for (const campo of ["puesto", "stack", "bio", "linkedin", "correo"]) assertCampoSinError(pagina, campo);
+  for (const campo of ["puesto", "herramientas", "bio", "linkedin", "correo"]) assertCampoSinError(pagina, campo);
   assertModalidadTrabajoSinError(pagina);
   assertFocoEn(pagina, "miFichaGithub");
   assert.equal(pagina.guardarMiFicha.llamadas.length, 0);
@@ -821,7 +821,7 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
     puesto: "Desarrolladora backend",
     sector: "Bases de datos",
     ubicacion: "Querétaro, México",
-    stack: ["PostgreSQL", "Python", "GCP"],
+    herramientas: ["PostgreSQL", "Python", "GCP"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -837,7 +837,7 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
   assert.equal(verPerfil.textContent, "Ver mi perfil");
 
   // El formulario queda con lo que devolvió la base, ya normalizado.
-  assert.deepEqual(pagina.stackEnPantalla(), ["PostgreSQL", "Python", "GCP"]);
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["PostgreSQL", "Python", "GCP"]);
   assert.equal(pagina.porId("miFichaPuesto").value, "Desarrolladora backend");
   assert.equal(pagina.porId("miFichaStatus").hidden, true);
   for (const campo of Object.keys(ID_DE)) assertCampoSinError(pagina, campo);
@@ -868,7 +868,7 @@ test("a service failure shows its message in the alert, focused, with no toast a
   assert.deepEqual(pagina.toasts, []);
   assert.equal(pagina.porId("miFichaVerPerfil").hidden, true);
   // Lo escrito no se pierde.
-  assert.deepEqual(pagina.stackEnPantalla(), [...VALORES_VALIDOS.stack]);
+  assert.deepEqual(pagina.herramientasEnPantalla(), [...VALORES_VALIDOS.herramientas]);
   assert.equal(pagina.porId("formMiFicha").getAttribute("aria-busy"), "false");
 
   // El siguiente intento esconde el aviso anterior antes de validar.
@@ -977,47 +977,47 @@ test("the bio counter's live region stays quiet until the last 20 characters", a
   assert.equal(contador().getAttribute("aria-live"), "off");
 });
 
-/* ---------- Stack: el editor de etiquetas ---------- */
+/* ---------- Herramientas: el editor de etiquetas ---------- */
 
 // La manija de la etiqueta en el índice dado (hijo 0 de su <li>).
-function manijaStack(pagina, indice) {
-  return pagina.porId("miFichaStackLista").children[indice].children[0];
+function manijaHerramienta(pagina, indice) {
+  return pagina.porId("miFichaHerramientasLista").children[indice].children[0];
 }
 
 // El botón de quitar de la etiqueta en el índice dado (hijo 2 de su <li>).
-function quitarStack(pagina, indice) {
-  return pagina.porId("miFichaStackLista").children[indice].children[2];
+function quitarHerramienta(pagina, indice) {
+  return pagina.porId("miFichaHerramientasLista").children[indice].children[2];
 }
 
 // La opción resaltada del desplegable, si hay alguna.
 function opcionResaltada(pagina) {
-  return pagina.porId("miFichaStackOpciones").children
-    .find((opcion) => opcion.classList.contains("mi-ficha__stack-opcion--resaltada"));
+  return pagina.porId("miFichaHerramientasOpciones").children
+    .find((opcion) => opcion.classList.contains("mi-ficha__etiquetas-opcion--resaltada"));
 }
 
 test("typing filters the catalog into the listbox, prefix matches first", async () => {
   const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python", "AWS"] });
-  const opciones = () => pagina.porId("miFichaStackOpciones");
+  const opciones = () => pagina.porId("miFichaHerramientasOpciones");
 
-  pagina.escribir("stack", "p");
+  pagina.escribir("herramientas", "p");
 
   assert.equal(opciones().hidden, false);
   assert.deepEqual(opciones().children.map((opcion) => opcion.textContent), ["PostgreSQL", "Python"]);
-  assert.equal(pagina.porId("miFichaStack").getAttribute("aria-expanded"), "true");
+  assert.equal(pagina.porId("miFichaHerramientas").getAttribute("aria-expanded"), "true");
 
-  pagina.escribir("stack", "");
+  pagina.escribir("herramientas", "");
   assert.equal(opciones().hidden, true);
-  assert.equal(pagina.porId("miFichaStack").getAttribute("aria-expanded"), "false");
+  assert.equal(pagina.porId("miFichaHerramientas").getAttribute("aria-expanded"), "false");
 });
 
 test("ArrowDown and ArrowUp move the highlighted suggestion, clamped at the edges", async () => {
   const pagina = await cargarPagina({ catalogo: ["Postgres", "Python", "PHP"] });
-  const input = pagina.porId("miFichaStack");
-  pagina.escribir("stack", "p");
+  const input = pagina.porId("miFichaHerramientas");
+  pagina.escribir("herramientas", "p");
 
   input.disparar("keydown", { key: "ArrowDown" });
   assert.equal(opcionResaltada(pagina).textContent, "Postgres");
-  assert.equal(input.getAttribute("aria-activedescendant"), "miFichaStackOpcion0");
+  assert.equal(input.getAttribute("aria-activedescendant"), "miFichaHerramientasOpcion0");
 
   input.disparar("keydown", { key: "ArrowDown" });
   input.disparar("keydown", { key: "ArrowDown" });
@@ -1036,135 +1036,135 @@ test("ArrowDown and ArrowUp move the highlighted suggestion, clamped at the edge
 
 test("Enter without a highlighted option adds the typed text and clears the input", async () => {
   const pagina = await cargarPagina();
-  pagina.escribir("stack", "Rust");
+  pagina.escribir("herramientas", "Rust");
 
-  pagina.porId("miFichaStack").disparar("keydown", { key: "Enter" });
+  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter" });
 
-  assert.deepEqual(pagina.stackEnPantalla(), ["Rust"]);
-  assert.equal(pagina.porId("miFichaStack").value, "");
-  assert.equal(pagina.porId("miFichaStackOpciones").hidden, true);
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["Rust"]);
+  assert.equal(pagina.porId("miFichaHerramientas").value, "");
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true);
 });
 
 test("Enter with a highlighted suggestion confirms that suggestion, not the typed text", async () => {
   const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python"] });
-  const input = pagina.porId("miFichaStack");
-  pagina.escribir("stack", "pos");
+  const input = pagina.porId("miFichaHerramientas");
+  pagina.escribir("herramientas", "pos");
   input.disparar("keydown", { key: "ArrowDown" });
 
   input.disparar("keydown", { key: "Enter" });
 
-  assert.deepEqual(pagina.stackEnPantalla(), ["PostgreSQL"]);
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["PostgreSQL"]);
 });
 
 test("a comma confirms the entry, just like Enter", async () => {
   const pagina = await cargarPagina();
-  pagina.escribir("stack", "Go");
+  pagina.escribir("herramientas", "Go");
 
-  pagina.porId("miFichaStack").disparar("keydown", { key: "," });
+  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "," });
 
-  assert.deepEqual(pagina.stackEnPantalla(), ["Go"]);
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["Go"]);
 });
 
-test("Escape closes the listbox without touching the text or the stack", async () => {
+test("Escape closes the listbox without touching the text or the tools", async () => {
   const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python"] });
-  const input = pagina.porId("miFichaStack");
-  pagina.escribir("stack", "pos");
+  const input = pagina.porId("miFichaHerramientas");
+  pagina.escribir("herramientas", "pos");
 
   input.disparar("keydown", { key: "Escape" });
 
-  assert.equal(pagina.porId("miFichaStackOpciones").hidden, true);
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true);
   assert.equal(input.value, "pos");
-  assert.deepEqual(pagina.stackEnPantalla(), []);
+  assert.deepEqual(pagina.herramientasEnPantalla(), []);
 });
 
-test("adding a duplicate announces it, highlights the existing tag and does not grow the stack", async () => {
+test("adding a duplicate announces it, highlights the existing tag and does not grow the tools list", async () => {
   const pagina = await cargarPagina();
-  pagina.agregarStack("PostgreSQL");
+  pagina.agregarHerramienta("PostgreSQL");
 
-  pagina.agregarStack("  POSTGRESQL  ");
+  pagina.agregarHerramienta("  POSTGRESQL  ");
 
-  assert.deepEqual(pagina.stackEnPantalla(), ["PostgreSQL"]);
-  assert.equal(pagina.texto("miFichaStackEstado"), "PostgreSQL ya está en tu stack.");
-  assert.ok(manijaStack(pagina, 0).parent.classList.contains("mi-ficha__etiqueta--duplicada"));
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["PostgreSQL"]);
+  assert.equal(pagina.texto("miFichaHerramientasEstado"), "PostgreSQL ya está en tus herramientas.");
+  assert.ok(manijaHerramienta(pagina, 0).parent.classList.contains("mi-ficha__etiqueta--duplicada"));
 });
 
 test("the twelfth technology disables the input and the help says so; removing one re-enables it", async () => {
   const pagina = await cargarPagina();
-  for (let i = 0; i < 12; i += 1) pagina.agregarStack(`T${i}`);
+  for (let i = 0; i < 12; i += 1) pagina.agregarHerramienta(`T${i}`);
 
-  assert.equal(pagina.stackEnPantalla().length, 12);
-  assert.equal(pagina.porId("miFichaStack").disabled, true);
-  assert.match(pagina.texto("miFichaStackAyuda"), /12/);
+  assert.equal(pagina.herramientasEnPantalla().length, 12);
+  assert.equal(pagina.porId("miFichaHerramientas").disabled, true);
+  assert.match(pagina.texto("miFichaHerramientasAyuda"), /12/);
 
-  quitarStack(pagina, 0).disparar("click");
+  quitarHerramienta(pagina, 0).disparar("click");
 
-  assert.equal(pagina.stackEnPantalla().length, 11);
-  assert.equal(pagina.porId("miFichaStack").disabled, false);
+  assert.equal(pagina.herramientasEnPantalla().length, 11);
+  assert.equal(pagina.porId("miFichaHerramientas").disabled, false);
 });
 
 test("removing a tag moves focus to the handle at the same index, then the previous one, then the input when the list empties", async () => {
   const pagina = await cargarPagina();
-  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarStack(tecnologia));
+  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
 
   // Quita "B" (índice 1): el foco va a la manija que ocupa ese índice ahora ("C").
-  quitarStack(pagina, 1).disparar("click");
-  assert.deepEqual(pagina.stackEnPantalla(), ["A", "C"]);
-  assert.equal(pagina.activo(), manijaStack(pagina, 1));
+  quitarHerramienta(pagina, 1).disparar("click");
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["A", "C"]);
+  assert.equal(pagina.activo(), manijaHerramienta(pagina, 1));
 
   // Quita "C", que ahora es la última (índice 1 de 2): el foco va a la anterior.
-  quitarStack(pagina, 1).disparar("click");
-  assert.deepEqual(pagina.stackEnPantalla(), ["A"]);
-  assert.equal(pagina.activo(), manijaStack(pagina, 0));
+  quitarHerramienta(pagina, 1).disparar("click");
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["A"]);
+  assert.equal(pagina.activo(), manijaHerramienta(pagina, 0));
 
   // Quita la última que queda: la lista se vacía y el foco va al input.
-  quitarStack(pagina, 0).disparar("click");
-  assert.deepEqual(pagina.stackEnPantalla(), []);
-  assertFocoEn(pagina, "miFichaStack");
+  quitarHerramienta(pagina, 0).disparar("click");
+  assert.deepEqual(pagina.herramientasEnPantalla(), []);
+  assertFocoEn(pagina, "miFichaHerramientas");
 });
 
 test("Backspace on an empty input removes the last tag and keeps focus on the input", async () => {
   const pagina = await cargarPagina();
-  ["A", "B"].forEach((tecnologia) => pagina.agregarStack(tecnologia));
-  const input = pagina.porId("miFichaStack");
+  ["A", "B"].forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
+  const input = pagina.porId("miFichaHerramientas");
   input.focus();
 
   input.disparar("keydown", { key: "Backspace" });
 
-  assert.deepEqual(pagina.stackEnPantalla(), ["A"]);
-  assertFocoEn(pagina, "miFichaStack");
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["A"]);
+  assertFocoEn(pagina, "miFichaHerramientas");
 });
 
 test("keyboard reordering from the handle moves the tag and focus follows it", async () => {
   const pagina = await cargarPagina();
-  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarStack(tecnologia));
+  ["A", "B", "C"].forEach((tecnologia) => pagina.agregarHerramienta(tecnologia));
 
-  manijaStack(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
 
-  assert.deepEqual(pagina.stackEnPantalla(), ["B", "A", "C"]);
-  assert.equal(pagina.activo(), manijaStack(pagina, 1));
-  assert.equal(pagina.texto("miFichaStackEstado"), "A, posición 2 de 3.");
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["B", "A", "C"]);
+  assert.equal(pagina.activo(), manijaHerramienta(pagina, 1));
+  assert.equal(pagina.texto("miFichaHerramientasEstado"), "A, posición 2 de 3.");
 
-  manijaStack(pagina, 1).disparar("keydown", { key: "End" });
-  assert.deepEqual(pagina.stackEnPantalla(), ["B", "C", "A"]);
-  assert.equal(pagina.activo(), manijaStack(pagina, 2));
+  manijaHerramienta(pagina, 1).disparar("keydown", { key: "End" });
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["B", "C", "A"]);
+  assert.equal(pagina.activo(), manijaHerramienta(pagina, 2));
 });
 
 test("a missing technology catalog script degrades silently: no suggestions, but free text still works", async () => {
   const pagina = await cargarPagina(); // sin `catalogo`: el script del catálogo no llegó.
 
-  pagina.escribir("stack", "cualquier cosa");
-  assert.equal(pagina.porId("miFichaStackOpciones").hidden, true, "sin catálogo no hay nada que sugerir");
+  pagina.escribir("herramientas", "cualquier cosa");
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true, "sin catálogo no hay nada que sugerir");
 
-  pagina.porId("miFichaStack").disparar("keydown", { key: "Enter" });
-  assert.deepEqual(pagina.stackEnPantalla(), ["cualquier cosa"]);
+  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter" });
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["cualquier cosa"]);
   assert.equal(pagina.errores.length, 0, "la ausencia del catálogo no se avisa ni se reintenta");
 });
 
 test("preloading a card with a technology outside the catalog keeps it exactly as it is", async () => {
   const pagina = await cargarPagina({
     catalogo: ["Python", "PostgreSQL"],
-    ficha: enSecuencia(exito({ ...structuredClone(FICHA), stack: ["Un framework rarísimo"] })),
+    ficha: enSecuencia(exito({ ...structuredClone(FICHA), herramientas: ["Un framework rarísimo"] })),
   });
 
-  assert.deepEqual(pagina.stackEnPantalla(), ["Un framework rarísimo"]);
+  assert.deepEqual(pagina.herramientasEnPantalla(), ["Un framework rarísimo"]);
 });

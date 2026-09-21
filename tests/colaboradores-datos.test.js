@@ -74,9 +74,9 @@ test("sample slugs are unique and follow the database slug format", () => {
 });
 
 /*
-  La muestra ejercita cada modalidad de trabajo, y está congelada hasta el
-  stack: un test que la retoque sin clonarla lanza en vez de ensuciar al
-  siguiente.
+  La muestra ejercita cada modalidad de trabajo, y está congelada hasta las
+  herramientas: un test que la retoque sin clonarla lanza en vez de ensuciar
+  al siguiente.
 */
 test("the sample covers every work modality value and is frozen all the way down", () => {
   assert.deepEqual(new Set(MUESTRA.map((persona) => persona.modalidad_trabajo)), new Set(MODALIDADES_TRABAJO));
@@ -84,7 +84,7 @@ test("the sample covers every work modality value and is frozen all the way down
   assert.ok(Object.isFrozen(MUESTRA));
   for (const persona of MUESTRA) {
     assert.ok(Object.isFrozen(persona), `${persona.nombre}: la ficha no está congelada`);
-    assert.ok(Object.isFrozen(persona.stack), `${persona.nombre}: el stack no está congelado`);
+    assert.ok(Object.isFrozen(persona.herramientas), `${persona.nombre}: las herramientas no están congeladas`);
   }
 });
 
@@ -139,7 +139,7 @@ test("a public record without a card yet has no profile", () => {
     puesto: null,
     sector: null,
     ubicacion: null,
-    stack: null,
+    herramientas: null,
     modalidad_trabajo: null,
     anio_inicio: null,
     bio: null,
@@ -166,9 +166,9 @@ test("a single missing, blank or unknown field is enough to have no profile", ()
     }
   }
 
-  // El stack es un arreglo con al menos un texto, y ninguno en blanco.
-  for (const stack of [undefined, null, [], ["   "], ["Python", ""], ["Python", null], [7], "PostgreSQL · Python"]) {
-    assert.equal(tienePerfil({ ...base, stack }), false, `stack = ${JSON.stringify(stack)}`);
+  // Las herramientas son un arreglo con al menos un texto, y ninguno en blanco.
+  for (const herramientas of [undefined, null, [], ["   "], ["Python", ""], ["Python", null], [7], "PostgreSQL · Python"]) {
+    assert.equal(tienePerfil({ ...base, herramientas }), false, `herramientas = ${JSON.stringify(herramientas)}`);
   }
 
   for (const modalidad_trabajo of [undefined, null, "", "Ocupado", "remoto", " Remoto"]) {
@@ -188,20 +188,21 @@ test("each work modality value is a valid one for a profile", () => {
 });
 
 /*
-  Los campos del prototipo se renombraron a los de la base (0039/0040): ciudad
-  → ubicacion, esp → sector, disp → modalidad_trabajo, anios → anio_inicio
-  (un año, no un texto) y el stack pasó de texto a arreglo. Una ficha con la
-  forma vieja ya no abre perfil, y la muestra no la conserva.
+  Los campos del prototipo se renombraron a los de la base (0039/0040/0041):
+  ciudad → ubicacion, esp → sector, disp → modalidad_trabajo, anios →
+  anio_inicio (un año, no un texto) y las herramientas pasaron de texto a
+  arreglo. Una ficha con la forma vieja ya no abre perfil, y la muestra no la
+  conserva.
 */
 test("a card in the old prototype shape has no profile, and the sample no longer uses it", () => {
-  const { sector, ubicacion, modalidad_trabajo, anio_inicio, stack, ...resto } = MUESTRA[0];
+  const { sector, ubicacion, modalidad_trabajo, anio_inicio, herramientas, ...resto } = MUESTRA[0];
   const vieja = {
     ...resto,
     esp: sector,
     ciudad: ubicacion,
     disp: modalidad_trabajo,
     anios: "8 años",
-    stack: stack.join(" · "),
+    stack: herramientas.join(" · "),
   };
   assert.equal(tienePerfil(vieja), false);
   assert.equal(anio_inicio, 2018, "premisa: la muestra trae el año, no el texto");

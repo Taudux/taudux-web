@@ -163,19 +163,19 @@
   }
 
   /*
-    El editor de etiquetas del stack: el input de arriba, el desplegable de
-    sugerencias flotando debajo (position: relative en el envoltorio) y la
-    lista de etiquetas elegidas, que envuelve en su propia fila y nunca
-    empuja el ancho de la página.
+    El editor de etiquetas de las herramientas: el input de arriba, el
+    desplegable de sugerencias flotando debajo (position: relative en el
+    envoltorio) y la lista de etiquetas elegidas, que envuelve en su propia
+    fila y nunca empuja el ancho de la página.
   */
-  .mi-ficha__stack {
+  .mi-ficha__etiquetas {
     position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
 
-  .mi-ficha__stack-opciones {
+  .mi-ficha__etiquetas-opciones {
     position: absolute;
     inset-block-start: calc(100% + 0.25rem);
     inset-inline: 0;
@@ -190,7 +190,7 @@
     overflow-y: auto;
   }
 
-  .mi-ficha__stack-opcion {
+  .mi-ficha__etiquetas-opcion {
     padding: 0.5rem 0.75rem;
     border-radius: var(--radius-field);
     color: var(--color-text);
@@ -198,11 +198,11 @@
     overflow-wrap: anywhere;
   }
 
-  .mi-ficha__stack-opcion--resaltada {
+  .mi-ficha__etiquetas-opcion--resaltada {
     background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
   }
 
-  .mi-ficha__stack-lista {
+  .mi-ficha__etiquetas-lista {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -230,7 +230,7 @@
     transition: border-color var(--transition-fast), background-color var(--transition-fast);
   }
 
-  /* El aviso de "ya está en tu stack": se apaga solo, a los 1.2s. */
+  /* El aviso de "ya está en tus herramientas": se apaga solo, a los 1.2s. */
   .mi-ficha__etiqueta--duplicada {
     border-color: var(--color-warning);
     background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);

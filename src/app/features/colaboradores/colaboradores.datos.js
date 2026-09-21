@@ -4,10 +4,10 @@
 
   Acá NO hay personas. La lista sale de la base con listarColaboradores()
   (core/colaboradores/colaboradores.service.js), que entrega de cada una
-  nombre, corto y slug, más los campos de su ficha (migraciones 0039 y 0040)
-  con los nombres de la base: puesto, sector, ubicacion, stack (arreglo de
-  textos), modalidad_trabajo, anio_inicio (un año entero), bio, linkedin,
-  github y correo. Las fichas de muestra del prototipo viven en
+  nombre, corto y slug, más los campos de su ficha (migraciones 0039, 0040 y
+  0041) con los nombres de la base: puesto, sector, ubicacion, herramientas
+  (arreglo de textos), modalidad_trabajo, anio_inicio (un año entero), bio,
+  linkedin, github y correo. Las fichas de muestra del prototipo viven en
   tests/fixtures/colaboradores.muestra.js y sólo las usan los tests.
 
   Quien todavía no llenó su ficha trae esos campos en null: está en el roster
@@ -47,12 +47,12 @@ function tienePerfil(persona) {
   if (!persona || typeof persona !== "object") return false;
 
   const textosCompletos = CAMPOS_DE_TEXTO_DEL_PERFIL.every((campo) => esTextoConContenido(persona[campo]));
-  const stackCompleto = Array.isArray(persona.stack)
-    && persona.stack.length > 0
-    && persona.stack.every(esTextoConContenido);
+  const herramientasCompletas = Array.isArray(persona.herramientas)
+    && persona.herramientas.length > 0
+    && persona.herramientas.every(esTextoConContenido);
 
   return textosCompletos
-    && stackCompleto
+    && herramientasCompletas
     && MODALIDADES_TRABAJO.includes(persona.modalidad_trabajo)
     && Number.isInteger(persona.anio_inicio);
 }

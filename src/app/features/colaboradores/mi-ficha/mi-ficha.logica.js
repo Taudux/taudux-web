@@ -3,10 +3,10 @@
   que cada colaborador edita su ficha pública. Sin DOM y sin fetch: este
   archivo se carga igual en la página y en los tests de Node.
 
-  Las reglas son las de los CHECK de `fichas_colaborador` (migraciones 0039 y
-  0040). Lo que este módulo deja pasar, la base lo acepta; lo que la base
-  rechazaría, el formulario lo avisa campo por campo antes de enviarlo. Los
-  límites, las expresiones de los enlaces y las modalidades de trabajo se
+  Las reglas son las de los CHECK de `fichas_colaborador` (migraciones 0039,
+  0040 y 0041). Lo que este módulo deja pasar, la base lo acepta; lo que la
+  base rechazaría, el formulario lo avisa campo por campo antes de enviarlo.
+  Los límites, las expresiones de los enlaces y las modalidades de trabajo se
   comparan contra el SQL en tests/mi-ficha.logica.test.js: una copia sin
   vigilancia se desfasa sola.
 
@@ -22,7 +22,7 @@ const CAMPOS_MI_FICHA = Object.freeze([
   "puesto",
   "sector",
   "ubicacion",
-  "stack",
+  "herramientas",
   "modalidad_trabajo",
   "anio_inicio",
   "bio",
@@ -39,13 +39,13 @@ const CAMPOS_MI_FICHA = Object.freeze([
 const MODALIDADES_TRABAJO_MI_FICHA = Object.freeze(["Presencial", "Híbrido", "Remoto"]);
 
 // Largos en caracteres (puntos de código, como `char_length`), cantidad de
-// elementos del stack y rango de años que admite la base.
+// elementos de herramientas y rango de años que admite la base.
 const LIMITES_MI_FICHA = Object.freeze({
   puesto: Object.freeze({ min: 2, max: 60 }),
   sector: Object.freeze({ min: 2, max: 80 }),
   ubicacion: Object.freeze({ min: 2, max: 80 }),
   bio: Object.freeze({ min: 10, max: 240 }),
-  stack: Object.freeze({ min: 1, max: 12 }),
+  herramientas: Object.freeze({ min: 1, max: 12 }),
   etiqueta: Object.freeze({ min: 1, max: 40 }),
   anio_inicio: Object.freeze({ min: 1950, max: 2100 }),
   linkedin: 200,
@@ -96,11 +96,11 @@ const MENSAJES_MI_FICHA = Object.freeze({
     largo: "La bio debe tener entre 10 y 240 caracteres.",
     caracteres: "La bio tiene caracteres no permitidos. Sólo se admiten saltos de línea.",
   }),
-  stack: Object.freeze({
-    vacio: "Escribe al menos una tecnología.",
-    muchas: "Escribe como máximo 12 tecnologías.",
-    largo: "Cada tecnología puede tener hasta 40 caracteres.",
-    caracteres: "Alguna tecnología tiene caracteres no permitidos.",
+  herramientas: Object.freeze({
+    vacio: "Escribe al menos una herramienta.",
+    muchas: "Escribe como máximo 12 herramientas.",
+    largo: "Cada herramienta puede tener hasta 40 caracteres.",
+    caracteres: "Alguna herramienta tiene caracteres no permitidos.",
   }),
   modalidad_trabajo: "Elige tu modalidad de trabajo.",
   anio_inicio: Object.freeze({
@@ -136,13 +136,13 @@ function tieneCaracteresProhibidosMiFicha(texto) {
 }
 
 /*
-  El stack ya llega como arreglo: lo arma el editor de etiquetas
+  Las herramientas ya llegan como arreglo: lo arma el editor de etiquetas
   (mi-ficha.etiquetas.logica.js), no un campo de texto separado por comas. Lo que
   no es arreglo se trata como vacío, y cada elemento se recorta con el mismo
   criterio que cualquier otro texto de la ficha; lo que queda en blanco se
   descarta.
 */
-function normalizarStackMiFicha(valor) {
+function normalizarEtiquetasMiFicha(valor) {
   if (!Array.isArray(valor)) return [];
   return valor.map(textoMiFicha).filter((elemento) => elemento !== "");
 }
@@ -162,8 +162,9 @@ function enlaceMiFicha(valor) {
 
 /*
   De los valores del formulario (todo texto) a la ficha que se guarda: textos
-  recortados, stack separado, año numérico y enlaces vacíos en null. Siempre
-  las diez llaves, válida o no; decidir si sirve es cosa de validarMiFicha().
+  recortados, herramientas separadas, año numérico y enlaces vacíos en null.
+  Siempre las diez llaves, válida o no; decidir si sirve es cosa de
+  validarMiFicha().
 
   El recorte de la bio también quita los saltos de línea de los bordes: la
   base exige `bio = btrim(bio, E' \n')`, y un salto al final no es un error
@@ -175,7 +176,7 @@ function normalizarMiFicha(valores) {
     puesto: textoMiFicha(origen.puesto),
     sector: textoMiFicha(origen.sector),
     ubicacion: textoMiFicha(origen.ubicacion),
-    stack: normalizarStackMiFicha(origen.stack),
+    herramientas: normalizarEtiquetasMiFicha(origen.herramientas),
     modalidad_trabajo: textoMiFicha(origen.modalidad_trabajo),
     anio_inicio: anioMiFicha(origen.anio_inicio),
     bio: textoMiFicha(origen.bio),
@@ -199,18 +200,19 @@ function errorDeTextoMiFicha(campo, texto, { conSaltos = false } = {}) {
 }
 
 /*
-  El veredicto de UN elemento de una lista de etiquetas (hoy sólo el stack):
-  los dos motivos que la 0039 revisa elemento por elemento con
-  stack_colaborador_valido(). No mira el mínimo de un carácter porque quien
-  arma la lista ya descarta lo vacío antes de llegar acá; el editor de
+  El veredicto de UN elemento de una lista de etiquetas (hoy sólo
+  herramientas): los dos motivos que la 0041 revisa elemento por elemento con
+  etiquetas_colaborador_validas(). No mira el mínimo de un carácter porque
+  quien arma la lista ya descarta lo vacío antes de llegar acá; el editor de
   etiquetas avisa ese caso por su cuenta.
 */
 function errorDeElementoEtiquetaMiFicha(campo, texto) {
   const mensajes = MENSAJES_MI_FICHA[campo];
   if (tieneCaracteresProhibidosMiFicha(texto)) return mensajes.caracteres;
   // LIMITES_MI_FICHA.etiqueta.max (40) es global a propósito, no
-  // LIMITES_MI_FICHA[campo].max: sale de stack_colaborador_valido() en la
-  // 0039 y lo comparten todas las listas de etiquetas, no sólo el stack.
+  // LIMITES_MI_FICHA[campo].max: sale de etiquetas_colaborador_validas() en
+  // la 0041 y lo comparten todas las listas de etiquetas, no sólo
+  // herramientas.
   if (largoMiFicha(texto) > LIMITES_MI_FICHA.etiqueta.max) return mensajes.largo;
   return null;
 }
@@ -268,7 +270,7 @@ function validarMiFicha(valores, anioActual) {
     puesto: errorDeTextoMiFicha("puesto", ficha.puesto),
     sector: errorDeTextoMiFicha("sector", ficha.sector),
     ubicacion: errorDeTextoMiFicha("ubicacion", ficha.ubicacion),
-    stack: errorDeListaDeEtiquetasMiFicha("stack", ficha.stack),
+    herramientas: errorDeListaDeEtiquetasMiFicha("herramientas", ficha.herramientas),
     modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(ficha.modalidad_trabajo) ? null : MENSAJES_MI_FICHA.modalidad_trabajo,
     anio_inicio: errorDeAnioMiFicha(origen.anio_inicio, ficha.anio_inicio, anioActual),
     bio: errorDeTextoMiFicha("bio", ficha.bio, { conSaltos: true }),
@@ -286,9 +288,9 @@ function validarMiFicha(valores, anioActual) {
 
 /*
   De la ficha guardada (o null, si todavía no hay) a los valores del
-  formulario: el stack como una COPIA del arreglo (el editor de etiquetas es
-  quien lo muta; nunca el arreglo de la ficha cargada), el año como texto y los
-  enlaces ausentes como campo vacío.
+  formulario: las herramientas como una COPIA del arreglo (el editor de
+  etiquetas es quien lo muta; nunca el arreglo de la ficha cargada), el año
+  como texto y los enlaces ausentes como campo vacío.
 */
 function valoresFormularioMiFicha(ficha) {
   const origen = ficha && typeof ficha === "object" ? ficha : {};
@@ -297,7 +299,7 @@ function valoresFormularioMiFicha(ficha) {
     puesto: texto(origen.puesto),
     sector: texto(origen.sector),
     ubicacion: texto(origen.ubicacion),
-    stack: Array.isArray(origen.stack) ? [...origen.stack] : [],
+    herramientas: Array.isArray(origen.herramientas) ? [...origen.herramientas] : [],
     modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(origen.modalidad_trabajo) ? origen.modalidad_trabajo : "",
     anio_inicio: Number.isInteger(origen.anio_inicio) ? String(origen.anio_inicio) : "",
     bio: texto(origen.bio),

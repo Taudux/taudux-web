@@ -81,44 +81,44 @@ test("anything that is not text has no key", () => {
 /* ---------- Agregar ---------- */
 
 test("a technology is added at the end, trimmed, on a new array", () => {
-  const stack = ["Python"];
+  const herramientas = ["Python"];
 
-  const resultado = agregarEtiqueta("stack", stack, "  PostgreSQL  ");
+  const resultado = agregarEtiqueta("herramientas", herramientas, "  PostgreSQL  ");
 
   assert.equal(resultado.ok, true);
   assert.deepEqual(plano(resultado.lista), ["Python", "PostgreSQL"]);
-  assert.deepEqual(stack, ["Python"], "el arreglo de entrada no se toca");
+  assert.deepEqual(herramientas, ["Python"], "el arreglo de entrada no se toca");
 });
 
 // El catálogo sugiere, nunca restringe: es la decisión de fondo del editor.
 test("a technology outside the catalog is added just the same", () => {
-  const resultado = agregarEtiqueta("stack", [], "Un framework que nadie conoce");
+  const resultado = agregarEtiqueta("herramientas", [], "Un framework que nadie conoce");
 
   assert.equal(resultado.ok, true);
   assert.deepEqual(plano(resultado.lista), ["Un framework que nadie conoce"]);
 });
 
-test("an empty or blank text is refused without touching the stack", () => {
-  const stack = ["Python"];
+test("an empty or blank text is refused without touching the tools list", () => {
+  const herramientas = ["Python"];
   for (const vacio of ["", "   ", null, undefined, 7]) {
-    const resultado = agregarEtiqueta("stack", stack, vacio);
+    const resultado = agregarEtiqueta("herramientas", herramientas, vacio);
     assert.equal(resultado.ok, false, JSON.stringify(vacio));
     assert.equal(resultado.motivo, "vacio");
-    assert.equal(resultado.lista, stack, "devuelve el mismo arreglo, no una copia");
+    assert.equal(resultado.lista, herramientas, "devuelve el mismo arreglo, no una copia");
   }
 });
 
 test("the twelfth is the last one that fits", () => {
   const once = Array.from({ length: 11 }, (_, i) => `T${i}`);
 
-  const doceava = agregarEtiqueta("stack", once, "T11");
+  const doceava = agregarEtiqueta("herramientas", once, "T11");
   assert.equal(doceava.ok, true);
-  assert.equal(doceava.lista.length, LIMITES_MI_FICHA.stack.max);
+  assert.equal(doceava.lista.length, LIMITES_MI_FICHA.herramientas.max);
 
-  const treceava = agregarEtiqueta("stack", doceava.lista, "T12");
+  const treceava = agregarEtiqueta("herramientas", doceava.lista, "T12");
   assert.equal(treceava.ok, false);
   assert.equal(treceava.motivo, "muchas");
-  assert.equal(treceava.lista.length, LIMITES_MI_FICHA.stack.max);
+  assert.equal(treceava.lista.length, LIMITES_MI_FICHA.herramientas.max);
 });
 
 /*
@@ -126,22 +126,22 @@ test("the twelfth is the last one that fits", () => {
   editor deja entrar es exactamente lo que la base va a aceptar.
 */
 test("a technology too long or with forbidden characters is refused, with its reason", () => {
-  const largo = agregarEtiqueta("stack", [], "a".repeat(LIMITES_MI_FICHA.etiqueta.max + 1));
+  const largo = agregarEtiqueta("herramientas", [], "a".repeat(LIMITES_MI_FICHA.etiqueta.max + 1));
   assert.equal(largo.ok, false);
   assert.equal(largo.motivo, "largo");
 
-  assert.equal(agregarEtiqueta("stack", [], "a".repeat(LIMITES_MI_FICHA.etiqueta.max)).ok, true);
+  assert.equal(agregarEtiqueta("herramientas", [], "a".repeat(LIMITES_MI_FICHA.etiqueta.max)).ok, true);
 
   for (const control of ["\u0000", "\t", "\u007f"]) {
-    const resultado = agregarEtiqueta("stack", [], `Po${control}stgres`);
+    const resultado = agregarEtiqueta("herramientas", [], `Po${control}stgres`);
     assert.equal(resultado.ok, false, JSON.stringify(control));
     assert.equal(resultado.motivo, "caracteres");
   }
 
-  // Los de formato bidireccional, que `[[:cntrl:]]` no cubre y la 0039
+  // Los de formato bidireccional, que `[[:cntrl:]]` no cubre y la 0041
   // rechaza aparte.
   for (const bidi of ["\u200e", "\u202a", "\u2066"]) {
-    const resultado = agregarEtiqueta("stack", [], `Postgres${bidi}`);
+    const resultado = agregarEtiqueta("herramientas", [], `Postgres${bidi}`);
     assert.equal(resultado.ok, false, JSON.stringify(bidi));
     assert.equal(resultado.motivo, "caracteres");
   }
@@ -150,21 +150,21 @@ test("a technology too long or with forbidden characters is refused, with its re
 /* ---------- No repetir ---------- */
 
 test("a repeat is refused and points at the one already there", () => {
-  const stack = ["Python", "PostgreSQL", "AWS"];
+  const herramientas = ["Python", "PostgreSQL", "AWS"];
 
   for (const repetida of ["PostgreSQL", "postgresql", "  POSTGRESQL  "]) {
-    const resultado = agregarEtiqueta("stack", stack, repetida);
+    const resultado = agregarEtiqueta("herramientas", herramientas, repetida);
     assert.equal(resultado.ok, false, repetida);
     assert.equal(resultado.motivo, "duplicado");
     assert.equal(resultado.indice, 1, "el índice sirve para señalar la etiqueta que ya está");
-    assert.equal(resultado.lista, stack);
+    assert.equal(resultado.lista, herramientas);
   }
 });
 
 test("accents do not make a second entry either", () => {
-  const stack = ["Metodologías ágiles"];
+  const herramientas = ["Metodologías ágiles"];
 
-  const resultado = agregarEtiqueta("stack", stack, "Metodologias agiles");
+  const resultado = agregarEtiqueta("herramientas", herramientas, "Metodologias agiles");
 
   assert.equal(resultado.ok, false);
   assert.equal(resultado.motivo, "duplicado");
@@ -176,10 +176,10 @@ test("accents do not make a second entry either", () => {
   —posible, porque hasta hoy nada dedupeaba— se muestran las dos. La dedupe es
   un guardián de la entrada, no una limpieza de lo que ya existe.
 */
-test("a stack that already repeats is left alone; only new entries are guarded", () => {
+test("a tools list that already repeats is left alone; only new entries are guarded", () => {
   const conRepetida = ["PostgreSQL", "postgresql"];
 
-  const resultado = agregarEtiqueta("stack", conRepetida, "Python");
+  const resultado = agregarEtiqueta("herramientas", conRepetida, "Python");
 
   assert.equal(resultado.ok, true);
   assert.deepEqual(plano(resultado.lista), ["PostgreSQL", "postgresql", "Python"]);
@@ -188,30 +188,30 @@ test("a stack that already repeats is left alone; only new entries are guarded",
 /* ---------- Quitar ---------- */
 
 test("removing takes the one at that position, on a new array", () => {
-  const stack = ["Python", "PostgreSQL", "AWS"];
+  const herramientas = ["Python", "PostgreSQL", "AWS"];
 
-  const resultado = quitarEtiqueta(stack, 1);
+  const resultado = quitarEtiqueta(herramientas, 1);
 
   assert.deepEqual(plano(resultado), ["Python", "AWS"]);
-  assert.deepEqual(stack, ["Python", "PostgreSQL", "AWS"]);
+  assert.deepEqual(herramientas, ["Python", "PostgreSQL", "AWS"]);
 });
 
 test("removing a position that is not there changes nothing", () => {
-  const stack = ["Python", "PostgreSQL"];
+  const herramientas = ["Python", "PostgreSQL"];
   for (const indice of [-1, 2, 99, null, undefined, 1.5, "1"]) {
-    assert.equal(quitarEtiqueta(stack, indice), stack, JSON.stringify(indice));
+    assert.equal(quitarEtiqueta(herramientas, indice), herramientas, JSON.stringify(indice));
   }
 });
 
 /* ---------- Reordenar ---------- */
 
 test("a technology moves to its new position, on a new array", () => {
-  const stack = ["A", "B", "C", "D"];
+  const herramientas = ["A", "B", "C", "D"];
 
-  assert.deepEqual(plano(moverEtiqueta(stack, 0, 2)), ["B", "C", "A", "D"]);
-  assert.deepEqual(plano(moverEtiqueta(stack, 3, 0)), ["D", "A", "B", "C"]);
-  assert.deepEqual(plano(moverEtiqueta(stack, 2, 1)), ["A", "C", "B", "D"]);
-  assert.deepEqual(stack, ["A", "B", "C", "D"], "el arreglo de entrada no se toca");
+  assert.deepEqual(plano(moverEtiqueta(herramientas, 0, 2)), ["B", "C", "A", "D"]);
+  assert.deepEqual(plano(moverEtiqueta(herramientas, 3, 0)), ["D", "A", "B", "C"]);
+  assert.deepEqual(plano(moverEtiqueta(herramientas, 2, 1)), ["A", "C", "B", "D"]);
+  assert.deepEqual(herramientas, ["A", "B", "C", "D"], "el arreglo de entrada no se toca");
 });
 
 /*
@@ -220,22 +220,22 @@ test("a technology moves to its new position, on a new array", () => {
   otro lado. Mismo criterio que moverSeleccion() en el roster.
 */
 test("a destination past the edges is clamped, never wrapped", () => {
-  const stack = ["A", "B", "C"];
+  const herramientas = ["A", "B", "C"];
 
-  assert.deepEqual(plano(moverEtiqueta(stack, 2, -5)), ["C", "A", "B"]);
-  assert.deepEqual(plano(moverEtiqueta(stack, 0, 99)), ["B", "C", "A"]);
+  assert.deepEqual(plano(moverEtiqueta(herramientas, 2, -5)), ["C", "A", "B"]);
+  assert.deepEqual(plano(moverEtiqueta(herramientas, 0, 99)), ["B", "C", "A"]);
 });
 
 test("a move that does not move, or that starts nowhere, returns the same array", () => {
-  const stack = ["A", "B", "C"];
+  const herramientas = ["A", "B", "C"];
 
-  assert.equal(moverEtiqueta(stack, 1, 1), stack, "al mismo lugar");
-  assert.equal(moverEtiqueta(stack, 0, -3), stack, "ya estaba en el borde");
-  assert.equal(moverEtiqueta(stack, 2, 9), stack, "ya estaba en el otro borde");
+  assert.equal(moverEtiqueta(herramientas, 1, 1), herramientas, "al mismo lugar");
+  assert.equal(moverEtiqueta(herramientas, 0, -3), herramientas, "ya estaba en el borde");
+  assert.equal(moverEtiqueta(herramientas, 2, 9), herramientas, "ya estaba en el otro borde");
   for (const origen of [-1, 3, null, undefined, 1.5]) {
-    assert.equal(moverEtiqueta(stack, origen, 0), stack, JSON.stringify(origen));
+    assert.equal(moverEtiqueta(herramientas, origen, 0), herramientas, JSON.stringify(origen));
   }
-  assert.equal(moverEtiqueta(stack, 0, null), stack, "destino que no es un índice");
+  assert.equal(moverEtiqueta(herramientas, 0, null), herramientas, "destino que no es un índice");
 });
 
 /* ---------- Sugerir ---------- */
@@ -257,7 +257,7 @@ test("the ones that start with the query come first", () => {
   assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "an")), ["Angular", "pandas"]);
 });
 
-test("what is already in the stack is not offered again", () => {
+test("what is already in the tools list is not offered again", () => {
   assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "react", ["React"])), ["React Native"]);
   assert.deepEqual(
     plano(sugerenciasDeEtiqueta(CATALOGO, "react", ["  REACT  ", "react native"])),

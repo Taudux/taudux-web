@@ -1,9 +1,9 @@
 /*
-  Carga el catálogo de tecnologías que el campo Stack de "Mi ficha" usa para
-  sugerir mientras se escribe. Como las notas, y a diferencia del resto de los
-  servicios del sitio, este NO habla con Supabase: el catálogo es un archivo
-  estático del repositorio (src/content/tecnologias/catalogo.json) y se sirve
-  desde /content/tecnologias.
+  Carga el catálogo de tecnologías que el campo Herramientas de "Mi ficha"
+  usa para sugerir mientras se escribe. Como las notas, y a diferencia del
+  resto de los servicios del sitio, este NO habla con Supabase: el catálogo
+  es un archivo estático del repositorio (src/content/tecnologias/catalogo.json)
+  y se sirve desde /content/tecnologias.
 
   El catálogo NO es una lista blanca. Sugiere, nunca restringe: quien escribe
   una tecnología que no está en él la guarda igual. De ahí que este archivo no

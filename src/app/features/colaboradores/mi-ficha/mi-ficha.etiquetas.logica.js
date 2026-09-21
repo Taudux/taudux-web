@@ -8,8 +8,8 @@
   notas.grafo.js depende de notas.arbol.js. Va aparte porque son dos
   responsabilidades: allá se valida la ficha completa contra los CHECK de la
   0039 antes de enviarla, acá se decide qué pasa cuando alguien teclea. Los
-  nombres son agnósticos al campo: hoy sólo lo instancia el stack, pero mañana
-  también lo van a usar Herramientas, Habilidades e Idiomas, cada uno con su
+  nombres son agnósticos al campo: hoy sólo lo instancian las herramientas,
+  pero mañana también lo van a usar Habilidades e Idiomas, cada uno con su
   propia clave en LIMITES_MI_FICHA y MENSAJES_MI_FICHA.
 
   El catálogo NO es una lista blanca. Sólo alimenta las sugerencias: cualquier
@@ -42,7 +42,8 @@ function normalizarClaveEtiqueta(texto) {
   motivo y no tiene que adivinar si algo cambió.
 
   `campo` es la clave en LIMITES_MI_FICHA y MENSAJES_MI_FICHA (hoy siempre
-  "stack"): de ahí sale el máximo de elementos y los mensajes por motivo.
+  "herramientas"): de ahí sale el máximo de elementos y los mensajes por
+  motivo.
 
   Motivos: "vacio" (no se escribió nada), "muchas" (ya se llegó al máximo),
   "duplicado" (con el `indice` de la que ya está, para poder señalarla) y los

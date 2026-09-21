@@ -11,12 +11,12 @@ const MENSAJE_GUARDAR = "No se pudo guardar tu ficha. Intenta de nuevo.";
 
 const USUARIO = "123e4567-e89b-42d3-a456-426614174000";
 
-// Las diez columnas de la ficha (0039/0040) que el dueño puede escribir.
+// Las diez columnas de la ficha (0039/0040/0041) que el dueño puede escribir.
 const COLUMNAS = Object.freeze([
   "puesto",
   "sector",
   "ubicacion",
-  "stack",
+  "herramientas",
   "modalidad_trabajo",
   "anio_inicio",
   "bio",
@@ -29,7 +29,7 @@ const FICHA = Object.freeze({
   puesto: "Arquitectura de datos",
   sector: "Data warehousing",
   ubicacion: "Querétaro, MX",
-  stack: ["PostgreSQL", "Python", "GCP"],
+  herramientas: ["PostgreSQL", "Python", "GCP"],
   modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",

@@ -1,13 +1,15 @@
 /*
   Núcleo puro de "Mi ficha": normalización y validación del formulario con el
   que cada colaborador edita su ficha pública. Las reglas son las de los CHECK
-  de `fichas_colaborador` (0039 y 0040): lo que el formulario deja pasar, la
-  base lo acepta, y lo que la base rechazaría, el formulario lo avisa campo
-  por campo antes de enviarlo.
+  de `fichas_colaborador` (0039, 0040 y 0041): lo que el formulario deja
+  pasar, la base lo acepta, y lo que la base rechazaría, el formulario lo
+  avisa campo por campo antes de enviarlo.
 
   Los límites y las expresiones de los enlaces se leen de la 0039; las
-  modalidades de trabajo, de la 0040. Todo se compara contra el SQL: una copia
-  sin vigilancia se desfasa en silencio.
+  modalidades de trabajo, de la 0040; el tope de herramientas y el largo de
+  cada etiqueta, de la 0041 (ahí se partió el stack original en herramientas,
+  habilidades e idiomas, y el CHECK por elemento se movió con él). Todo se
+  compara contra el SQL: una copia sin vigilancia se desfasa en silencio.
 */
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -37,6 +39,7 @@ const {
 
 const SQL = leer("supabase/migrations/0039_fichas_colaborador.sql");
 const SQL_0040 = leer("supabase/migrations/0040_modalidad_trabajo_colaborador.sql");
+const SQL_0041 = leer("supabase/migrations/0041_etiquetas_empresa.sql");
 
 // Año fijo: la validación recibe el año en curso como argumento, así que los
 // casos no cambian con el reloj.
@@ -52,7 +55,7 @@ function valoresValidos(cambios = {}) {
     puesto: "Desarrolladora backend",
     sector: "Bases de datos",
     ubicacion: "Querétaro, México",
-    stack: ["PostgreSQL", "Python", "GCP"],
+    herramientas: ["PostgreSQL", "Python", "GCP"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -96,7 +99,7 @@ test("the card keys are exactly the columns the service writes, in the same orde
 
   assert.deepEqual([...CAMPOS_MI_FICHA], columnas);
   assert.deepEqual([...CAMPOS_MI_FICHA], [
-    "puesto", "sector", "ubicacion", "stack", "modalidad_trabajo",
+    "puesto", "sector", "ubicacion", "herramientas", "modalidad_trabajo",
     "anio_inicio", "bio", "linkedin", "github", "correo",
   ]);
 });
@@ -107,12 +110,12 @@ test("normalizing always returns exactly the ten card keys", () => {
   }
 });
 
-test("normalizing trims texts, trims each stack item and drops the empty ones, parses the year and turns empty links into null", () => {
+test("normalizing trims texts, trims each tool item and drops the empty ones, parses the year and turns empty links into null", () => {
   const ficha = normalizarMiFicha({
     puesto: "  Desarrolladora backend ",
     sector: "\tBases de datos\n",
     ubicacion: " Querétaro ",
-    stack: [" PostgreSQL ", "Python", "", "  ", " GCP "],
+    herramientas: [" PostgreSQL ", "Python", "", "  ", " GCP "],
     modalidad_trabajo: "Híbrido",
     anio_inicio: " 2018 ",
     bio: "\n\n  Primera línea.\nSegunda línea.  \n",
@@ -125,7 +128,7 @@ test("normalizing trims texts, trims each stack item and drops the empty ones, p
     puesto: "Desarrolladora backend",
     sector: "Bases de datos",
     ubicacion: "Querétaro",
-    stack: ["PostgreSQL", "Python", "GCP"],
+    herramientas: ["PostgreSQL", "Python", "GCP"],
     modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Primera línea.\nSegunda línea.",
@@ -135,20 +138,20 @@ test("normalizing trims texts, trims each stack item and drops the empty ones, p
   });
 });
 
-test("normalizing a stack that is not an array, or that has non-text items, gives an empty or trimmed array", () => {
-  for (const stack of ["PostgreSQL, Python", null, undefined, 7, {}]) {
-    assert.deepEqual(normalizarMiFicha(valoresValidos({ stack })).stack, [], JSON.stringify(stack));
+test("normalizing a tools list that is not an array, or that has non-text items, gives an empty or trimmed array", () => {
+  for (const herramientas of ["PostgreSQL, Python", null, undefined, 7, {}]) {
+    assert.deepEqual(normalizarMiFicha(valoresValidos({ herramientas })).herramientas, [], JSON.stringify(herramientas));
   }
   // Lo que no es texto se descarta como si fuera un elemento vacío.
-  assert.deepEqual(normalizarMiFicha(valoresValidos({ stack: ["Python", 7, null, "  ", "GCP"] })).stack, ["Python", "GCP"]);
+  assert.deepEqual(normalizarMiFicha(valoresValidos({ herramientas: ["Python", 7, null, "  ", "GCP"] })).herramientas, ["Python", "GCP"]);
 });
 
-test("normalizing an empty form gives empty texts, an empty stack, no year and null links", () => {
+test("normalizing an empty form gives empty texts, an empty tools list, no year and null links", () => {
   assert.deepEqual(normalizarMiFicha({}), {
     puesto: "",
     sector: "",
     ubicacion: "",
-    stack: [],
+    herramientas: [],
     modalidad_trabajo: "",
     anio_inicio: null,
     bio: "",
@@ -202,73 +205,74 @@ for (const { campo, min, max } of TEXTOS_CORTOS) {
   });
 }
 
-/* ---------- Stack ---------- */
+/* ---------- Herramientas ---------- */
 
-test("stack: from 1 to 12 items", () => {
-  assertSoloErrorEn(valoresValidos({ stack: [] }), "stack", "vacío");
-  assertSoloErrorEn(valoresValidos({ stack: ["", "  "] }), "stack", "sólo blancos");
+test("tools: from 1 to 12 items", () => {
+  assertSoloErrorEn(valoresValidos({ herramientas: [] }), "herramientas", "vacío");
+  assertSoloErrorEn(valoresValidos({ herramientas: ["", "  "] }), "herramientas", "sólo blancos");
 
   const doce = Array.from({ length: 12 }, (_, i) => `T${i}`);
-  assert.equal(assertValido(valoresValidos({ stack: doce }), "doce").stack.length, 12);
-  assertValido(valoresValidos({ stack: ["Python"] }), "uno");
+  assert.equal(assertValido(valoresValidos({ herramientas: doce }), "doce").herramientas.length, 12);
+  assertValido(valoresValidos({ herramientas: ["Python"] }), "uno");
 
   const trece = Array.from({ length: 13 }, (_, i) => `T${i}`);
-  assertSoloErrorEn(valoresValidos({ stack: trece }), "stack", "trece");
+  assertSoloErrorEn(valoresValidos({ herramientas: trece }), "herramientas", "trece");
 });
 
-test("stack: each item from 1 to 40 characters, with the same character rules", () => {
-  assertValido(valoresValidos({ stack: ["Python", "a".repeat(40)] }), "un elemento de 40");
-  assertValido(valoresValidos({ stack: ["Python", "😀".repeat(40)] }), "40 emojis cuentan como 40");
-  assertSoloErrorEn(valoresValidos({ stack: ["Python", "a".repeat(41)] }), "stack", "un elemento de 41");
+test("tools: each item from 1 to 40 characters, with the same character rules", () => {
+  assertValido(valoresValidos({ herramientas: ["Python", "a".repeat(40)] }), "un elemento de 40");
+  assertValido(valoresValidos({ herramientas: ["Python", "😀".repeat(40)] }), "40 emojis cuentan como 40");
+  assertSoloErrorEn(valoresValidos({ herramientas: ["Python", "a".repeat(41)] }), "herramientas", "un elemento de 41");
 
   for (const control of ["\u0000", "\t", "\n", "\u007f"]) {
-    assertSoloErrorEn(valoresValidos({ stack: ["Python", `Po${control}stgres`] }), "stack", "control");
+    assertSoloErrorEn(valoresValidos({ herramientas: ["Python", `Po${control}stgres`] }), "herramientas", "control");
   }
   for (const bidi of BIDI) {
-    assertSoloErrorEn(valoresValidos({ stack: ["Python", `Postgres${bidi}`] }), "stack", `bidi U+${bidi.codePointAt(0).toString(16)}`);
+    assertSoloErrorEn(valoresValidos({ herramientas: ["Python", `Postgres${bidi}`] }), "herramientas", `bidi U+${bidi.codePointAt(0).toString(16)}`);
   }
 });
 
 /*
-  Cuando las dos faltas conviven en el mismo stack gana la de caracteres, esté
-  donde esté el elemento que la comete. Eso es lo que separa revisar los doce
-  elementos de cortar en el primero que falla: con el corte, el mensaje
-  dependería del orden en que se escribieron las tecnologías.
+  Cuando las dos faltas conviven en las mismas herramientas gana la de
+  caracteres, esté donde esté el elemento que la comete. Eso es lo que separa
+  revisar los doce elementos de cortar en el primero que falla: con el corte,
+  el mensaje dependería del orden en que se escribieron las tecnologías.
 */
-test("stack: the character fault wins over the length one, whatever the order", () => {
+test("tools: the character fault wins over the length one, whatever the order", () => {
   const largo = "a".repeat(41);
   const conControl = "Po\u0000stgres";
 
-  const porCaracteres = assertSoloErrorEn(valoresValidos({ stack: [conControl] }), "stack", "sólo caracteres");
-  const porLargo = assertSoloErrorEn(valoresValidos({ stack: [largo] }), "stack", "sólo largo");
+  const porCaracteres = assertSoloErrorEn(valoresValidos({ herramientas: [conControl] }), "herramientas", "sólo caracteres");
+  const porLargo = assertSoloErrorEn(valoresValidos({ herramientas: [largo] }), "herramientas", "sólo largo");
   assert.notEqual(porCaracteres, porLargo, "los dos motivos tienen que decir cosas distintas");
 
   for (const orden of [[largo, conControl], [conControl, largo]]) {
-    const mensaje = assertSoloErrorEn(valoresValidos({ stack: orden }), "stack", orden.join(" + "));
+    const mensaje = assertSoloErrorEn(valoresValidos({ herramientas: orden }), "herramientas", orden.join(" + "));
     assert.equal(mensaje, porCaracteres, "gana caracteres sin importar el orden");
   }
 });
 
 /*
   El veredicto de una sola tecnología, que es lo que consulta el editor de
-  etiquetas para decidir si la deja entrar. Los mismos dos motivos que el
-  stack entero, y ningún otro: el mínimo de un carácter no es asunto suyo.
+  etiquetas para decidir si la deja entrar. Los mismos dos motivos que las
+  herramientas enteras, y ningún otro: el mínimo de un carácter no es asunto
+  suyo.
 */
-test("a single technology is judged by the same two rules as the whole stack", () => {
-  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "PostgreSQL"), null);
-  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "a".repeat(40)), null);
-  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "😀".repeat(40)), null, "40 emojis cuentan como 40");
-  assert.equal(errorDeElementoEtiquetaMiFicha("stack", ""), null, "lo vacío lo descarta quien arma el stack");
+test("a single technology is judged by the same two rules as the whole tools list", () => {
+  assert.equal(errorDeElementoEtiquetaMiFicha("herramientas", "PostgreSQL"), null);
+  assert.equal(errorDeElementoEtiquetaMiFicha("herramientas", "a".repeat(40)), null);
+  assert.equal(errorDeElementoEtiquetaMiFicha("herramientas", "😀".repeat(40)), null, "40 emojis cuentan como 40");
+  assert.equal(errorDeElementoEtiquetaMiFicha("herramientas", ""), null, "lo vacío lo descarta quien arma la lista");
 
-  const porLargo = errorDeElementoEtiquetaMiFicha("stack", "a".repeat(41));
-  const porCaracteres = errorDeElementoEtiquetaMiFicha("stack", "Po\u0000stgres");
+  const porLargo = errorDeElementoEtiquetaMiFicha("herramientas", "a".repeat(41));
+  const porCaracteres = errorDeElementoEtiquetaMiFicha("herramientas", "Po\u0000stgres");
   assert.ok(porLargo, "41 caracteres tiene que dar mensaje");
   assert.ok(porCaracteres, "un carácter de control tiene que dar mensaje");
   assert.notEqual(porLargo, porCaracteres);
 
   // En un elemento que comete las dos, manda el de caracteres: es el mismo
   // orden con el que errorDeListaDeEtiquetasMiFicha resuelve la lista completa.
-  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "Po\u0000stgres".padEnd(41, "a")), porCaracteres);
+  assert.equal(errorDeElementoEtiquetaMiFicha("herramientas", "Po\u0000stgres".padEnd(41, "a")), porCaracteres);
 });
 
 /* ---------- Modalidad de trabajo ---------- */
@@ -459,14 +463,21 @@ test("links: length limits of 200, 200 and 254 characters", () => {
   assertSoloErrorEn(valoresValidos({ correo: correo(255) }), "correo", "correo de 255");
 });
 
-/* ---------- Las reglas son las de la 0039 ---------- */
+/* ---------- Las reglas están repartidas entre la 0039, la 0040 y la 0041 ---------- */
 
-test("the length limits are the ones the 0039 CHECKs declare, and bio the 0040 override", () => {
-  // `fuente` por defecto es la 0039; el bio se compara aparte contra la 0040,
-  // que es quien de verdad manda su tope hoy (ver la cabecera del archivo).
-  const entre = (expresion, fuente = SQL) => {
+/*
+  La verdad de cada límite vive en una migración distinta: puesto, sector,
+  ubicación y los enlaces siguen en la 0039; la bio bajó a 240 en la 0040; y
+  herramientas y el largo de cada etiqueta se movieron a la 0041, que es
+  donde vive hoy `etiquetas_colaborador_validas()` (la 0039 y su
+  `stack_colaborador_valido()` ya no existen tras aplicarla). Cada assert
+  dice en su mensaje qué migración leyó, para que un futuro desfase señale de
+  entrada dónde mirar.
+*/
+test("the length limits are the ones each CHECK declares today: 0039 for most fields, 0040 for bio, 0041 for tools and tags", () => {
+  const entre = (expresion, fuente, nombreFuente) => {
     const encontrado = fuente.match(new RegExp(`${expresion}\\s+between\\s+(\\d+)\\s+and\\s+(\\d+)`));
-    assert.ok(encontrado, `no se encontró "${expresion} between" en ${fuente === SQL_0040 ? "la 0040" : "la 0039"}`);
+    assert.ok(encontrado, `no se encontró "${expresion} between" en la ${nombreFuente}`);
     return { min: Number(encontrado[1]), max: Number(encontrado[2]) };
   };
   const hasta = (columna) => {
@@ -475,13 +486,13 @@ test("the length limits are the ones the 0039 CHECKs declare, and bio the 0040 o
     return Number(encontrado[1]);
   };
 
-  assert.deepEqual(LIMITES_MI_FICHA.puesto, entre("char_length\\(rol\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.sector, entre("char_length\\(especialidad\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.ubicacion, entre("char_length\\(ubicacion\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.bio, entre("char_length\\(bio\\)", SQL_0040));
-  assert.deepEqual(LIMITES_MI_FICHA.stack, entre("cardinality\\(stack\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.etiqueta, entre("char_length\\(elemento\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.anio_inicio, entre("anio_inicio"));
+  assert.deepEqual(LIMITES_MI_FICHA.puesto, entre("char_length\\(rol\\)", SQL, "0039"));
+  assert.deepEqual(LIMITES_MI_FICHA.sector, entre("char_length\\(especialidad\\)", SQL, "0039"));
+  assert.deepEqual(LIMITES_MI_FICHA.ubicacion, entre("char_length\\(ubicacion\\)", SQL, "0039"));
+  assert.deepEqual(LIMITES_MI_FICHA.bio, entre("char_length\\(bio\\)", SQL_0040, "0040"));
+  assert.deepEqual(LIMITES_MI_FICHA.herramientas, entre("cardinality\\(herramientas\\)", SQL_0041, "0041"));
+  assert.deepEqual(LIMITES_MI_FICHA.etiqueta, entre("char_length\\(elemento\\)", SQL_0041, "0041"));
+  assert.deepEqual(LIMITES_MI_FICHA.anio_inicio, entre("anio_inicio", SQL, "0039"));
   assert.equal(LIMITES_MI_FICHA.linkedin, hasta("linkedin"));
   assert.equal(LIMITES_MI_FICHA.github, hasta("github"));
   assert.equal(LIMITES_MI_FICHA.correo, hasta("correo"));
@@ -506,7 +517,7 @@ test("an empty form reports every required field at once, in form order, and no 
   assert.equal(resultado.ok, false);
   assert.deepEqual(
     resultado.errores.map(({ campo }) => campo),
-    ["puesto", "sector", "ubicacion", "stack", "modalidad_trabajo", "anio_inicio", "bio"],
+    ["puesto", "sector", "ubicacion", "herramientas", "modalidad_trabajo", "anio_inicio", "bio"],
   );
   for (const { mensaje } of resultado.errores) {
     assert.equal(typeof mensaje, "string");
@@ -521,7 +532,7 @@ test("errors follow the card order and each field reports only one message", () 
 
 test("error messages speak in tuteo, never voseo", () => {
   const { errores } = validarMiFicha({
-    puesto: "a", sector: "", ubicacion: "‮", stack: [], modalidad_trabajo: "x",
+    puesto: "a", sector: "", ubicacion: "\u202e", herramientas: [], modalidad_trabajo: "x",
     anio_inicio: "abc", bio: "", linkedin: "x", github: "x", correo: "x",
   }, ANIO);
   assert.equal(errores.length, CAMPOS_MI_FICHA.length, "premisa: todos los campos fallan");
@@ -534,13 +545,13 @@ test("error messages speak in tuteo, never voseo", () => {
 
 /* ---------- Del perfil y la ficha guardada al formulario ---------- */
 
-test("a saved card becomes form values: texts as is, stack as a copied array, year as text, null links empty", () => {
-  const stackGuardado = ["PostgreSQL", "Python", "GCP"];
+test("a saved card becomes form values: texts as is, tools as a copied array, year as text, null links empty", () => {
+  const herramientasGuardadas = ["PostgreSQL", "Python", "GCP"];
   const valores = valoresFormularioMiFicha({
     puesto: "Desarrolladora backend",
     sector: "Bases de datos",
     ubicacion: "Querétaro",
-    stack: stackGuardado,
+    herramientas: herramientasGuardadas,
     modalidad_trabajo: "Remoto",
     anio_inicio: 2018,
     bio: "Primera.\nSegunda.",
@@ -553,7 +564,7 @@ test("a saved card becomes form values: texts as is, stack as a copied array, ye
     puesto: "Desarrolladora backend",
     sector: "Bases de datos",
     ubicacion: "Querétaro",
-    stack: ["PostgreSQL", "Python", "GCP"],
+    herramientas: ["PostgreSQL", "Python", "GCP"],
     modalidad_trabajo: "Remoto",
     anio_inicio: "2018",
     bio: "Primera.\nSegunda.",
@@ -563,11 +574,11 @@ test("a saved card becomes form values: texts as is, stack as a copied array, ye
   });
   // Una COPIA: el editor de etiquetas muta el arreglo del formulario, y eso
   // no tiene que tocar la ficha guardada.
-  assert.notEqual(valores.stack, stackGuardado);
+  assert.notEqual(valores.herramientas, herramientasGuardadas);
 });
 
 test("no card yet (null) becomes an empty form", () => {
-  const vacio = Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "stack" ? [] : ""]));
+  const vacio = Object.fromEntries(CAMPOS_MI_FICHA.map((campo) => [campo, campo === "herramientas" ? [] : ""]));
   assert.deepEqual(valoresFormularioMiFicha(null), vacio);
   assert.deepEqual(valoresFormularioMiFicha(undefined), vacio);
   // Un valor fuera de la lista no marca ninguna opción.

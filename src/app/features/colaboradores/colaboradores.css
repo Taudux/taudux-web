@@ -573,21 +573,26 @@
     overflow-wrap: anywhere;
   }
 
-  /* Píldoras del stack, en la ficha de perfil. Mismo patrón que
+  /* Píldoras de las herramientas, en la ficha de perfil. Mismo patrón que
      .colaboradores__enlace(s) (arriba), con una diferencia deliberada: SIN
      white-space: nowrap. "LinkedIn" y "GitHub" son etiquetas cortas y fijas;
-     un elemento del stack es texto libre de hasta 40 caracteres (por ejemplo
-     "System Architecture (GCloud · Supabase)") y tiene que poder envolver
-     DENTRO de su propia píldora, o a 390px de ancho mete scroll horizontal y
-     rompe el invariante de layout. */
-  .colaboradores__stack {
+     un elemento de herramientas es texto libre de hasta 40 caracteres (por
+     ejemplo "System Architecture (GCloud · Supabase)") y tiene que poder
+     envolver DENTRO de su propia píldora, o a 390px de ancho mete scroll
+     horizontal y rompe el invariante de layout.
+
+     El ítem NO se llama `.colaboradores__etiqueta` (a secas): esa clase ya
+     existe para el eyebrow "PERFIL" (arriba, chica y en mayúsculas) y
+     colisionaría con esta píldora, que es un elemento visual completamente
+     distinto. */
+  .colaboradores__etiquetas {
     display: flex;
     flex-wrap: wrap;
     gap: 0.625rem;
     list-style: none;
   }
 
-  .colaboradores__stack-etiqueta {
+  .colaboradores__etiquetas-item {
     display: inline-flex;
     align-items: center;
     max-inline-size: 100%;

@@ -48,7 +48,7 @@ function plano(valor) {
 }
 
 /*
-  Los campos de la ficha (0039/0040), con los nombres de la base. Quien
+  Los campos de la ficha (0039/0040/0041), con los nombres de la base. Quien
   todavía no llenó la suya los trae en null: el RPC hace left join. Una fila
   que ni siquiera trae la columna (el RPC de la 0038) queda igual, en null.
 */
@@ -56,7 +56,7 @@ const SIN_FICHA = Object.freeze({
   puesto: null,
   sector: null,
   ubicacion: null,
-  stack: null,
+  herramientas: null,
   modalidad_trabajo: null,
   anio_inicio: null,
   bio: null,
@@ -67,7 +67,7 @@ const SIN_FICHA = Object.freeze({
 const sinFicha = (identidad) => ({ ...identidad, ...SIN_FICHA });
 const CAMPOS_PUBLICOS = ["nombre", "corto", "slug", ...Object.keys(SIN_FICHA)].sort();
 
-// Una fila completa como la entrega `listar_colaboradores()` de la 0040.
+// Una fila completa como la entrega `listar_colaboradores()` de la 0041.
 const FILA_CON_FICHA = Object.freeze({
   nombre: "Valeria",
   apellidos: "Ortiz",
@@ -75,7 +75,7 @@ const FILA_CON_FICHA = Object.freeze({
   puesto: "Arquitectura de datos",
   sector: "Data warehousing",
   ubicacion: "Querétaro, MX",
-  stack: ["PostgreSQL", "Python", "GCP"],
+  herramientas: ["PostgreSQL", "Python", "GCP"],
   modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
@@ -160,7 +160,7 @@ test("passes the card fields through under their database names", async () => {
       puesto: "Arquitectura de datos",
       sector: "Data warehousing",
       ubicacion: "Querétaro, MX",
-      stack: ["PostgreSQL", "Python", "GCP"],
+      herramientas: ["PostgreSQL", "Python", "GCP"],
       modalidad_trabajo: "Híbrido",
       anio_inicio: 2018,
       bio: "Diseña pipelines y modelos de datos.\nConvierte tablas desordenadas en decisiones.",
@@ -185,22 +185,22 @@ test("a collaborator without a card yet keeps every card field null", async () =
 });
 
 /*
-  El stack se pinta unido con " · ": sólo pasa si es un arreglo de textos.
-  Cualquier otra forma (el texto suelto del prototipo, números, un null
-  adentro) llega como null. Si está completo o no lo decide tienePerfil(), no
-  el servicio: por eso el arreglo vacío pasa tal cual.
+  Las herramientas se pintan unidas con " · ": sólo pasan si son un arreglo de
+  textos. Cualquier otra forma (el texto suelto del prototipo, números, un
+  null adentro) llega como null. Si está completo o no lo decide
+  tienePerfil(), no el servicio: por eso el arreglo vacío pasa tal cual.
 */
-test("stack only passes as an array of strings; anything else becomes null", async () => {
-  for (const stack of ["PostgreSQL · Python", [1, 2], ["Python", null], { 0: "Python" }, 7]) {
-    const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, stack }] });
+test("tools only pass as an array of strings; anything else becomes null", async () => {
+  for (const herramientas of ["PostgreSQL · Python", [1, 2], ["Python", null], { 0: "Python" }, 7]) {
+    const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, herramientas }] });
     const result = await listarColaboradores();
-    assert.equal(result.data[0].stack, null, `stack = ${JSON.stringify(stack)}`);
+    assert.equal(result.data[0].herramientas, null, `herramientas = ${JSON.stringify(herramientas)}`);
   }
 
-  for (const stack of [["Python"], []]) {
-    const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, stack }] });
+  for (const herramientas of [["Python"], []]) {
+    const { listarColaboradores } = createHarness({ data: [{ ...FILA_CON_FICHA, herramientas }] });
     const result = await listarColaboradores();
-    assert.deepEqual(plano(result.data[0].stack), stack);
+    assert.deepEqual(plano(result.data[0].herramientas), herramientas);
   }
 });
 

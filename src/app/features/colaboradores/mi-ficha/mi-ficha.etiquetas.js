@@ -2,10 +2,10 @@
   Editor de etiquetas genérico: un combobox de texto libre con sugerencias de
   un catálogo, un listbox de sugerencias y una lista de etiquetas ya elegidas
   que se pueden quitar y reordenar (con el teclado o arrastrando). Hoy sólo lo
-  usa el Stack de "Mi ficha" (mi-ficha.js); se separa de ahí para que mañana
-  lo puedan instanciar también Herramientas, Habilidades e Idiomas, cada uno
-  con su propio prefijo de id de opción (ver más abajo) y sus propios nodos
-  del DOM.
+  usan las Herramientas de "Mi ficha" (mi-ficha.js); se separa de ahí para
+  que mañana lo puedan instanciar también Habilidades e Idiomas, cada uno con
+  su propio prefijo de id de opción (ver más abajo) y sus propios nodos del
+  DOM.
 
   La lógica pura de agregar/quitar/mover/sugerir sigue en
   mi-ficha.etiquetas.logica.js (agregarEtiqueta, quitarEtiqueta, moverEtiqueta,
@@ -20,7 +20,7 @@
 
   crearEditorDeEtiquetas recibe:
     campo             la clave en LIMITES_MI_FICHA y MENSAJES_MI_FICHA, por
-                      ejemplo "stack".
+                      ejemplo "herramientas".
     input             el combobox de texto.
     opciones          el <ul role="listbox"> de sugerencias.
     lista             el <ul> de las etiquetas ya elegidas.
@@ -34,8 +34,11 @@
                       de pantalla anunciaría la opción equivocada.
     textoAyuda        el texto de ayuda cuando todavía se puede escribir.
     textoAyudaLlena   el texto de ayuda cuando ya se llegó al máximo.
-    nombrePlural      completa el aviso de duplicado: "ya está en tu
-                      ${nombrePlural}.".
+    nombrePlural      completa el aviso de duplicado: "ya está en tus
+                      ${nombrePlural}.". Siempre un sustantivo plural
+                      ("herramientas" hoy; mañana, "habilidades" e "idiomas"
+                      también lo son), por eso el "tus" va fijo en la
+                      plantilla.
     marcarError       (mensaje) => void, ya cerrado sobre el campo del
                       formulario.
     limpiarError      () => void, ídem.
@@ -117,7 +120,7 @@ function crearEditorDeEtiquetas({
     manija.type = "button";
     manija.className = "mi-ficha__etiqueta-manija";
     manija.setAttribute("aria-label", `Reordenar ${tecnologia}`);
-    manija.setAttribute("data-indice-stack", String(indice));
+    manija.setAttribute("data-indice-etiqueta", String(indice));
     manija.textContent = "⠿";
     manija.addEventListener("keydown", (evento) => manejarTecladoManija(evento, indice));
     manija.addEventListener("pointerdown", (evento) => iniciarArrastre(evento, indice));
@@ -268,8 +271,8 @@ function crearEditorDeEtiquetas({
       opcion.setAttribute("role", "option");
       opcion.setAttribute("aria-selected", String(indice === resaltadaSugerencia));
       opcion.className = indice === resaltadaSugerencia
-        ? "mi-ficha__stack-opcion mi-ficha__stack-opcion--resaltada"
-        : "mi-ficha__stack-opcion";
+        ? "mi-ficha__etiquetas-opcion mi-ficha__etiquetas-opcion--resaltada"
+        : "mi-ficha__etiquetas-opcion";
       opcion.textContent = tecnologia;
       opcion.addEventListener("mousedown", (evento) => {
         evento.preventDefault();
@@ -335,7 +338,7 @@ function crearEditorDeEtiquetas({
     if (resultado.motivo === "vacio") return;
 
     if (resultado.motivo === "duplicado") {
-      anunciar(`${valores[resultado.indice]} ya está en tu ${nombrePlural}.`);
+      anunciar(`${valores[resultado.indice]} ya está en tus ${nombrePlural}.`);
       resaltarEtiquetaDuplicada(resultado.indice);
       return;
     }

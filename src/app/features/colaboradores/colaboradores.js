@@ -68,7 +68,7 @@
       perfilUbicacion: porId("perfilUbicacion"),
       perfilExperiencia: porId("perfilExperiencia"),
       perfilModalidadTrabajo: porId("perfilModalidadTrabajo"),
-      perfilStack: porId("perfilStack"),
+      perfilHerramientas: porId("perfilHerramientas"),
       perfilBio: porId("perfilBio"),
     };
 
@@ -487,32 +487,34 @@
       // La base guarda el año de inicio; los años se cuentan al pintar.
       escribir(el.perfilExperiencia, experienciaDesde(ficha.anio_inicio, new Date().getFullYear()));
       escribir(el.perfilModalidadTrabajo, ficha.modalidad_trabajo);
-      pintarStack(el.perfilStack, ficha.stack);
+      pintarEtiquetas(el.perfilHerramientas, ficha.herramientas);
       escribir(el.perfilBio, ficha.bio);
 
       pintarEnlaces(el.perfilEnlaces, ficha);
     }
 
     /*
-      El stack en píldoras, una por tecnología: calcada de pintarEnlaces(), sin
-      enlace porque acá no hay nada a donde ir. El separador " · " no sirve de
-      límite cuando una tecnología lo trae adentro de su propio nombre (por
-      ejemplo "System Architecture (GCloud · Supabase)"); cada elemento del
-      arreglo es una etiqueta propia y no se vuelve a partir por texto.
+      Las herramientas en píldoras, una por elemento: calcada de
+      pintarEnlaces(), sin enlace porque acá no hay nada a donde ir. El
+      separador " · " no sirve de límite cuando una herramienta lo trae
+      adentro de su propio nombre (por ejemplo "System Architecture (GCloud ·
+      Supabase)"); cada elemento del arreglo es una etiqueta propia y no se
+      vuelve a partir por texto.
 
-      La lista queda `hidden` si el stack viene vacío: una <ul> vacía igual
-      ocupa su hueco en el flex y se anuncia como "lista, 0 elementos".
+      La lista queda `hidden` si las herramientas vienen vacías: una <ul>
+      vacía igual ocupa su hueco en el flex y se anuncia como "lista, 0
+      elementos".
     */
-    function pintarStack(lista, stack) {
-      const tecnologias = stack || [];
+    function pintarEtiquetas(lista, herramientas) {
+      const elementos = herramientas || [];
 
-      lista.replaceChildren(...tecnologias.map((tecnologia) => {
+      lista.replaceChildren(...elementos.map((herramienta) => {
         const item = document.createElement("li");
-        item.className = "colaboradores__stack-etiqueta";
-        item.textContent = tecnologia;
+        item.className = "colaboradores__etiquetas-item";
+        item.textContent = herramienta;
         return item;
       }));
-      lista.hidden = tecnologias.length === 0;
+      lista.hidden = elementos.length === 0;
     }
 
     // La lista queda `hidden` si no hay ninguno: una <ul> vacía igual ocupa su

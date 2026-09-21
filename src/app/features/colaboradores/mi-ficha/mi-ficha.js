@@ -3,8 +3,8 @@
   formulario que la guarda.
 
   La normalización y la validación viven en mi-ficha.logica.js; el editor de
-  etiquetas del stack, en mi-ficha.etiquetas.js (crearEditorDeEtiquetas), con
-  su lógica pura de agregar/quitar/mover/sugerir en
+  etiquetas de las herramientas, en mi-ficha.etiquetas.js
+  (crearEditorDeEtiquetas), con su lógica pura de agregar/quitar/mover/sugerir en
   mi-ficha.etiquetas.logica.js; la lectura y el guardado, en
   core/colaboradores/ficha.service.js. Todos se
   cargan antes y dejan sus funciones en el ámbito global.
@@ -32,9 +32,9 @@
   const SOLO_COLABORADORES = "Esta sección es sólo para colaboradores.";
   const SIN_NOMBRE = "Tu cuenta todavía no tiene nombre.";
 
-  // El texto de la ayuda del stack cambia según si todavía se puede escribir.
-  const AYUDA_STACK = "Escribe una tecnología y presiona Enter para agregarla. Por ejemplo: Python, PostgreSQL, GCP. Hasta 12.";
-  const AYUDA_STACK_LLENA = "Ya tienes 12 tecnologías, el máximo. Quita alguna para escribir otra.";
+  // El texto de la ayuda de herramientas cambia según si todavía se puede escribir.
+  const AYUDA_HERRAMIENTAS = "Los lenguajes, frameworks y productos con los que trabajas. Por ejemplo: Python, PostgreSQL, Figma. Hasta 12.";
+  const AYUDA_HERRAMIENTAS_LLENA = "Ya tienes 12 herramientas, el máximo. Quita alguna para escribir otra.";
 
   // El contador de la bio sólo se anuncia con aria-live cerca del tope: una
   // región que hablara en cada tecla sería insoportable con lector de
@@ -44,14 +44,15 @@
 
   // Los campos de texto de la ficha y su input. Cada uno tiene su ayuda en
   // `${id}Ayuda` y su error en `${id}Error`. La modalidad de trabajo va
-  // aparte: es un grupo de radios. El stack es un tercer caso: su input es un
-  // combobox y su valor no vive en `.value`, sino en el arreglo que gestiona
-  // el editor de etiquetas de mi-ficha.etiquetas.js (ver editorStack).
+  // aparte: es un grupo de radios. Herramientas es un tercer caso: su input
+  // es un combobox y su valor no vive en `.value`, sino en el arreglo que
+  // gestiona el editor de etiquetas de mi-ficha.etiquetas.js (ver
+  // editorHerramientas).
   const IDS_DE_CAMPO = Object.freeze({
     puesto: "miFichaPuesto",
     sector: "miFichaSector",
     ubicacion: "miFichaUbicacion",
-    stack: "miFichaStack",
+    herramientas: "miFichaHerramientas",
     anio_inicio: "miFichaAnioInicio",
     bio: "miFichaBio",
     linkedin: "miFichaLinkedin",
@@ -72,10 +73,10 @@
     modalidadTrabajo: "miFichaModalidadTrabajo",
     modalidadTrabajoError: "miFichaModalidadTrabajoError",
     verPerfil: "miFichaVerPerfil",
-    stackOpciones: "miFichaStackOpciones",
-    stackLista: "miFichaStackLista",
-    stackEstado: "miFichaStackEstado",
-    stackAyuda: "miFichaStackAyuda",
+    herramientasOpciones: "miFichaHerramientasOpciones",
+    herramientasLista: "miFichaHerramientasLista",
+    herramientasEstado: "miFichaHerramientasEstado",
+    herramientasAyuda: "miFichaHerramientasAyuda",
     bioContador: "miFichaBioContador",
   });
 
@@ -86,7 +87,7 @@
 
     El catálogo de tecnologías queda AFUERA a propósito: es una sugerencia,
     no una dependencia. Sin él el editor de etiquetas sigue vivo, sólo sin
-    autocompletar (ver cargarCatalogoStack).
+    autocompletar (ver cargarCatalogoHerramientas).
   */
   function dependenciasFaltantes() {
     const disponibles = {
@@ -155,9 +156,9 @@
     const {
       aviso, avisoMensaje, reintentar, irColaboradores, contenido, publico,
       form, estado, nombre, verPerfil, campos, radios,
-      stackOpciones, stackLista, stackEstado, stackAyuda, bioContador,
+      herramientasOpciones, herramientasLista, herramientasEstado, herramientasAyuda, bioContador,
     } = elementos;
-    const stackInput = campos.stack.controles[0];
+    const herramientasInput = campos.herramientas.controles[0];
     const bioInput = campos.bio.controles[0];
 
     // Lo que el arranque deja para el guardado.
@@ -250,11 +251,11 @@
     function llenarFormulario(ficha) {
       const valores = valoresFormularioMiFicha(ficha);
       for (const [campo, { controles }] of Object.entries(campos)) {
-        if (campo === "modalidad_trabajo" || campo === "stack") continue;
+        if (campo === "modalidad_trabajo" || campo === "herramientas") continue;
         controles[0].value = valores[campo];
       }
       radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
-      editorStack.establecer(valores.stack);
+      editorHerramientas.establecer(valores.herramientas);
       actualizarContadorBio();
       limpiarErrores();
       ocultarEstado();
@@ -263,19 +264,19 @@
     function leerFormulario() {
       const valores = {};
       for (const [campo, { controles }] of Object.entries(campos)) {
-        if (campo === "modalidad_trabajo" || campo === "stack") continue;
+        if (campo === "modalidad_trabajo" || campo === "herramientas") continue;
         valores[campo] = controles[0].value;
       }
       valores.modalidad_trabajo = radios.find((radio) => radio.checked)?.value ?? "";
-      valores.stack = editorStack.leer();
+      valores.herramientas = editorHerramientas.leer();
       return valores;
     }
 
     /*
       establecerFormularioOcupado (auth-ui.js) recorre button, input y select:
       la bio es un textarea y quedaría editable mientras se guarda. El input
-      del stack y los botones de cada etiqueta ya son input/button, así que
-      quedan cubiertos sin nada extra acá.
+      de herramientas y los botones de cada etiqueta ya son input/button, así
+      que quedan cubiertos sin nada extra acá.
     */
     function ocuparFormulario(ocupado) {
       establecerFormularioOcupado(form, ocupado);
@@ -283,24 +284,24 @@
     }
 
     /*
-      El editor de etiquetas del stack (mi-ficha.etiquetas.js) se instancia
-      más abajo, después de dependenciasFaltantes(): crearEditorDeEtiquetas()
-      se LLAMA acá (no sólo se referencia dentro de un callback), así que si
-      el script no llegó tiene que fallar por el mismo camino prolijo que
-      cualquier otra dependencia faltante, con ERROR_DE_PAGINA y no con una
-      excepción sin capturar.
+      El editor de etiquetas de herramientas (mi-ficha.etiquetas.js) se
+      instancia más abajo, después de dependenciasFaltantes():
+      crearEditorDeEtiquetas() se LLAMA acá (no sólo se referencia dentro de
+      un callback), así que si el script no llegó tiene que fallar por el
+      mismo camino prolijo que cualquier otra dependencia faltante, con
+      ERROR_DE_PAGINA y no con una excepción sin capturar.
     */
-    let editorStack;
+    let editorHerramientas;
 
     /*
       El catálogo es sólo para sugerir: si el script no llegó o la carga
       falla, queda vacío y el editor se degrada en silencio a texto libre, sin
       aviso ni reintento (a quien edita su ficha no le toca resolver eso).
     */
-    async function cargarCatalogoStack() {
+    async function cargarCatalogoHerramientas() {
       if (typeof cargarCatalogoDeTecnologias !== "function") return;
       const resultado = await cargarCatalogoDeTecnologias();
-      if (resultado?.ok) editorStack.fijarCatalogo(resultado.tecnologias);
+      if (resultado?.ok) editorHerramientas.fijarCatalogo(resultado.tecnologias);
     }
 
     /* ---------- Arranque ---------- */
@@ -333,7 +334,7 @@
         // En paralelo: el catálogo no bloquea la ficha ni al revés.
         const [resultado] = await Promise.all([
           obtenerMiFicha(sesion.user.id),
-          cargarCatalogoStack(),
+          cargarCatalogoHerramientas(),
         ]);
         if (!resultado?.ok) {
           mostrarAviso(resultado?.mensaje || ERROR_DE_FICHA, { error: true, conReintento: true });
@@ -412,19 +413,19 @@
       return undefined;
     }
 
-    editorStack = crearEditorDeEtiquetas({
-      campo: "stack",
-      input: stackInput,
-      opciones: stackOpciones,
-      lista: stackLista,
-      estado: stackEstado,
-      ayuda: stackAyuda,
-      prefijoIdOpcion: "miFichaStackOpcion",
-      textoAyuda: AYUDA_STACK,
-      textoAyudaLlena: AYUDA_STACK_LLENA,
-      nombrePlural: "stack",
-      marcarError: (mensaje) => marcarError("stack", mensaje),
-      limpiarError: () => limpiarError("stack"),
+    editorHerramientas = crearEditorDeEtiquetas({
+      campo: "herramientas",
+      input: herramientasInput,
+      opciones: herramientasOpciones,
+      lista: herramientasLista,
+      estado: herramientasEstado,
+      ayuda: herramientasAyuda,
+      prefijoIdOpcion: "miFichaHerramientasOpcion",
+      textoAyuda: AYUDA_HERRAMIENTAS,
+      textoAyudaLlena: AYUDA_HERRAMIENTAS_LLENA,
+      nombrePlural: "herramientas",
+      marcarError: (mensaje) => marcarError("herramientas", mensaje),
+      limpiarError: () => limpiarError("herramientas"),
     });
 
     // Devuelve la promesa del arranque: el navegador la ignora, los tests la

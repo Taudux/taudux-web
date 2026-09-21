@@ -42,11 +42,11 @@ test("the catalog holds a useful amount of entries", () => {
 });
 
 /*
-  Los mismos límites que el CHECK de la 0039 le pone a cada elemento del
-  stack: una entrada que el catálogo sugiera y la base rechace sería una
-  trampa puesta a mano.
+  Los mismos límites que el CHECK de la 0041 le pone a cada elemento de
+  herramientas: una entrada que el catálogo sugiera y la base rechace sería
+  una trampa puesta a mano.
 */
-test("every entry passes the same per-item rules the 0039 CHECK enforces", () => {
+test("every entry passes the same per-item rules the 0041 CHECK enforces", () => {
   const { min, max } = LIMITES_MI_FICHA.etiqueta;
   for (const tecnologia of CATALOGO.tecnologias) {
     const largo = [...tecnologia].length;

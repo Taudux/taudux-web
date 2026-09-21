@@ -3,11 +3,12 @@
   supabaseClient y debe cargarse después de él; la página es pública, así que
   funciona con la anon key y sin sesión.
 
-  La lista sale del RPC `listar_colaboradores()` (migraciones 0038, 0039 y
-  0040), security definer, que entrega de cada cuenta marcada nombre,
+  La lista sale del RPC `listar_colaboradores()` (migraciones 0038, 0039,
+  0040 y 0041), security definer, que entrega de cada cuenta marcada nombre,
   apellidos y slug, más los campos de su ficha pública (puesto, sector,
-  ubicación, stack, modalidad de trabajo, año de inicio, bio y enlaces). Quien
-  todavía no llenó su ficha los trae en null: el RPC hace left join.
+  ubicación, herramientas, modalidad de trabajo, año de inicio, bio y
+  enlaces). Quien todavía no llenó su ficha los trae en null: el RPC hace
+  left join.
 
   Este servicio vuelve a recortar del lado del cliente: arma cada registro
   campo por campo, así que una columna que el RPC agregue más adelante no
@@ -45,9 +46,10 @@ function tieneSlugDeColaborador(fila) {
   return typeof fila?.slug === "string" && PATRON_SLUG_COLABORADOR.test(fila.slug);
 }
 
-// La página une el stack con " · ": sólo pasa un arreglo de textos, copiado
-// para no compartirlo con la respuesta. Cualquier otra forma llega como null.
-function stackDeColaborador(valor) {
+// La página une las herramientas con " · ": sólo pasa un arreglo de textos,
+// copiado para no compartirlo con la respuesta. Cualquier otra forma llega
+// como null.
+function etiquetasDeColaborador(valor) {
   const esListaDeTextos = Array.isArray(valor) && valor.every((elemento) => typeof elemento === "string");
   return esListaDeTextos ? [...valor] : null;
 }
@@ -79,7 +81,7 @@ function aColaborador(fila) {
     puesto: campoDeFichaColaborador(fila.puesto),
     sector: campoDeFichaColaborador(fila.sector),
     ubicacion: campoDeFichaColaborador(fila.ubicacion),
-    stack: stackDeColaborador(fila.stack),
+    herramientas: etiquetasDeColaborador(fila.herramientas),
     modalidad_trabajo: campoDeFichaColaborador(fila.modalidad_trabajo),
     anio_inicio: campoDeFichaColaborador(fila.anio_inicio),
     bio: campoDeFichaColaborador(fila.bio),

@@ -32,13 +32,13 @@ const { COLABORADORES_MUESTRA: MUESTRA } = require("./fixtures/colaboradores.mue
 
 const rutaDe = (indice) => `#/${MUESTRA[indice].slug}`;
 
-// Los campos de ficha (0039/0040) de quien todavía no la llenó: el RPC hace
-// left join y el servicio los entrega en null.
+// Los campos de ficha (0039/0040/0041) de quien todavía no la llenó: el RPC
+// hace left join y el servicio los entrega en null.
 const FICHA_EN_NULL = Object.freeze({
   puesto: null,
   sector: null,
   ubicacion: null,
-  stack: null,
+  herramientas: null,
   modalidad_trabajo: null,
   anio_inicio: null,
   bio: null,
@@ -509,8 +509,8 @@ function assertPerfilDe(pagina, indice, lista = MUESTRA) {
   assert.equal(pagina.texto("perfilExperiencia"), experienciaDe(ficha));
   assert.equal(pagina.texto("perfilModalidadTrabajo"), ficha.modalidad_trabajo);
   assert.deepEqual(
-    porClase(pagina.porId("perfilStack"), "colaboradores__stack-etiqueta").map((etiqueta) => etiqueta.textContent),
-    ficha.stack,
+    porClase(pagina.porId("perfilHerramientas"), "colaboradores__etiquetas-item").map((etiqueta) => etiqueta.textContent),
+    ficha.herramientas,
   );
   assert.equal(pagina.texto("perfilBio"), ficha.bio);
 }
@@ -756,20 +756,20 @@ test("the profile shows the experience computed from anio_inicio and the current
   }
 });
 
-// El texto de las etiquetas de stack pintadas, en orden.
-const etiquetasDeStack = (pagina) => porClase(pagina.porId("perfilStack"), "colaboradores__stack-etiqueta")
+// El texto de las etiquetas de herramientas pintadas, en orden.
+const etiquetasDeHerramientas = (pagina) => porClase(pagina.porId("perfilHerramientas"), "colaboradores__etiquetas-item")
   .map((etiqueta) => etiqueta.textContent);
 
-test("the profile shows the stack as one tag per technology", async () => {
+test("the profile shows the tools as one tag per technology", async () => {
   const pagina = await cargarPagina();
 
   pagina.fichas()[0].disparar("click");
-  assert.deepEqual(etiquetasDeStack(pagina), ["PostgreSQL", "Python", "GCP"]);
+  assert.deepEqual(etiquetasDeHerramientas(pagina), ["PostgreSQL", "Python", "GCP"]);
 
   // Un solo elemento sigue siendo una sola etiqueta.
-  const conUno = await cargarPagina({ retoques: { 0: { stack: ["Python"] } } });
+  const conUno = await cargarPagina({ retoques: { 0: { herramientas: ["Python"] } } });
   conUno.fichas()[0].disparar("click");
-  assert.deepEqual(etiquetasDeStack(conUno), ["Python"]);
+  assert.deepEqual(etiquetasDeHerramientas(conUno), ["Python"]);
 });
 
 /*
@@ -780,12 +780,12 @@ test("the profile shows the stack as one tag per technology", async () => {
 */
 test("a technology name that contains a middle dot stays as a single tag", async () => {
   const conPuntoMedio = await cargarPagina({
-    retoques: { 0: { stack: ["System Architecture (GCloud · Supabase)", "Python"] } },
+    retoques: { 0: { herramientas: ["System Architecture (GCloud · Supabase)", "Python"] } },
   });
 
   conPuntoMedio.fichas()[0].disparar("click");
   assert.deepEqual(
-    etiquetasDeStack(conPuntoMedio),
+    etiquetasDeHerramientas(conPuntoMedio),
     ["System Architecture (GCloud · Supabase)", "Python"],
   );
 });
@@ -1183,7 +1183,7 @@ test("in a mixed list the profile card shows and stays while the preview follows
 
 /*
   De punta a punta, con el servicio real: las filas tal como las devuelve
-  `listar_colaboradores()` de la 0040. Quien no llenó su ficha trae los campos
+  `listar_colaboradores()` de la 0041. Quien no llenó su ficha trae los campos
   en null (left join) y sólo se elige; quien la llenó abre su perfil pintado
   con los nombres de la base.
 */
@@ -1198,7 +1198,7 @@ test("rows from the service: a collaborator whose card fields are null only gets
       puesto: conFicha.puesto,
       sector: conFicha.sector,
       ubicacion: conFicha.ubicacion,
-      stack: [...conFicha.stack],
+      herramientas: [...conFicha.herramientas],
       modalidad_trabajo: conFicha.modalidad_trabajo,
       anio_inicio: conFicha.anio_inicio,
       bio: conFicha.bio,

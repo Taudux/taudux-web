@@ -287,7 +287,7 @@ test("every text control describes its hint and has a hidden error slot", () => 
 test("the bio is a textarea and the texts are plain text inputs, with the right input types for links", () => {
   assert.match(MARCADO, /<textarea\b[^>]*\sclass="field field--textarea"[^>]*\sname="bio"/);
   const tipoDe = (campo) => atributo(MARCADO.match(new RegExp(`<input\\b[^>]*\\sname="${campo}"[^>]*>`))[0], "type");
-  for (const campo of ["puesto", "sector", "ubicacion", "stack"]) assert.equal(tipoDe(campo), "text", campo);
+  for (const campo of ["puesto", "sector", "ubicacion", "herramientas"]) assert.equal(tipoDe(campo), "text", campo);
   assert.equal(tipoDe("anio_inicio"), "text", "type=number cambia con la rueda del mouse y acepta 1e3");
   assert.equal(atributo(MARCADO.match(/<input\b[^>]*\sname="anio_inicio"[^>]*>/)[0], "inputmode"), "numeric");
   assert.equal(tipoDe("linkedin"), "url");
@@ -315,24 +315,24 @@ test("the bio has a countdown counter wired to its aria-describedby, and no maxl
   assert.equal(atributo(contador, "aria-live"), "off");
 });
 
-test("the stack field is a combobox wired to a listbox of suggestions and a tag list, with its own live region", () => {
-  const stackInput = MARCADO.match(/<input\b[^>]*\sname="stack"[^>]*>/)[0];
-  assert.equal(atributo(stackInput, "role"), "combobox");
-  assert.equal(atributo(stackInput, "aria-autocomplete"), "list");
-  assert.equal(atributo(stackInput, "aria-expanded"), "false");
-  assert.equal(atributo(stackInput, "aria-controls"), "miFichaStackOpciones");
+test("the tools field is a combobox wired to a listbox of suggestions and a tag list, with its own live region", () => {
+  const herramientasInput = MARCADO.match(/<input\b[^>]*\sname="herramientas"[^>]*>/)[0];
+  assert.equal(atributo(herramientasInput, "role"), "combobox");
+  assert.equal(atributo(herramientasInput, "aria-autocomplete"), "list");
+  assert.equal(atributo(herramientasInput, "aria-expanded"), "false");
+  assert.equal(atributo(herramientasInput, "aria-controls"), "miFichaHerramientasOpciones");
 
-  const opciones = porId("miFichaStackOpciones");
+  const opciones = porId("miFichaHerramientasOpciones");
   assert.match(opciones, /^<ul\b/);
   assert.equal(atributo(opciones, "role"), "listbox");
   assert.ok(tieneAtributo(opciones, "hidden"), "el desplegable arranca oculto");
 
-  const lista = porId("miFichaStackLista");
+  const lista = porId("miFichaHerramientasLista");
   assert.match(lista, /^<ul\b/);
 
   // Región propia del widget, distinta de la de errores del servidor
   // (#miFichaStatus, que sigue existiendo con su propio role="alert").
-  const estado = porId("miFichaStackEstado");
+  const estado = porId("miFichaHerramientasEstado");
   assert.equal(atributo(estado, "role"), "status");
   assert.equal(atributo(estado, "aria-live"), "polite");
   assert.equal(atributo(porId("miFichaStatus"), "role"), "alert");
@@ -450,8 +450,8 @@ test("the disabled field style is scoped to this page, not to the shared .field"
   que un `.children.map(...)` pasa la suite en verde y revienta en el
   navegador — y justo el arrastre, que es lo único que los tests no ejercitan.
   Por eso el guardián se lee del código fuente y no de un comportamiento.
-  El arrastre del stack vive en mi-ficha.etiquetas.js, así que el guardián
-  cubre los dos archivos.
+  El arrastre de las herramientas vive en mi-ficha.etiquetas.js, así que el
+  guardián cubre los dos archivos.
 */
 test("the wiring never calls array methods on a live HTMLCollection", () => {
   for (const fuente of [JS, ETIQUETAS]) {
