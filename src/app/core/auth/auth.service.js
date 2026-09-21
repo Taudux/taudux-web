@@ -327,18 +327,53 @@ async function requerirSesion() {
   return session;
 }
 
-// `es_colaborador` y `slug` (0038) los usa "Mi ficha": quién puede editarla y
-// a qué perfil público enlaza.
+// Lo que toda página autenticada necesita de su perfil. Existe desde antes de
+// la 0038.
+const COLUMNAS_PERFIL_BASE = "nombre, apellidos, telefono, rol, avisos_curso_nuevo";
+// `es_colaborador` y `slug` los agrega la 0038, y los usa "Mi ficha": quién
+// puede editarla y a qué perfil público enlaza.
+const COLUMNAS_PERFIL_0038 = "es_colaborador, slug";
+
+/*
+  ÉSTA ES LA LECTURA DE PERFIL DE TODO EL SITIO: navbar, portal, Mi ficha y el
+  roster. Por eso pide las columnas de la 0038 con una RED DE SEGURIDAD y no a
+  secas.
+
+  Las migraciones de este proyecto se aplican A MANO en el SQL Editor y el
+  front despliega solo. Un despliegue que llegue antes que su migración hace
+  que PostgREST responda 42703 a la columna que no existe; con un único select
+  ancho y un `if (error) return null`, eso convierte obtenerPerfil() en una
+  función que devuelve null PARA TODO USUARIO LOGUEADO EN TODA PÁGINA —una
+  degradación de todo el sitio causada por dos columnas que necesitan dos
+  páginas—.
+
+  Con el reintento angosto, esa ventana cuesta lo que tenía que costar: Mi
+  ficha y el enlace del roster no funcionan hasta que la migración esté, y
+  todo lo demás sigue en pie.
+*/
 async function obtenerPerfil(session) {
   if (!session?.user?.id) return null;
 
-  const { data, error } = await supabaseClient
+  const leer = async (columnas) => supabaseClient
     .from("perfiles")
-    .select("nombre, apellidos, telefono, rol, avisos_curso_nuevo, es_colaborador, slug")
+    .select(columnas)
     .eq("id", session.user.id)
     .single();
-  if (error) return null;
-  return data;
+
+  const ancha = await leer(`${COLUMNAS_PERFIL_BASE}, ${COLUMNAS_PERFIL_0038}`);
+  if (!ancha.error) return ancha.data;
+
+  // 42703 es "la columna no existe". Cualquier otro error (red, sesión, RLS)
+  // fallaría igual en la consulta angosta: no se reintenta por reintentar.
+  if (ancha.error.code !== "42703") return null;
+  console.error("[auth.service] perfil sin las columnas de la 0038", ancha.error);
+
+  const angosta = await leer(COLUMNAS_PERFIL_BASE);
+  if (angosta.error) return null;
+  // Las dos columnas ausentes llegan como null y NO como undefined: quien las
+  // lee pregunta `=== true`, y una ficha sin slug ya es un caso que el roster
+  // sabe tratar.
+  return { ...angosta.data, es_colaborador: null, slug: null };
 }
 
 async function esAdmin(session) {

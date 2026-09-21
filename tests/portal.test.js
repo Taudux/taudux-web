@@ -519,7 +519,10 @@ test("portal.correo.js loads after portal.perfil.js and before portal.js", () =>
 test("auth.service.js and perfil.service.js select avisos_curso_nuevo, or the checkbox would always render unchecked", () => {
   const authJs = read("src/app/core/auth/auth.service.js");
   const perfilServicio = read("src/app/core/perfil/perfil.service.js");
-  assert.match(authJs, /\.select\(\s*"[^"]*avisos_curso_nuevo[^"]*"\s*\)/);
+  // En auth.service.js la columna vive en COLUMNAS_PERFIL_BASE, que es lo que
+  // arma el select: pedirla ahí es pedirla en las dos lecturas, la ancha y el
+  // reintento angosto.
+  assert.match(authJs, /const COLUMNAS_PERFIL_BASE = "[^"]*avisos_curso_nuevo[^"]*"/);
   assert.match(perfilServicio, /\.select\(\s*"[^"]*avisos_curso_nuevo[^"]*"\s*\)/);
 });
 

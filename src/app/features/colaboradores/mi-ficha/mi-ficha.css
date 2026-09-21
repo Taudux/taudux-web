@@ -216,8 +216,17 @@
     envolver DENTRO de su propia píldora en vez de estirarla fuera del
     contenedor (mismo invariante que .colaboradores__enlaces, que en esta
     página además tiene que tolerar texto sin espacios).
+
+    SE LLAMA `etiquetas-item` Y NO `etiqueta` POR ALGO. Esta página ya usa
+    `.mi-ficha__etiqueta` para el RÓTULO de cada campo (arriba), y la píldora
+    llegó declarando ese mismo selector: misma especificidad, misma capa, ganaba
+    la de abajo, y cada <label>, el <p> del nombre y el <legend> se pintaban
+    como píldoras con borde y fondo de campo. `colaboradores.css` evita lo
+    mismo llamando a la suya `.colaboradores__etiquetas-item`; ésta sigue esa
+    convención. Hay un test que prohibe declarar dos veces un mismo selector
+    en esta hoja.
   */
-  .mi-ficha__etiqueta {
+  .mi-ficha__etiquetas-item {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -231,17 +240,17 @@
   }
 
   /* El aviso de "ya está en tus herramientas": se apaga solo, a los 1.2s. */
-  .mi-ficha__etiqueta--duplicada {
+  .mi-ficha__etiquetas-item--duplicada {
     border-color: var(--color-warning);
     background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
   }
 
-  .mi-ficha__etiqueta-texto {
+  .mi-ficha__etiquetas-item-texto {
     overflow-wrap: anywhere;
   }
 
-  .mi-ficha__etiqueta-manija,
-  .mi-ficha__etiqueta-quitar {
+  .mi-ficha__etiquetas-item-manija,
+  .mi-ficha__etiquetas-item-quitar {
     padding: 0;
     border: 0;
     background: none;
@@ -250,21 +259,21 @@
     line-height: 1;
   }
 
-  .mi-ficha__etiqueta-manija {
+  .mi-ficha__etiquetas-item-manija {
     cursor: grab;
     touch-action: none;
   }
 
-  .mi-ficha__etiqueta-quitar {
+  .mi-ficha__etiquetas-item-quitar {
     cursor: pointer;
   }
 
-  .mi-ficha__etiqueta-quitar:hover {
+  .mi-ficha__etiquetas-item-quitar:hover {
     color: var(--color-error-text);
   }
 
-  .mi-ficha__etiqueta-manija:focus-visible,
-  .mi-ficha__etiqueta-quitar:focus-visible {
+  .mi-ficha__etiquetas-item-manija:focus-visible,
+  .mi-ficha__etiquetas-item-quitar:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
   }

@@ -348,6 +348,8 @@ function montarEsqueleto(documento, html) {
                   catálogo. Es el
                   falso; sin pasarlo, la función no existe (el script no
                   llegó), como en la mayoría de las páginas de verdad.
+    catalogoColgado  un cargarCatalogoDeEtiquetas() que nunca resuelve: el
+                  asset estático colgado. Pisa a `catalogo`.
     sin           nombres de funciones globales que NO se inyectan (un script
                   que no llegó).
 */
@@ -357,6 +359,7 @@ function abrirPagina({
   ficha = enSecuencia(exito(null)),
   guardar,
   catalogo,
+  catalogoColgado = false,
   sin = [],
 } = {}) {
   const alCargar = [];
@@ -405,6 +408,12 @@ function abrirPagina({
     globales.cargarCatalogoDeEtiquetas = async (nombre) => (porNombre[nombre]
       ? { ok: true, etiquetas: structuredClone(porNombre[nombre]) }
       : { ok: false, mensaje: `El catálogo de ${nombre} está vacío.` });
+  }
+  // Un catálogo que NUNCA resuelve: el asset estático que se cuelga. Es el
+  // único modo de fallo que un { ok: false } inmediato no puede representar,
+  // y es justo el que dejaba la ficha escondida detrás de un await.
+  if (catalogoColgado) {
+    globales.cargarCatalogoDeEtiquetas = () => new Promise(() => {});
   }
   for (const nombre of sin) delete globales[nombre];
 
@@ -1125,7 +1134,7 @@ test("adding a duplicate announces it, highlights the existing tag and does not 
 
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["PostgreSQL"]);
   assert.equal(pagina.texto("miFichaHerramientasEstado"), "PostgreSQL ya está en tus herramientas.");
-  assert.ok(manijaHerramienta(pagina, 0).parent.classList.contains("mi-ficha__etiqueta--duplicada"));
+  assert.ok(manijaHerramienta(pagina, 0).parent.classList.contains("mi-ficha__etiquetas-item--duplicada"));
 });
 
 test("the twelfth technology disables the input and the help says so; removing one re-enables it", async () => {
@@ -1294,6 +1303,43 @@ test("each editor suggests from its own catalog", async () => {
   assert.deepEqual(opcionesDe("herramientas"), ["Elixir", "Express"]);
   assert.deepEqual(opcionesDe("habilidades"), ["Estadística"]);
   assert.deepEqual(opcionesDe("idiomas"), ["Español", "Euskera"]);
+});
+
+/*
+  EL TEST QUE FALTABA. El catálogo es decoración y tiene que degradarse en
+  silencio, pero el arranque lo esperaba: `await Promise.all([obtenerMiFicha(),
+  cargarCatalogos()])` resuelve cuando resuelven LOS DOS. Con un asset
+  estático colgado —CDN con fallo de borde, portal cautivo, radio móvil— la
+  ficha volvía en 200 ms y el dueño se quedaba en "Cargando tu ficha…" hasta
+  el timeout del navegador, con el formulario oculto y el reintento
+  deshabilitado por ese mismo await.
+
+  Ningún test lo vio porque el arnés inyectaba un catálogo que resuelve al
+  instante: el único modo de fallo que no se podía escribir era el que
+  importaba. `catalogoColgado` es una promesa que NUNCA resuelve; si el
+  arranque volviera a esperarla, este test colgaría en vez de fallar, y por
+  eso lleva su propia carrera contra un tiempo límite.
+*/
+test("a hung catalog does not keep the form hidden", async () => {
+  const pagina = abrirPagina({ catalogoColgado: true });
+
+  const colgado = Symbol("colgado");
+  const conLimite = await Promise.race([
+    pagina.iniciada,
+    new Promise((resolver) => setTimeout(() => resolver(colgado), 1000)),
+  ]);
+  assert.notEqual(conLimite, colgado, "el arranque no puede esperar al catálogo");
+  // `iniciada` es el Promise.all de los oyentes de DOMContentLoaded.
+  assert.deepEqual(conLimite, ["formulario"]);
+
+  // Y la ficha quedó utilizable, no sólo "no colgada".
+  assert.equal(pagina.porId("miFichaContenido").hidden, false, "el formulario tiene que verse");
+  assert.equal(pagina.porId("miFichaAviso").hidden, true, "el aviso de carga tiene que irse");
+
+  // Sin sugerencias, que es la degradación prometida: texto libre y nada más.
+  pagina.escribir("herramientas", "p");
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true);
+  assert.equal(pagina.errores.length, 0, "un catálogo colgado no se avisa");
 });
 
 /*

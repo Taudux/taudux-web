@@ -51,7 +51,7 @@
 // Cuánto dura resaltada la etiqueta que ya estaba, cuando se intenta
 // repetirla. El mismo criterio que el aviso de guardado del extractor.
 const DURACION_RESALTADO_DUPLICADO_MS = 1200;
-const CLASE_ETIQUETA_DUPLICADA = "mi-ficha__etiqueta--duplicada";
+const CLASE_ETIQUETA_DUPLICADA = "mi-ficha__etiquetas-item--duplicada";
 
 function crearEditorDeEtiquetas({
   campo,
@@ -114,11 +114,11 @@ function crearEditorDeEtiquetas({
   */
   function crearEtiqueta(tecnologia, indice) {
     const item = document.createElement("li");
-    item.className = "mi-ficha__etiqueta";
+    item.className = "mi-ficha__etiquetas-item";
 
     const manija = document.createElement("button");
     manija.type = "button";
-    manija.className = "mi-ficha__etiqueta-manija";
+    manija.className = "mi-ficha__etiquetas-item-manija";
     manija.setAttribute("aria-label", `Reordenar ${tecnologia}`);
     manija.setAttribute("data-indice-etiqueta", String(indice));
     manija.textContent = "⠿";
@@ -126,12 +126,12 @@ function crearEditorDeEtiquetas({
     manija.addEventListener("pointerdown", (evento) => iniciarArrastre(evento, indice));
 
     const texto = document.createElement("span");
-    texto.className = "mi-ficha__etiqueta-texto";
+    texto.className = "mi-ficha__etiquetas-item-texto";
     texto.textContent = tecnologia;
 
     const quitar = document.createElement("button");
     quitar.type = "button";
-    quitar.className = "mi-ficha__etiqueta-quitar";
+    quitar.className = "mi-ficha__etiquetas-item-quitar";
     quitar.setAttribute("aria-label", `Quitar ${tecnologia}`);
     quitar.textContent = "×";
     quitar.addEventListener("click", () => quitarEnIndice(indice));

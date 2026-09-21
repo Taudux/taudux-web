@@ -170,17 +170,42 @@ test("the page gates on a session and reads the collaborator mark from the profi
   obtenerPerfil() es la única lectura del perfil propio que tiene la página:
   sin estas dos columnas, nadie sería colaborador y no habría enlace al
   perfil público.
+
+  Las columnas viven en dos constantes y no en un select suelto, porque la
+  lectura ancha tiene un reintento angosto detrás (ver abajo). Se leen las
+  constantes: un select literal ya no describe lo que la función hace.
 */
-test("the auth service's profile select brings the collaborator mark and the slug", () => {
+const columnasDe = (servicio, constante) => {
+  const encontrado = servicio.match(new RegExp(`const ${constante} = "([^"]*)"`));
+  assert.ok(encontrado, `falta la constante ${constante}`);
+  return encontrado[1].split(",").map((columna) => columna.trim());
+};
+
+test("the auth service's profile read brings the collaborator mark and the slug", () => {
   const servicio = read("src/app/core/auth/auth.service.js");
-  const cuerpo = servicio.slice(servicio.indexOf("async function obtenerPerfil("));
-  const select = cuerpo.match(/\.select\(\s*"([^"]*)"\s*\)/);
-  assert.ok(select, "obtenerPerfil no tiene un select literal");
-  const columnas = select[1].split(",").map((columna) => columna.trim());
-  for (const columna of ["nombre", "apellidos", "telefono", "rol", "avisos_curso_nuevo", "es_colaborador", "slug"]) {
-    assert.ok(columnas.includes(columna), `obtenerPerfil no lee ${columna}`);
+  const base = columnasDe(servicio, "COLUMNAS_PERFIL_BASE");
+  const nuevas = columnasDe(servicio, "COLUMNAS_PERFIL_0038");
+
+  for (const columna of ["nombre", "apellidos", "telefono", "rol", "avisos_curso_nuevo"]) {
+    assert.ok(base.includes(columna), `la lectura base no trae ${columna}`);
   }
+  assert.deepEqual(nuevas, ["es_colaborador", "slug"]);
+  // Y la lectura ancha es la suma de las dos: si alguien dejara de pedir las
+  // nuevas, nadie sería colaborador y el fallo sería mudo.
+  assert.match(servicio, /leer\(`\$\{COLUMNAS_PERFIL_BASE\}, \$\{COLUMNAS_PERFIL_0038\}`\)/);
 });
+
+/*
+  El comportamiento de esa red de seguridad —el reintento angosto ante 42703 y
+  el no-reintento ante cualquier otro error— NO se prueba acá. Se ejecuta en
+  tests/auth-perfil.test.js contra un cliente de Supabase falso.
+
+  La distinción importó: la primera versión de esta comprobación buscaba
+  "42703" en la fuente y sobrevivía a dos mutantes que borraban la rama,
+  porque el único "42703" que quedaba vivía en un comentario. Un grep no
+  puede probar una rama.
+*/
+
 
 /* ---------- Estructura ---------- */
 
@@ -471,6 +496,66 @@ test("the stylesheet lives in the features layer", () => {
     if (profundidad === 0) { cierre = i; break; }
   }
   assert.equal(cierre, css.length - 1, "hay reglas fuera de @layer features");
+});
+
+/*
+  EL TEST QUE FALTABA. `.mi-ficha__etiqueta` llegó a estar declarada DOS veces
+  en esta hoja: arriba como rótulo de campo (color y peso) y más abajo como
+  píldora de etiqueta (inline-flex, borde, radio de píldora, fondo de campo).
+  Misma especificidad, misma capa: ganaba la de abajo, y cada <label>, el <p>
+  del nombre y el <legend> se pintaban como píldoras.
+
+  Ningún test lo vio. Los de esta hoja miran capas, breakpoints y tokens; los
+  de interacción asiertan estado del DOM y no estilo computado. Una colisión
+  de selector no rompe nada que se pueda consultar desde el DOM —sólo se ve—.
+
+  Esto es lo más barato que la detecta: dos reglas distintas con el MISMO
+  selector en la misma hoja. Repetir un selector puede ser legítimo con
+  @media o \supports de por medio, así que sólo se cuentan las que están al
+  mismo nivel del @layer.
+*/
+test("no selector is declared twice in the same stylesheet block", () => {
+  const cuerpo = sinComentariosCss(CSS);
+  // Se descartan los bloques anidados (@media, \supports) quedándose con el
+  // texto de primer nivel dentro del @layer.
+  const deMedia = /@(?:media|supports)[^{]*\{/g;
+  let plano = cuerpo;
+  let encontrado;
+  while ((encontrado = deMedia.exec(plano)) !== null) {
+    let profundidad = 1;
+    let i = encontrado.index + encontrado[0].length;
+    while (i < plano.length && profundidad > 0) {
+      if (plano[i] === "{") profundidad += 1;
+      if (plano[i] === "}") profundidad -= 1;
+      i += 1;
+    }
+    plano = plano.slice(0, encontrado.index) + plano.slice(i);
+    deMedia.lastIndex = 0;
+  }
+
+  const vistos = new Map();
+  for (const [, selector] of plano.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+    const limpio = selector.trim().replace(/\s+/g, " ");
+    if (limpio === "" || limpio.startsWith("@")) continue;
+    vistos.set(limpio, (vistos.get(limpio) ?? 0) + 1);
+  }
+
+  assert.ok(vistos.has(".mi-ficha__etiqueta"), "premisa: el barrido encuentra los selectores");
+  const repetidos = [...vistos].filter(([, veces]) => veces > 1).map(([selector]) => selector);
+  assert.deepEqual(repetidos, [], `selectores declarados dos veces: ${repetidos.join(", ")}`);
+});
+
+/*
+  Y la otra punta: la píldora y el rótulo tienen que seguir siendo clases
+  DISTINTAS. El test de arriba caería igual si alguien volviera a unirlas,
+  pero éste dice por qué importa.
+*/
+test("the tag pill and the field label are different classes", () => {
+  assert.match(CSS, /\.mi-ficha__etiquetas-item\s*\{/, "la píldora tiene su propia clase");
+  assert.match(ETIQUETAS, /mi-ficha__etiquetas-item/, "y el editor se la pone a cada etiqueta");
+  assert.equal(ETIQUETAS.includes('"mi-ficha__etiqueta"'), false,
+    "el editor no puede usar la clase del rótulo para sus píldoras");
+  assert.match(HTML, /class="mi-ficha__etiqueta"/, "los rótulos conservan la suya");
 });
 
 test("the stylesheet only uses the documented breakpoints", () => {

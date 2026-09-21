@@ -359,9 +359,17 @@
     */
     async function cargarCatalogos() {
       if (typeof cargarCatalogoDeEtiquetas !== "function") return;
+      // Ya nadie espera esta promesa (ver el arranque), así que un rechazo
+      // aquí sería un unhandled rejection en la consola del dueño de la ficha.
+      // El servicio ya devuelve { ok: false } en vez de lanzar; esto cubre lo
+      // que se le escape.
       await Promise.all(CAMPOS_DE_ETIQUETAS.map(async ({ campo, nombreCatalogo }) => {
-        const resultado = await cargarCatalogoDeEtiquetas(nombreCatalogo);
-        if (resultado?.ok) editores[campo].fijarCatalogo(resultado.etiquetas);
+        try {
+          const resultado = await cargarCatalogoDeEtiquetas(nombreCatalogo);
+          if (resultado?.ok) editores[campo].fijarCatalogo(resultado.etiquetas);
+        } catch (error) {
+          console.error("[mi-ficha] catálogo", { campo, error });
+        }
       }));
     }
 
@@ -392,11 +400,22 @@
           return "solo-colaboradores";
         }
 
-        // En paralelo: el catálogo no bloquea la ficha ni al revés.
-        const [resultado] = await Promise.all([
-          obtenerMiFicha(sesion.user.id),
-          cargarCatalogos(),
-        ]);
+        /*
+          El catálogo se pide a la vez que la ficha pero NO se espera. Con un
+          `Promise.all` de los dos —como estaba— la palabra "paralelo" era
+          cierta y la conclusión falsa: `Promise.all` resuelve cuando resuelven
+          LOS DOS, así que un asset estático lento (CDN con fallo de borde,
+          portal cautivo, radio móvil flojo) dejaba la ficha lista en 200 ms y
+          al dueño mirando "Cargando tu ficha…" hasta el timeout del
+          navegador, con el formulario oculto y el botón de reintento
+          deshabilitado por este mismo await.
+
+          Las sugerencias son decoración: llegan cuando lleguen y cada editor
+          se las pone solo. Si no llegan nunca, el campo sigue aceptando texto
+          libre, que es exactamente lo que ya pasa cuando el catálogo falla.
+        */
+        cargarCatalogos();
+        const resultado = await obtenerMiFicha(sesion.user.id);
         if (!resultado?.ok) {
           mostrarAviso(resultado?.mensaje || ERROR_DE_FICHA, { error: true, conReintento: true });
           return "error";
