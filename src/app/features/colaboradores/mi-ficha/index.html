@@ -134,10 +134,15 @@
             <p class="mi-ficha__error" id="miFichaAnioInicioError" hidden></p>
           </div>
 
+          <!-- Sin tope nativo del navegador a propósito: ese conteo usa
+               unidades UTF-16 (un emoji son dos) y la base cuenta puntos de
+               código con char_length (un emoji es uno). El freno vive en
+               mi-ficha.js, con largoMiFicha() de mi-ficha.logica.js. -->
           <div class="mi-ficha__grupo">
             <label class="mi-ficha__etiqueta" for="miFichaBio">Bio</label>
-            <textarea class="field field--textarea" id="miFichaBio" name="bio" rows="6" aria-describedby="miFichaBioAyuda"></textarea>
-            <small class="mi-ficha__ayuda" id="miFichaBioAyuda">Preséntate en 10 a 600 caracteres. Puedes usar saltos de línea.</small>
+            <textarea class="field field--textarea" id="miFichaBio" name="bio" rows="6" aria-describedby="miFichaBioAyuda miFichaBioContador"></textarea>
+            <p class="mi-ficha__contador" id="miFichaBioContador" aria-live="off">Te quedan 240 caracteres</p>
+            <small class="mi-ficha__ayuda" id="miFichaBioAyuda">Preséntate en 10 a 240 caracteres. Puedes usar saltos de línea.</small>
             <p class="mi-ficha__error" id="miFichaBioError" hidden></p>
           </div>
 

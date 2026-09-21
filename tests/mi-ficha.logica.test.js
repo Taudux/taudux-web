@@ -329,14 +329,16 @@ test("start year: never above the database limit, whatever the current year", ()
 
 /* ---------- Bio ---------- */
 
-test("bio: required, from 10 to 600 characters after trimming", () => {
+test("bio: required, from 10 to 240 characters after trimming", () => {
   assertSoloErrorEn(valoresValidos({ bio: "" }), "bio", "vacía");
   assertSoloErrorEn(valoresValidos({ bio: "a".repeat(9) }), "bio", "nueve");
-  assertSoloErrorEn(valoresValidos({ bio: "a".repeat(601) }), "bio", "601");
-  assertSoloErrorEn(valoresValidos({ bio: "😀".repeat(601) }), "bio", "601 emojis");
+  assertSoloErrorEn(valoresValidos({ bio: "a".repeat(241) }), "bio", "241");
+  assertSoloErrorEn(valoresValidos({ bio: "😀".repeat(241) }), "bio", "241 emojis");
   assertValido(valoresValidos({ bio: "a".repeat(10) }), "diez");
-  assertValido(valoresValidos({ bio: "a".repeat(600) }), "600");
-  assertValido(valoresValidos({ bio: "😀".repeat(600) }), "600 emojis");
+  assertValido(valoresValidos({ bio: "a".repeat(240) }), "240");
+  // char_length cuenta puntos de código: 240 emojis pasan porque para la base
+  // son 240 caracteres, aunque .length (UTF-16) diría 480.
+  assertValido(valoresValidos({ bio: "😀".repeat(240) }), "240 emojis");
   // Nueve letras con espacios alrededor siguen siendo nueve.
   assertSoloErrorEn(valoresValidos({ bio: "   aaaaaaaaa   " }), "bio", "nueve con espacios");
 });
@@ -459,10 +461,12 @@ test("links: length limits of 200, 200 and 254 characters", () => {
 
 /* ---------- Las reglas son las de la 0039 ---------- */
 
-test("the length limits are the ones the 0039 CHECKs declare", () => {
-  const entre = (expresion) => {
-    const encontrado = SQL.match(new RegExp(`${expresion}\\s+between\\s+(\\d+)\\s+and\\s+(\\d+)`));
-    assert.ok(encontrado, `no se encontró "${expresion} between" en la 0039`);
+test("the length limits are the ones the 0039 CHECKs declare, and bio the 0040 override", () => {
+  // `fuente` por defecto es la 0039; el bio se compara aparte contra la 0040,
+  // que es quien de verdad manda su tope hoy (ver la cabecera del archivo).
+  const entre = (expresion, fuente = SQL) => {
+    const encontrado = fuente.match(new RegExp(`${expresion}\\s+between\\s+(\\d+)\\s+and\\s+(\\d+)`));
+    assert.ok(encontrado, `no se encontró "${expresion} between" en ${fuente === SQL_0040 ? "la 0040" : "la 0039"}`);
     return { min: Number(encontrado[1]), max: Number(encontrado[2]) };
   };
   const hasta = (columna) => {
@@ -474,7 +478,7 @@ test("the length limits are the ones the 0039 CHECKs declare", () => {
   assert.deepEqual(LIMITES_MI_FICHA.puesto, entre("char_length\\(rol\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.sector, entre("char_length\\(especialidad\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.ubicacion, entre("char_length\\(ubicacion\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.bio, entre("char_length\\(bio\\)"));
+  assert.deepEqual(LIMITES_MI_FICHA.bio, entre("char_length\\(bio\\)", SQL_0040));
   assert.deepEqual(LIMITES_MI_FICHA.stack, entre("cardinality\\(stack\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.tecnologia, entre("char_length\\(elemento\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.anio_inicio, entre("anio_inicio"));

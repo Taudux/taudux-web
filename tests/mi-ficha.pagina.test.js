@@ -293,6 +293,26 @@ test("the bio is a textarea and the texts are plain text inputs, with the right 
   assert.equal(tipoDe("correo"), "email");
 });
 
+/*
+  Sin maxlength a propósito: el navegador cuenta unidades UTF-16 (un emoji son
+  dos) y char_length() de la base cuenta puntos de código (un emoji es uno).
+  El freno vive en JS, con largoMiFicha() (mi-ficha.interaccion.test.js prueba
+  el recorte real).
+*/
+test("the bio has a countdown counter wired to its aria-describedby, and no maxlength", () => {
+  const bioTextarea = MARCADO.match(/<textarea\b[^>]*\sname="bio"[^>]*>/)[0];
+  assert.ok(!tieneAtributo(bioTextarea, "maxlength"), "el freno vive en JS, no en maxlength");
+
+  const describe = (atributo(bioTextarea, "aria-describedby") || "").split(/\s+/);
+  assert.ok(describe.includes("miFichaBioAyuda"), "el bio perdió su ayuda");
+  assert.ok(describe.includes("miFichaBioContador"), "el bio no describe su contador");
+
+  const contador = porId("miFichaBioContador");
+  assert.match(contador, /^<p\b/);
+  // Mudo salvo cerca del límite: mi-ficha.js lo alterna a "polite".
+  assert.equal(atributo(contador, "aria-live"), "off");
+});
+
 test("the stack field is a combobox wired to a listbox of suggestions and a tag list, with its own live region", () => {
   const stackInput = MARCADO.match(/<input\b[^>]*\sname="stack"[^>]*>/)[0];
   assert.equal(atributo(stackInput, "role"), "combobox");

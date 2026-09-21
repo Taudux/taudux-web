@@ -39,6 +39,12 @@
   const DURACION_RESALTADO_DUPLICADO_MS = 1200;
   const CLASE_ETIQUETA_DUPLICADA = "mi-ficha__etiqueta--duplicada";
 
+  // El contador de la bio sólo se anuncia con aria-live cerca del tope: una
+  // región que hablara en cada tecla sería insoportable con lector de
+  // pantalla. "Cerca" son los últimos 20 caracteres disponibles.
+  const UMBRAL_AVISO_CONTADOR_BIO = 20;
+  const CLASE_CONTADOR_BIO_LIMITE = "mi-ficha__contador--limite";
+
   // Los campos de texto de la ficha y su input. Cada uno tiene su ayuda en
   // `${id}Ayuda` y su error en `${id}Error`. La modalidad de trabajo va
   // aparte: es un grupo de radios. El stack es un tercer caso: su input es un
@@ -73,6 +79,7 @@
     stackLista: "miFichaStackLista",
     stackEstado: "miFichaStackEstado",
     stackAyuda: "miFichaStackAyuda",
+    bioContador: "miFichaBioContador",
   });
 
   /*
@@ -94,6 +101,7 @@
       formularioEstaOcupado: typeof formularioEstaOcupado,
       mostrarToast: typeof mostrarToast,
       validarMiFicha: typeof validarMiFicha,
+      largoMiFicha: typeof largoMiFicha,
       valoresFormularioMiFicha: typeof valoresFormularioMiFicha,
       nombreVisibleMiFicha: typeof nombreVisibleMiFicha,
       rutaPerfilPublicoMiFicha: typeof rutaPerfilPublicoMiFicha,
@@ -154,9 +162,10 @@
     const {
       aviso, avisoMensaje, reintentar, irColaboradores, contenido, publico,
       form, estado, nombre, verPerfil, campos, radios,
-      stackOpciones, stackLista, stackEstado, stackAyuda,
+      stackOpciones, stackLista, stackEstado, stackAyuda, bioContador,
     } = elementos;
     const stackInput = campos.stack.controles[0];
+    const bioInput = campos.bio.controles[0];
 
     // Lo que el arranque deja para el guardado.
     let sesion = null;
@@ -222,6 +231,35 @@
       estado.textContent = "";
     }
 
+    /* ---------- Contador de la bio ---------- */
+
+    // "Te quedan N caracteres", en singular cuando queda uno.
+    function textoContadorBio(restantes) {
+      return restantes === 1 ? "Te queda 1 carácter" : `Te quedan ${restantes} caracteres`;
+    }
+
+    /*
+      El freno cuenta PUNTOS DE CÓDIGO con largoMiFicha(), no unidades UTF-16:
+      un `maxlength` cortaría un emoji a la mitad, porque para el navegador
+      vale 2 y para el char_length() de la base vale 1 (por eso el textarea no
+      lleva maxlength). Al escribir o pegar por encima del tope, el texto se
+      recorta acá (pegar 500 caracteres deja exactamente 240, nunca 239 ni
+      500), y el aviso sólo se vuelve aria-live cerca del límite: una región
+      que hablara en cada tecla sería insoportable con lector de pantalla.
+    */
+    function actualizarContadorBio() {
+      const maximo = LIMITES_MI_FICHA.bio.max;
+      if (largoMiFicha(bioInput.value) > maximo) {
+        bioInput.value = [...bioInput.value].slice(0, maximo).join("");
+      }
+      const restantes = maximo - largoMiFicha(bioInput.value);
+      bioContador.textContent = textoContadorBio(restantes);
+      bioContador.setAttribute("aria-live", restantes <= UMBRAL_AVISO_CONTADOR_BIO ? "polite" : "off");
+      bioContador.classList.toggle(CLASE_CONTADOR_BIO_LIMITE, restantes === 0);
+    }
+
+    bioInput.addEventListener("input", actualizarContadorBio);
+
     /* ---------- Valores ---------- */
 
     function llenarFormulario(ficha) {
@@ -232,6 +270,7 @@
       }
       radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
       establecerStack(valores.stack);
+      actualizarContadorBio();
       limpiarErrores();
       ocultarEstado();
     }

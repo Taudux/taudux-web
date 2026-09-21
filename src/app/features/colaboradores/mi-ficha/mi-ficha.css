@@ -133,6 +133,22 @@
     font-size: 0.9rem;
   }
 
+  /*
+    El contador de la bio: mudo la mayor parte del tiempo (mi-ficha.js sólo lo
+    pone aria-live="polite" cerca del tope). Al llegar a cero no cambia sólo de
+    color: también gana peso, para no depender únicamente de percibir el color.
+  */
+  .mi-ficha__contador {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  .mi-ficha__contador--limite {
+    color: var(--color-warning);
+    font-weight: 700;
+  }
+
   .mi-ficha__enlace {
     color: var(--color-accent);
   }

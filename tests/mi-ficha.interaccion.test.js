@@ -547,12 +547,15 @@ function assertCampoConError(pagina, campo, mensaje) {
   assert.ok(describe.includes(`${id}Ayuda`), `${campo} perdió su ayuda`);
 }
 
+// El bio describe dos ids (su ayuda y su contador); todos los demás, uno solo.
+const AYUDA_DE = Object.freeze({ bio: "miFichaBioAyuda miFichaBioContador" });
+
 function assertCampoSinError(pagina, campo) {
   const id = ID_DE[campo];
   const control = pagina.porId(id);
   assert.equal(pagina.porId(`${id}Error`).hidden, true, `el error de ${campo} no debería verse`);
   assert.equal(control.getAttribute("aria-invalid"), null, `${campo} con aria-invalid`);
-  assert.equal(control.getAttribute("aria-describedby"), `${id}Ayuda`, `${campo} describe sólo su ayuda`);
+  assert.equal(control.getAttribute("aria-describedby"), AYUDA_DE[campo] ?? `${id}Ayuda`, `${campo} describe sólo su ayuda`);
 }
 
 function assertModalidadTrabajoConError(pagina, mensaje) {
@@ -897,6 +900,59 @@ test("an existing card saved again sends the edited values, not the loaded ones"
     puesto: "Arquitecta de datos",
     modalidad_trabajo: "Remoto",
   }]]);
+});
+
+/* ---------- Bio: el contador que descuenta ---------- */
+
+test("the bio counter starts at 240 and counts down while typing", async () => {
+  const pagina = await cargarPagina();
+  const contador = () => pagina.porId("miFichaBioContador");
+
+  assert.equal(contador().textContent, "Te quedan 240 caracteres");
+
+  pagina.escribir("bio", "a".repeat(50));
+  assert.equal(contador().textContent, "Te quedan 190 caracteres");
+
+  pagina.escribir("bio", "a".repeat(239));
+  assert.equal(contador().textContent, "Te queda 1 carácter", "singular cuando queda uno");
+});
+
+/*
+  El freno cuenta PUNTOS DE CÓDIGO (largoMiFicha), no unidades UTF-16: un
+  maxlength cortaría un emoji a la mitad. Pegar 500 caracteres deja
+  exactamente 240, nunca 500 ni 239; y 240 emojis, que para .length (UTF-16)
+  serían 480, no se recortan porque para la base son 240 caracteres.
+*/
+test("pasting past the limit truncates to exactly 240 code points, and 240 emojis are not truncated", async () => {
+  const pagina = await cargarPagina();
+  const bio = () => pagina.porId("miFichaBio");
+  const contador = () => pagina.porId("miFichaBioContador");
+
+  pagina.escribir("bio", "b".repeat(500));
+  assert.equal(bio().value, "b".repeat(240));
+  assert.equal(contador().textContent, "Te quedan 0 caracteres");
+
+  const emojis = "😀".repeat(240);
+  pagina.escribir("bio", emojis);
+  assert.equal(bio().value, emojis, "240 emojis cuentan como 240 para la base, no se recortan");
+  assert.equal(contador().textContent, "Te quedan 0 caracteres");
+});
+
+test("the bio counter's live region stays quiet until the last 20 characters", async () => {
+  const pagina = await cargarPagina();
+  const contador = () => pagina.porId("miFichaBioContador");
+
+  pagina.escribir("bio", "a".repeat(200));
+  assert.equal(contador().textContent, "Te quedan 40 caracteres");
+  assert.equal(contador().getAttribute("aria-live"), "off", "lejos del límite: no debe anunciar cada tecla");
+
+  pagina.escribir("bio", "a".repeat(221));
+  assert.equal(contador().textContent, "Te quedan 19 caracteres");
+  assert.equal(contador().getAttribute("aria-live"), "polite", "cerca del límite: se anuncia");
+
+  // Alejarse del límite lo vuelve a callar.
+  pagina.escribir("bio", "a".repeat(50));
+  assert.equal(contador().getAttribute("aria-live"), "off");
 });
 
 /* ---------- Stack: el editor de etiquetas ---------- */

@@ -44,7 +44,7 @@ const LIMITES_MI_FICHA = Object.freeze({
   puesto: Object.freeze({ min: 2, max: 60 }),
   sector: Object.freeze({ min: 2, max: 80 }),
   ubicacion: Object.freeze({ min: 2, max: 80 }),
-  bio: Object.freeze({ min: 10, max: 600 }),
+  bio: Object.freeze({ min: 10, max: 240 }),
   stack: Object.freeze({ min: 1, max: 12 }),
   tecnologia: Object.freeze({ min: 1, max: 40 }),
   anio_inicio: Object.freeze({ min: 1950, max: 2100 }),
@@ -93,7 +93,7 @@ const MENSAJES_MI_FICHA = Object.freeze({
   }),
   bio: Object.freeze({
     vacio: "Escribe tu bio.",
-    largo: "La bio debe tener entre 10 y 600 caracteres.",
+    largo: "La bio debe tener entre 10 y 240 caracteres.",
     caracteres: "La bio tiene caracteres no permitidos. Sólo se admiten saltos de línea.",
   }),
   stack: Object.freeze({
@@ -321,6 +321,7 @@ if (typeof module === "object" && module.exports) {
     LIMITES_MI_FICHA,
     MENSAJES_MI_FICHA,
     PATRONES_ENLACE_MI_FICHA,
+    largoMiFicha,
     errorDeElementoStackMiFicha,
     normalizarMiFicha,
     validarMiFicha,
