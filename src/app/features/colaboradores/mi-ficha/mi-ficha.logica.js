@@ -46,7 +46,7 @@ const LIMITES_MI_FICHA = Object.freeze({
   ubicacion: Object.freeze({ min: 2, max: 80 }),
   bio: Object.freeze({ min: 10, max: 240 }),
   stack: Object.freeze({ min: 1, max: 12 }),
-  tecnologia: Object.freeze({ min: 1, max: 40 }),
+  etiqueta: Object.freeze({ min: 1, max: 40 }),
   anio_inicio: Object.freeze({ min: 1950, max: 2100 }),
   linkedin: 200,
   github: 200,
@@ -137,7 +137,7 @@ function tieneCaracteresProhibidosMiFicha(texto) {
 
 /*
   El stack ya llega como arreglo: lo arma el editor de etiquetas
-  (mi-ficha.stack.logica.js), no un campo de texto separado por comas. Lo que
+  (mi-ficha.etiquetas.logica.js), no un campo de texto separado por comas. Lo que
   no es arreglo se trata como vacío, y cada elemento se recorta con el mismo
   criterio que cualquier otro texto de la ficha; lo que queda en blanco se
   descarta.
@@ -199,29 +199,34 @@ function errorDeTextoMiFicha(campo, texto, { conSaltos = false } = {}) {
 }
 
 /*
-  El veredicto de UNA tecnología: los dos motivos que la 0039 revisa elemento
-  por elemento con stack_colaborador_valido(). No mira el mínimo de un
-  carácter porque quien arma el stack ya descarta lo vacío antes de llegar
-  acá; el editor de etiquetas avisa ese caso por su cuenta.
+  El veredicto de UN elemento de una lista de etiquetas (hoy sólo el stack):
+  los dos motivos que la 0039 revisa elemento por elemento con
+  stack_colaborador_valido(). No mira el mínimo de un carácter porque quien
+  arma la lista ya descarta lo vacío antes de llegar acá; el editor de
+  etiquetas avisa ese caso por su cuenta.
 */
-function errorDeElementoStackMiFicha(tecnologia) {
-  const mensajes = MENSAJES_MI_FICHA.stack;
-  if (tieneCaracteresProhibidosMiFicha(tecnologia)) return mensajes.caracteres;
-  if (largoMiFicha(tecnologia) > LIMITES_MI_FICHA.tecnologia.max) return mensajes.largo;
+function errorDeElementoEtiquetaMiFicha(campo, texto) {
+  const mensajes = MENSAJES_MI_FICHA[campo];
+  if (tieneCaracteresProhibidosMiFicha(texto)) return mensajes.caracteres;
+  // LIMITES_MI_FICHA.etiqueta.max (40) es global a propósito, no
+  // LIMITES_MI_FICHA[campo].max: sale de stack_colaborador_valido() en la
+  // 0039 y lo comparten todas las listas de etiquetas, no sólo el stack.
+  if (largoMiFicha(texto) > LIMITES_MI_FICHA.etiqueta.max) return mensajes.largo;
   return null;
 }
 
 /*
-  El veredicto del stack entero. Primero la cantidad, y después los motivos
-  por elemento en su orden de siempre: si en el mismo stack una tecnología
-  trae caracteres prohibidos y otra se pasa de largo, gana el de caracteres.
-  Por eso se recorren los doce y no se corta en el primero que falle.
+  El veredicto de la lista entera. Primero la cantidad, y después los motivos
+  por elemento en su orden de siempre: si en la misma lista un elemento trae
+  caracteres prohibidos y otro se pasa de largo, gana el de caracteres. Por
+  eso se recorren todos y no se corta en el primero que falle.
 */
-function errorDeStackMiFicha(stack) {
-  const mensajes = MENSAJES_MI_FICHA.stack;
-  if (stack.length < LIMITES_MI_FICHA.stack.min) return mensajes.vacio;
-  if (stack.length > LIMITES_MI_FICHA.stack.max) return mensajes.muchas;
-  const errores = stack.map(errorDeElementoStackMiFicha);
+function errorDeListaDeEtiquetasMiFicha(campo, lista) {
+  const mensajes = MENSAJES_MI_FICHA[campo];
+  const limites = LIMITES_MI_FICHA[campo];
+  if (lista.length < limites.min) return mensajes.vacio;
+  if (lista.length > limites.max) return mensajes.muchas;
+  const errores = lista.map((elemento) => errorDeElementoEtiquetaMiFicha(campo, elemento));
   if (errores.includes(mensajes.caracteres)) return mensajes.caracteres;
   if (errores.includes(mensajes.largo)) return mensajes.largo;
   return null;
@@ -263,7 +268,7 @@ function validarMiFicha(valores, anioActual) {
     puesto: errorDeTextoMiFicha("puesto", ficha.puesto),
     sector: errorDeTextoMiFicha("sector", ficha.sector),
     ubicacion: errorDeTextoMiFicha("ubicacion", ficha.ubicacion),
-    stack: errorDeStackMiFicha(ficha.stack),
+    stack: errorDeListaDeEtiquetasMiFicha("stack", ficha.stack),
     modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(ficha.modalidad_trabajo) ? null : MENSAJES_MI_FICHA.modalidad_trabajo,
     anio_inicio: errorDeAnioMiFicha(origen.anio_inicio, ficha.anio_inicio, anioActual),
     bio: errorDeTextoMiFicha("bio", ficha.bio, { conSaltos: true }),
@@ -322,7 +327,7 @@ if (typeof module === "object" && module.exports) {
     MENSAJES_MI_FICHA,
     PATRONES_ENLACE_MI_FICHA,
     largoMiFicha,
-    errorDeElementoStackMiFicha,
+    errorDeElementoEtiquetaMiFicha,
     normalizarMiFicha,
     validarMiFicha,
     valoresFormularioMiFicha,

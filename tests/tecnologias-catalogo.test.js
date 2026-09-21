@@ -47,7 +47,7 @@ test("the catalog holds a useful amount of entries", () => {
   trampa puesta a mano.
 */
 test("every entry passes the same per-item rules the 0039 CHECK enforces", () => {
-  const { min, max } = LIMITES_MI_FICHA.tecnologia;
+  const { min, max } = LIMITES_MI_FICHA.etiqueta;
   for (const tecnologia of CATALOGO.tecnologias) {
     const largo = [...tecnologia].length;
     assert.ok(largo >= min && largo <= max, `"${tecnologia}" mide ${largo}, fuera de ${min}-${max}`);

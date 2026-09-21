@@ -4,8 +4,9 @@
 
   La normalización y la validación viven en mi-ficha.logica.js; el editor de
   etiquetas del stack, en mi-ficha.etiquetas.js (crearEditorDeEtiquetas), con
-  su lógica pura de agregar/quitar/mover/sugerir en mi-ficha.stack.logica.js;
-  la lectura y el guardado, en core/colaboradores/ficha.service.js. Todos se
+  su lógica pura de agregar/quitar/mover/sugerir en
+  mi-ficha.etiquetas.logica.js; la lectura y el guardado, en
+  core/colaboradores/ficha.service.js. Todos se
   cargan antes y dejan sus funciones en el ámbito global.
   establecerFormularioOcupado sale de features/auth/auth-ui.js.
 

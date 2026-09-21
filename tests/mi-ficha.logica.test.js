@@ -23,7 +23,7 @@ const {
   MODALIDADES_TRABAJO_MI_FICHA,
   LIMITES_MI_FICHA,
   PATRONES_ENLACE_MI_FICHA,
-  errorDeElementoStackMiFicha,
+  errorDeElementoEtiquetaMiFicha,
   normalizarMiFicha,
   validarMiFicha,
   valoresFormularioMiFicha,
@@ -255,20 +255,20 @@ test("stack: the character fault wins over the length one, whatever the order", 
   stack entero, y ningún otro: el mínimo de un carácter no es asunto suyo.
 */
 test("a single technology is judged by the same two rules as the whole stack", () => {
-  assert.equal(errorDeElementoStackMiFicha("PostgreSQL"), null);
-  assert.equal(errorDeElementoStackMiFicha("a".repeat(40)), null);
-  assert.equal(errorDeElementoStackMiFicha("😀".repeat(40)), null, "40 emojis cuentan como 40");
-  assert.equal(errorDeElementoStackMiFicha(""), null, "lo vacío lo descarta quien arma el stack");
+  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "PostgreSQL"), null);
+  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "a".repeat(40)), null);
+  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "😀".repeat(40)), null, "40 emojis cuentan como 40");
+  assert.equal(errorDeElementoEtiquetaMiFicha("stack", ""), null, "lo vacío lo descarta quien arma el stack");
 
-  const porLargo = errorDeElementoStackMiFicha("a".repeat(41));
-  const porCaracteres = errorDeElementoStackMiFicha("Po\u0000stgres");
+  const porLargo = errorDeElementoEtiquetaMiFicha("stack", "a".repeat(41));
+  const porCaracteres = errorDeElementoEtiquetaMiFicha("stack", "Po\u0000stgres");
   assert.ok(porLargo, "41 caracteres tiene que dar mensaje");
   assert.ok(porCaracteres, "un carácter de control tiene que dar mensaje");
   assert.notEqual(porLargo, porCaracteres);
 
   // En un elemento que comete las dos, manda el de caracteres: es el mismo
-  // orden con el que errorDeStackMiFicha resuelve el stack completo.
-  assert.equal(errorDeElementoStackMiFicha("Po\u0000stgres".padEnd(41, "a")), porCaracteres);
+  // orden con el que errorDeListaDeEtiquetasMiFicha resuelve la lista completa.
+  assert.equal(errorDeElementoEtiquetaMiFicha("stack", "Po\u0000stgres".padEnd(41, "a")), porCaracteres);
 });
 
 /* ---------- Modalidad de trabajo ---------- */
@@ -480,7 +480,7 @@ test("the length limits are the ones the 0039 CHECKs declare, and bio the 0040 o
   assert.deepEqual(LIMITES_MI_FICHA.ubicacion, entre("char_length\\(ubicacion\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.bio, entre("char_length\\(bio\\)", SQL_0040));
   assert.deepEqual(LIMITES_MI_FICHA.stack, entre("cardinality\\(stack\\)"));
-  assert.deepEqual(LIMITES_MI_FICHA.tecnologia, entre("char_length\\(elemento\\)"));
+  assert.deepEqual(LIMITES_MI_FICHA.etiqueta, entre("char_length\\(elemento\\)"));
   assert.deepEqual(LIMITES_MI_FICHA.anio_inicio, entre("anio_inicio"));
   assert.equal(LIMITES_MI_FICHA.linkedin, hasta("linkedin"));
   assert.equal(LIMITES_MI_FICHA.github, hasta("github"));

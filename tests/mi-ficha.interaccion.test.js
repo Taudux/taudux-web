@@ -21,7 +21,7 @@ const leer = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
 const CARPETA = "src/app/features/colaboradores/mi-ficha";
 const HTML = leer(`${CARPETA}/index.html`);
 const LOGICA = leer(`${CARPETA}/mi-ficha.logica.js`);
-const LOGICA_STACK = leer(`${CARPETA}/mi-ficha.stack.logica.js`);
+const LOGICA_STACK = leer(`${CARPETA}/mi-ficha.etiquetas.logica.js`);
 const ETIQUETAS = leer(`${CARPETA}/mi-ficha.etiquetas.js`);
 const PAGINA = leer(`${CARPETA}/mi-ficha.js`);
 const AUTH_UI = leer("src/app/features/auth/auth-ui.js");
@@ -406,7 +406,7 @@ function abrirPagina({
     exactamente lo que pasa en el navegador.
   */
   const GLOBAL_DEL_SCRIPT = [
-    [LOGICA_STACK, "agregarTecnologiaAlStack"],
+    [LOGICA_STACK, "agregarEtiqueta"],
     [ETIQUETAS, "crearEditorDeEtiquetas"],
   ];
 

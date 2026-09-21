@@ -9,21 +9,22 @@ const leer = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
 
 /*
   En el navegador estos dos scripts son globales clásicos y comparten un solo
-  ámbito: mi-ficha.stack.logica.js usa LIMITES_MI_FICHA, MENSAJES_MI_FICHA y
-  errorDeElementoStackMiFicha de mi-ficha.logica.js sin importarlos. require()
-  aísla cada archivo, así que acá se reproduce ese ámbito y, de paso, se prueba
-  que el orden de carga que declara el HTML es el que el módulo necesita.
+  ámbito: mi-ficha.etiquetas.logica.js usa LIMITES_MI_FICHA, MENSAJES_MI_FICHA
+  y errorDeElementoEtiquetaMiFicha de mi-ficha.logica.js sin importarlos.
+  require() aísla cada archivo, así que acá se reproduce ese ámbito y, de
+  paso, se prueba que el orden de carga que declara el HTML es el que el
+  módulo necesita.
 */
 const contexto = vm.createContext({});
 vm.runInContext(leer("src/app/features/colaboradores/mi-ficha/mi-ficha.logica.js"), contexto);
-vm.runInContext(leer("src/app/features/colaboradores/mi-ficha/mi-ficha.stack.logica.js"), contexto);
+vm.runInContext(leer("src/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.logica.js"), contexto);
 
 const {
-  normalizarClaveTecnologia,
-  agregarTecnologiaAlStack,
-  quitarTecnologiaDelStack,
-  moverTecnologiaEnStack,
-  sugerenciasDeTecnologia,
+  normalizarClaveEtiqueta,
+  agregarEtiqueta,
+  quitarEtiqueta,
+  moverEtiqueta,
+  sugerenciasDeEtiqueta,
   indiceMasCercano,
 } = contexto;
 
@@ -36,8 +37,8 @@ const {
 const { LIMITES_MI_FICHA } = require(
   path.join(ROOT, "src/app/features/colaboradores/mi-ficha/mi-ficha.logica.js"),
 );
-const { MAXIMO_SUGERENCIAS_STACK } = require(
-  path.join(ROOT, "src/app/features/colaboradores/mi-ficha/mi-ficha.stack.logica.js"),
+const { MAXIMO_SUGERENCIAS_ETIQUETAS } = require(
+  path.join(ROOT, "src/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.logica.js"),
 );
 
 // Copia al contexto principal para comparar con deepEqual estricto (los
@@ -63,17 +64,17 @@ const CATALOGO = Object.freeze([
 /* ---------- La clave con la que se compara ---------- */
 
 test("the key ignores case, accents and surrounding or repeated spaces", () => {
-  assert.equal(normalizarClaveTecnologia("PostgreSQL"), "postgresql");
-  assert.equal(normalizarClaveTecnologia("postgresql"), "postgresql");
-  assert.equal(normalizarClaveTecnologia("  PostgreSQL  "), "postgresql");
-  assert.equal(normalizarClaveTecnologia("Metodologías ágiles"), "metodologias agiles");
-  assert.equal(normalizarClaveTecnologia("React    Native"), "react native");
-  assert.equal(normalizarClaveTecnologia("REACT native"), normalizarClaveTecnologia("React Native"));
+  assert.equal(normalizarClaveEtiqueta("PostgreSQL"), "postgresql");
+  assert.equal(normalizarClaveEtiqueta("postgresql"), "postgresql");
+  assert.equal(normalizarClaveEtiqueta("  PostgreSQL  "), "postgresql");
+  assert.equal(normalizarClaveEtiqueta("Metodologías ágiles"), "metodologias agiles");
+  assert.equal(normalizarClaveEtiqueta("React    Native"), "react native");
+  assert.equal(normalizarClaveEtiqueta("REACT native"), normalizarClaveEtiqueta("React Native"));
 });
 
 test("anything that is not text has no key", () => {
   for (const valor of [null, undefined, 7, [], {}]) {
-    assert.equal(normalizarClaveTecnologia(valor), "");
+    assert.equal(normalizarClaveEtiqueta(valor), "");
   }
 });
 
@@ -82,42 +83,42 @@ test("anything that is not text has no key", () => {
 test("a technology is added at the end, trimmed, on a new array", () => {
   const stack = ["Python"];
 
-  const resultado = agregarTecnologiaAlStack(stack, "  PostgreSQL  ");
+  const resultado = agregarEtiqueta("stack", stack, "  PostgreSQL  ");
 
   assert.equal(resultado.ok, true);
-  assert.deepEqual(plano(resultado.stack), ["Python", "PostgreSQL"]);
+  assert.deepEqual(plano(resultado.lista), ["Python", "PostgreSQL"]);
   assert.deepEqual(stack, ["Python"], "el arreglo de entrada no se toca");
 });
 
 // El catálogo sugiere, nunca restringe: es la decisión de fondo del editor.
 test("a technology outside the catalog is added just the same", () => {
-  const resultado = agregarTecnologiaAlStack([], "Un framework que nadie conoce");
+  const resultado = agregarEtiqueta("stack", [], "Un framework que nadie conoce");
 
   assert.equal(resultado.ok, true);
-  assert.deepEqual(plano(resultado.stack), ["Un framework que nadie conoce"]);
+  assert.deepEqual(plano(resultado.lista), ["Un framework que nadie conoce"]);
 });
 
 test("an empty or blank text is refused without touching the stack", () => {
   const stack = ["Python"];
   for (const vacio of ["", "   ", null, undefined, 7]) {
-    const resultado = agregarTecnologiaAlStack(stack, vacio);
+    const resultado = agregarEtiqueta("stack", stack, vacio);
     assert.equal(resultado.ok, false, JSON.stringify(vacio));
     assert.equal(resultado.motivo, "vacio");
-    assert.equal(resultado.stack, stack, "devuelve el mismo arreglo, no una copia");
+    assert.equal(resultado.lista, stack, "devuelve el mismo arreglo, no una copia");
   }
 });
 
 test("the twelfth is the last one that fits", () => {
   const once = Array.from({ length: 11 }, (_, i) => `T${i}`);
 
-  const doceava = agregarTecnologiaAlStack(once, "T11");
+  const doceava = agregarEtiqueta("stack", once, "T11");
   assert.equal(doceava.ok, true);
-  assert.equal(doceava.stack.length, LIMITES_MI_FICHA.stack.max);
+  assert.equal(doceava.lista.length, LIMITES_MI_FICHA.stack.max);
 
-  const treceava = agregarTecnologiaAlStack(doceava.stack, "T12");
+  const treceava = agregarEtiqueta("stack", doceava.lista, "T12");
   assert.equal(treceava.ok, false);
   assert.equal(treceava.motivo, "muchas");
-  assert.equal(treceava.stack.length, LIMITES_MI_FICHA.stack.max);
+  assert.equal(treceava.lista.length, LIMITES_MI_FICHA.stack.max);
 });
 
 /*
@@ -125,14 +126,14 @@ test("the twelfth is the last one that fits", () => {
   editor deja entrar es exactamente lo que la base va a aceptar.
 */
 test("a technology too long or with forbidden characters is refused, with its reason", () => {
-  const largo = agregarTecnologiaAlStack([], "a".repeat(LIMITES_MI_FICHA.tecnologia.max + 1));
+  const largo = agregarEtiqueta("stack", [], "a".repeat(LIMITES_MI_FICHA.etiqueta.max + 1));
   assert.equal(largo.ok, false);
   assert.equal(largo.motivo, "largo");
 
-  assert.equal(agregarTecnologiaAlStack([], "a".repeat(LIMITES_MI_FICHA.tecnologia.max)).ok, true);
+  assert.equal(agregarEtiqueta("stack", [], "a".repeat(LIMITES_MI_FICHA.etiqueta.max)).ok, true);
 
   for (const control of ["\u0000", "\t", "\u007f"]) {
-    const resultado = agregarTecnologiaAlStack([], `Po${control}stgres`);
+    const resultado = agregarEtiqueta("stack", [], `Po${control}stgres`);
     assert.equal(resultado.ok, false, JSON.stringify(control));
     assert.equal(resultado.motivo, "caracteres");
   }
@@ -140,7 +141,7 @@ test("a technology too long or with forbidden characters is refused, with its re
   // Los de formato bidireccional, que `[[:cntrl:]]` no cubre y la 0039
   // rechaza aparte.
   for (const bidi of ["\u200e", "\u202a", "\u2066"]) {
-    const resultado = agregarTecnologiaAlStack([], `Postgres${bidi}`);
+    const resultado = agregarEtiqueta("stack", [], `Postgres${bidi}`);
     assert.equal(resultado.ok, false, JSON.stringify(bidi));
     assert.equal(resultado.motivo, "caracteres");
   }
@@ -152,18 +153,18 @@ test("a repeat is refused and points at the one already there", () => {
   const stack = ["Python", "PostgreSQL", "AWS"];
 
   for (const repetida of ["PostgreSQL", "postgresql", "  POSTGRESQL  "]) {
-    const resultado = agregarTecnologiaAlStack(stack, repetida);
+    const resultado = agregarEtiqueta("stack", stack, repetida);
     assert.equal(resultado.ok, false, repetida);
     assert.equal(resultado.motivo, "duplicado");
     assert.equal(resultado.indice, 1, "el índice sirve para señalar la etiqueta que ya está");
-    assert.equal(resultado.stack, stack);
+    assert.equal(resultado.lista, stack);
   }
 });
 
 test("accents do not make a second entry either", () => {
   const stack = ["Metodologías ágiles"];
 
-  const resultado = agregarTecnologiaAlStack(stack, "Metodologias agiles");
+  const resultado = agregarEtiqueta("stack", stack, "Metodologias agiles");
 
   assert.equal(resultado.ok, false);
   assert.equal(resultado.motivo, "duplicado");
@@ -178,10 +179,10 @@ test("accents do not make a second entry either", () => {
 test("a stack that already repeats is left alone; only new entries are guarded", () => {
   const conRepetida = ["PostgreSQL", "postgresql"];
 
-  const resultado = agregarTecnologiaAlStack(conRepetida, "Python");
+  const resultado = agregarEtiqueta("stack", conRepetida, "Python");
 
   assert.equal(resultado.ok, true);
-  assert.deepEqual(plano(resultado.stack), ["PostgreSQL", "postgresql", "Python"]);
+  assert.deepEqual(plano(resultado.lista), ["PostgreSQL", "postgresql", "Python"]);
 });
 
 /* ---------- Quitar ---------- */
@@ -189,7 +190,7 @@ test("a stack that already repeats is left alone; only new entries are guarded",
 test("removing takes the one at that position, on a new array", () => {
   const stack = ["Python", "PostgreSQL", "AWS"];
 
-  const resultado = quitarTecnologiaDelStack(stack, 1);
+  const resultado = quitarEtiqueta(stack, 1);
 
   assert.deepEqual(plano(resultado), ["Python", "AWS"]);
   assert.deepEqual(stack, ["Python", "PostgreSQL", "AWS"]);
@@ -198,7 +199,7 @@ test("removing takes the one at that position, on a new array", () => {
 test("removing a position that is not there changes nothing", () => {
   const stack = ["Python", "PostgreSQL"];
   for (const indice of [-1, 2, 99, null, undefined, 1.5, "1"]) {
-    assert.equal(quitarTecnologiaDelStack(stack, indice), stack, JSON.stringify(indice));
+    assert.equal(quitarEtiqueta(stack, indice), stack, JSON.stringify(indice));
   }
 });
 
@@ -207,9 +208,9 @@ test("removing a position that is not there changes nothing", () => {
 test("a technology moves to its new position, on a new array", () => {
   const stack = ["A", "B", "C", "D"];
 
-  assert.deepEqual(plano(moverTecnologiaEnStack(stack, 0, 2)), ["B", "C", "A", "D"]);
-  assert.deepEqual(plano(moverTecnologiaEnStack(stack, 3, 0)), ["D", "A", "B", "C"]);
-  assert.deepEqual(plano(moverTecnologiaEnStack(stack, 2, 1)), ["A", "C", "B", "D"]);
+  assert.deepEqual(plano(moverEtiqueta(stack, 0, 2)), ["B", "C", "A", "D"]);
+  assert.deepEqual(plano(moverEtiqueta(stack, 3, 0)), ["D", "A", "B", "C"]);
+  assert.deepEqual(plano(moverEtiqueta(stack, 2, 1)), ["A", "C", "B", "D"]);
   assert.deepEqual(stack, ["A", "B", "C", "D"], "el arreglo de entrada no se toca");
 });
 
@@ -221,45 +222,45 @@ test("a technology moves to its new position, on a new array", () => {
 test("a destination past the edges is clamped, never wrapped", () => {
   const stack = ["A", "B", "C"];
 
-  assert.deepEqual(plano(moverTecnologiaEnStack(stack, 2, -5)), ["C", "A", "B"]);
-  assert.deepEqual(plano(moverTecnologiaEnStack(stack, 0, 99)), ["B", "C", "A"]);
+  assert.deepEqual(plano(moverEtiqueta(stack, 2, -5)), ["C", "A", "B"]);
+  assert.deepEqual(plano(moverEtiqueta(stack, 0, 99)), ["B", "C", "A"]);
 });
 
 test("a move that does not move, or that starts nowhere, returns the same array", () => {
   const stack = ["A", "B", "C"];
 
-  assert.equal(moverTecnologiaEnStack(stack, 1, 1), stack, "al mismo lugar");
-  assert.equal(moverTecnologiaEnStack(stack, 0, -3), stack, "ya estaba en el borde");
-  assert.equal(moverTecnologiaEnStack(stack, 2, 9), stack, "ya estaba en el otro borde");
+  assert.equal(moverEtiqueta(stack, 1, 1), stack, "al mismo lugar");
+  assert.equal(moverEtiqueta(stack, 0, -3), stack, "ya estaba en el borde");
+  assert.equal(moverEtiqueta(stack, 2, 9), stack, "ya estaba en el otro borde");
   for (const origen of [-1, 3, null, undefined, 1.5]) {
-    assert.equal(moverTecnologiaEnStack(stack, origen, 0), stack, JSON.stringify(origen));
+    assert.equal(moverEtiqueta(stack, origen, 0), stack, JSON.stringify(origen));
   }
-  assert.equal(moverTecnologiaEnStack(stack, 0, null), stack, "destino que no es un índice");
+  assert.equal(moverEtiqueta(stack, 0, null), stack, "destino que no es un índice");
 });
 
 /* ---------- Sugerir ---------- */
 
 test("the search matches anywhere in the name, not only at the start", () => {
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "gres")), ["PostgreSQL"]);
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "supa")), ["Supabase"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "gres")), ["PostgreSQL"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "supa")), ["Supabase"]);
 });
 
 test("the search ignores case and accents", () => {
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "POSTGRE")), ["PostgreSQL"]);
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "agiles")), ["Metodologías ágiles"]);
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "ágiles")), ["Metodologías ágiles"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "POSTGRE")), ["PostgreSQL"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "agiles")), ["Metodologías ágiles"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "ágiles")), ["Metodologías ágiles"]);
 });
 
 // Quien teclea "pa" busca "pandas", no "Supabase".
 test("the ones that start with the query come first", () => {
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "pa")), ["pandas", "Supabase"]);
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "an")), ["Angular", "pandas"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "pa")), ["pandas", "Supabase"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "an")), ["Angular", "pandas"]);
 });
 
 test("what is already in the stack is not offered again", () => {
-  assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, "react", ["React"])), ["React Native"]);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, "react", ["React"])), ["React Native"]);
   assert.deepEqual(
-    plano(sugerenciasDeTecnologia(CATALOGO, "react", ["  REACT  ", "react native"])),
+    plano(sugerenciasDeEtiqueta(CATALOGO, "react", ["  REACT  ", "react native"])),
     [],
     "tampoco distinguiendo mayúsculas ni espacios",
   );
@@ -267,12 +268,12 @@ test("what is already in the stack is not offered again", () => {
 
 test("an empty query suggests nothing; one character already suggests", () => {
   for (const vacia of ["", "   ", null, undefined, 7]) {
-    assert.deepEqual(plano(sugerenciasDeTecnologia(CATALOGO, vacia)), [], JSON.stringify(vacia));
+    assert.deepEqual(plano(sugerenciasDeEtiqueta(CATALOGO, vacia)), [], JSON.stringify(vacia));
   }
   // Una sola letra ya sugiere. No se fija la lista entera porque "s" aparece
   // dentro de media docena de nombres; lo que importa es que haya algo y que
   // la que empieza por ella vaya adelante.
-  const conUnaLetra = plano(sugerenciasDeTecnologia(CATALOGO, "s"));
+  const conUnaLetra = plano(sugerenciasDeEtiqueta(CATALOGO, "s"));
   assert.ok(conUnaLetra.length > 0, "una sola letra ya sugiere");
   assert.equal(conUnaLetra[0], "Supabase", "y la que empieza por ella va primero");
 });
@@ -282,18 +283,18 @@ test("an empty query suggests nothing; one character already suggests", () => {
   real, "a" coincide con media lista.
 */
 test("the suggestions are capped, by default at the limit of the widget", () => {
-  const muchas = Array.from({ length: 40 }, (_, i) => `Tecnologia ${i}`);
+  const muchas = Array.from({ length: 40 }, (_, i) => `Etiqueta ${i}`);
 
-  assert.equal(sugerenciasDeTecnologia(muchas, "tecnologia").length, MAXIMO_SUGERENCIAS_STACK);
-  assert.equal(MAXIMO_SUGERENCIAS_STACK, 8);
-  assert.equal(sugerenciasDeTecnologia(muchas, "tecnologia", [], 3).length, 3);
-  assert.deepEqual(plano(sugerenciasDeTecnologia(muchas, "tecnologia", [], 0)), []);
+  assert.equal(sugerenciasDeEtiqueta(muchas, "etiqueta").length, MAXIMO_SUGERENCIAS_ETIQUETAS);
+  assert.equal(MAXIMO_SUGERENCIAS_ETIQUETAS, 8);
+  assert.equal(sugerenciasDeEtiqueta(muchas, "etiqueta", [], 3).length, 3);
+  assert.deepEqual(plano(sugerenciasDeEtiqueta(muchas, "etiqueta", [], 0)), []);
 });
 
 // Sin catálogo el editor sigue vivo: se escribe y se agrega a mano.
 test("a missing or broken catalog suggests nothing instead of failing", () => {
   for (const roto of [[], null, undefined, "PostgreSQL", [7, null, "", {}]]) {
-    assert.deepEqual(plano(sugerenciasDeTecnologia(roto, "post")), [], JSON.stringify(roto));
+    assert.deepEqual(plano(sugerenciasDeEtiqueta(roto, "post")), [], JSON.stringify(roto));
   }
 });
 

@@ -8,11 +8,10 @@
   del DOM.
 
   La lógica pura de agregar/quitar/mover/sugerir sigue en
-  mi-ficha.stack.logica.js (agregarTecnologiaAlStack, quitarTecnologiaDelStack,
-  moverTecnologiaEnStack, sugerenciasDeTecnologia, indiceMasCercano) y este
-  archivo depende de esas globales, igual que mi-ficha.stack.logica.js depende
-  de mi-ficha.logica.js: por eso se carga después de ambos y antes de
-  mi-ficha.js.
+  mi-ficha.etiquetas.logica.js (agregarEtiqueta, quitarEtiqueta, moverEtiqueta,
+  sugerenciasDeEtiqueta, indiceMasCercano) y este archivo depende de esas
+  globales, igual que mi-ficha.etiquetas.logica.js depende de mi-ficha.logica.js:
+  por eso se carga después de ambos y antes de mi-ficha.js.
 
   Esta fábrica no conoce el formulario: no sabe qué es `campos`, ni cómo se
   pinta un error de página. Recibe marcarError/limpiarError ya resueltos para
@@ -158,7 +157,7 @@ function crearEditorDeEtiquetas({
 
   function quitarEnIndice(indice, { gestionarFoco = true } = {}) {
     const anterior = valores;
-    valores = quitarTecnologiaDelStack(valores, indice);
+    valores = quitarEtiqueta(valores, indice);
     if (valores === anterior) return;
     pintarLista();
     actualizarLimite();
@@ -174,7 +173,7 @@ function crearEditorDeEtiquetas({
   // posición, y se anuncia por la región aria-live del widget.
   function mover(origen, destino) {
     const anterior = valores;
-    valores = moverTecnologiaEnStack(valores, origen, destino);
+    valores = moverEtiqueta(valores, origen, destino);
     if (valores === anterior) return;
     const posicionFinal = Math.min(Math.max(destino, 0), valores.length - 1);
     pintarLista();
@@ -223,7 +222,7 @@ function crearEditorDeEtiquetas({
     const destino = indiceMasCercano(centrosDeEtiquetas(), { x: evento.clientX, y: evento.clientY });
     if (destino === -1 || destino === arrastre.actual) return;
     const anterior = valores;
-    valores = moverTecnologiaEnStack(valores, arrastre.actual, destino);
+    valores = moverEtiqueta(valores, arrastre.actual, destino);
     if (valores === anterior) return;
     arrastre.actual = Math.min(Math.max(destino, 0), valores.length - 1);
     pintarLista();
@@ -286,7 +285,7 @@ function crearEditorDeEtiquetas({
   }
 
   function actualizarSugerencias() {
-    sugerenciasActuales = sugerenciasDeTecnologia(catalogo, input.value, valores);
+    sugerenciasActuales = sugerenciasDeEtiqueta(catalogo, input.value, valores);
     resaltadaSugerencia = -1;
     pintarOpciones();
   }
@@ -295,7 +294,7 @@ function crearEditorDeEtiquetas({
   // hacía falta y, si ya había algo resaltado, se mueve un paso desde ahí.
   function moverResaltado(delta) {
     if (sugerenciasActuales.length === 0) {
-      sugerenciasActuales = sugerenciasDeTecnologia(catalogo, input.value, valores);
+      sugerenciasActuales = sugerenciasDeEtiqueta(catalogo, input.value, valores);
       if (sugerenciasActuales.length === 0) return;
       resaltadaSugerencia = delta > 0 ? 0 : sugerenciasActuales.length - 1;
     } else if (resaltadaSugerencia === -1) {
@@ -314,18 +313,18 @@ function crearEditorDeEtiquetas({
   }
 
   /*
-    Los motivos de agregarTecnologiaAlStack, traducidos: "vacio" no dice nada
+    Los motivos de agregarEtiqueta, traducidos: "vacio" no dice nada
     (quien arma la lista ya lo descarta en silencio), "duplicado" avisa por la
     región aria-live y resalta la etiqueta que ya estaba, "muchas" avisa el
     tope y "largo"/"caracteres" son errores de campo como cualquier otro, con
     el marcarError() que recibió esta instancia.
   */
   function procesarConfirmacion(texto) {
-    const resultado = agregarTecnologiaAlStack(valores, texto);
+    const resultado = agregarEtiqueta(campo, valores, texto);
     cerrarListbox();
 
     if (resultado.ok) {
-      valores = resultado.stack;
+      valores = resultado.lista;
       input.value = "";
       pintarLista();
       actualizarLimite();

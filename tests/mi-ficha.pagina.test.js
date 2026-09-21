@@ -83,7 +83,7 @@ test("scripts load in dependency order", () => {
     "/app/core/colaboradores/ficha.service.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.logica.js",
     "/app/core/tecnologias/catalogo.service.js",
-    "/app/features/colaboradores/mi-ficha/mi-ficha.stack.logica.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.logica.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.js",
   ];
