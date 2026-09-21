@@ -475,6 +475,16 @@ test("the profile has one wide row per tag list, and only the optional ones star
   // Herramientas no lleva celda con id: no hay nada que ocultar.
   assert.equal(HTML.includes("perfilHerramientasCelda"), false);
 
+  // Habilidades va ARRIBA de Herramientas: primero lo que la persona sabe
+  // hacer, después con qué lo hace. Idiomas cierra el grupo. El orden es del
+  // marcado, no del pintado, así que se fija acá.
+  const orden = ["perfilHabilidades", "perfilHerramientas", "perfilIdiomas"].map((id) => {
+    const indice = HTML.indexOf(`id="${id}"`);
+    assert.notEqual(indice, -1, `falta #${id}`);
+    return indice;
+  });
+  assert.deepEqual([...orden].sort((a, b) => a - b), orden, "habilidades tiene que ir antes que herramientas");
+
   // Las tres listas comparten la misma clase de píldoras, y cada una se
   // nombra a sí misma para el lector de pantalla.
   for (const [id, etiqueta] of [
@@ -495,6 +505,13 @@ test("the profile has one wide row per tag list, and only the optional ones star
   opcionales de etiquetas: sin nombre no hay nada que mostrar y quedan las
   cinco celdas de antes.
 */
+test("the sector cell starts hidden and is a normal cell, not a wide row", () => {
+  const celda = HTML.match(/<div[^>]*\sid="perfilSectorCelda"[^>]*>/);
+  assert.ok(celda, "falta la celda #perfilSectorCelda");
+  assert.match(celda[0], /\shidden[\s>]/, "opcional desde la 0042: arranca oculta");
+  assert.equal(/colaboradores__dato--ancho/.test(celda[0]), false, "es una celda normal");
+});
+
 test("the company cell sits between the role and the sector, and starts hidden", () => {
   const celda = HTML.match(/<div[^>]*\sid="perfilEmpresaCelda"[^>]*>/);
   assert.ok(celda, "falta la celda #perfilEmpresaCelda");

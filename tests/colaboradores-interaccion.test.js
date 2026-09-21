@@ -864,6 +864,55 @@ test("going from a linked company to an unlinked one with the same name drops th
 });
 
 /*
+  El sector también es opcional (0042) y su celda se oculta igual que las de
+  empresa, habilidades e idiomas. Lo que lo distingue de todas ellas: el
+  sector ANTES era obligatorio y estaba en CAMPOS_DE_TEXTO_DEL_PERFIL, así
+  que si volviera, una ficha sin sector no abriría perfil y esta prueba
+  fallaría en su primer click, no en el assert de la celda.
+*/
+test("the sector row hides when there is no sector, and the profile still opens", async () => {
+  const pagina = await cargarPagina({ retoques: { 0: { sector: null } } });
+
+  pagina.fichas()[0].disparar("click");
+
+  assert.equal(pagina.porId("perfilSectorCelda").hidden, true, "sin sector, la celda no se ve");
+  assert.equal(pagina.texto("perfilSector"), "", "y no queda texto viejo adentro");
+  // El resto del perfil se pinta igual: perder el sector no es perder la ficha.
+  assert.ok(pagina.texto("perfilPuesto").length > 0);
+  assert.ok(pagina.texto("perfilUbicacion").length > 0);
+
+  pagina.irA("#/");
+  pagina.fichas()[1].disparar("click");
+  assert.equal(pagina.porId("perfilSectorCelda").hidden, false, "con sector, vuelve");
+  assert.ok(pagina.texto("perfilSector").length > 0);
+
+  /*
+    Y al revés: del perfil CON sector al perfil sin él. Ocultar la celda sin
+    limpiar su texto dejaría el sector del anterior guardado adentro, listo
+    para aparecer atribuido a la persona equivocada en cuanto algo muestre la
+    celda. Es la misma trampa que el <a> pegado de pintarEmpresa().
+  */
+  pagina.irA("#/");
+  pagina.fichas()[0].disparar("click");
+  assert.equal(pagina.porId("perfilSectorCelda").hidden, true);
+  assert.equal(pagina.texto("perfilSector"), "", "el sector del perfil anterior no puede quedar adentro");
+});
+
+/*
+  Un sector en blanco no es lo mismo que uno ausente para la base, pero para
+  la página sí: los dos dejan la fila sin nada que mostrar. Si escribirEnCelda
+  sólo mirara el null, un "   " pintaría una celda vacía con su rótulo.
+*/
+test("a blank sector hides the row just like a missing one", async () => {
+  const pagina = await cargarPagina({ retoques: { 0: { sector: "   " } } });
+
+  pagina.fichas()[0].disparar("click");
+
+  assert.equal(pagina.porId("perfilSectorCelda").hidden, true);
+  assert.equal(pagina.texto("perfilSector"), "");
+});
+
+/*
   Habilidades e idiomas son opcionales (0041: `between 0 and 12`). Con la
   lista vacía se oculta la CELDA ENTERA, no sólo la <ul>: si se ocultara nada
   más la lista, quedaría el rótulo "HABILIDADES" en versalitas flotando sobre

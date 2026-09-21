@@ -118,7 +118,10 @@
               <dt class="colaboradores__dato-etiqueta">Empresa</dt>
               <dd class="colaboradores__dato-valor" id="perfilEmpresa"></dd>
             </div>
-            <div class="colaboradores__dato">
+            <!-- Opcional desde la 0042: el sector es de la empresa donde
+                 alguien trabaja, no suyo, y quien no tiene una no tenía qué
+                 escribir acá. Sin sector la celda desaparece entera. -->
+            <div class="colaboradores__dato" id="perfilSectorCelda" hidden>
               <dt class="colaboradores__dato-etiqueta">Sector</dt>
               <dd class="colaboradores__dato-valor" id="perfilSector"></dd>
             </div>
@@ -134,21 +137,24 @@
               <dt class="colaboradores__dato-etiqueta">Modalidad de trabajo</dt>
               <dd class="colaboradores__dato-valor" id="perfilModalidadTrabajo"></dd>
             </div>
-            <div class="colaboradores__dato colaboradores__dato--ancho">
-              <dt class="colaboradores__dato-etiqueta">Herramientas</dt>
-              <dd class="colaboradores__dato-valor">
-                <ul class="colaboradores__etiquetas" id="perfilHerramientas" aria-label="Herramientas"></ul>
-              </dd>
-            </div>
             <!-- Habilidades e idiomas son opcionales: la celda ENTERA se
                  oculta cuando la lista viene vacía, no sólo la <ul>, o
                  quedaría el rótulo en versalitas con nada debajo. Van como
                  filas anchas igual que Herramientas, aunque la de idiomas
-                 sea corta: son la misma cosa y se leen mejor alineadas. -->
+                 sea corta: son la misma cosa y se leen mejor alineadas.
+
+                 Habilidades va ARRIBA de Herramientas: primero lo que la
+                 persona sabe hacer, después con qué lo hace. -->
             <div class="colaboradores__dato colaboradores__dato--ancho" id="perfilHabilidadesCelda" hidden>
               <dt class="colaboradores__dato-etiqueta">Habilidades</dt>
               <dd class="colaboradores__dato-valor">
                 <ul class="colaboradores__etiquetas" id="perfilHabilidades" aria-label="Habilidades"></ul>
+              </dd>
+            </div>
+            <div class="colaboradores__dato colaboradores__dato--ancho">
+              <dt class="colaboradores__dato-etiqueta">Herramientas</dt>
+              <dd class="colaboradores__dato-valor">
+                <ul class="colaboradores__etiquetas" id="perfilHerramientas" aria-label="Herramientas"></ul>
               </dd>
             </div>
             <div class="colaboradores__dato colaboradores__dato--ancho" id="perfilIdiomasCelda" hidden>

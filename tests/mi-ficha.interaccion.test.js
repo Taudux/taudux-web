@@ -831,7 +831,9 @@ test("editing a field clears only that field's error", async () => {
 
   pagina.escribir("puesto", "D");
   assertCampoSinError(pagina, "puesto");
-  assert.equal(pagina.porId("miFichaSectorError").hidden, false, "los demás errores siguen");
+  // Ubicación y no sector: el sector es opcional desde la 0042 y un formulario
+  // vacío ya no lo marca, así que no serviría de testigo.
+  assert.equal(pagina.porId("miFichaUbicacionError").hidden, false, "los demás errores siguen");
 
   pagina.elegir("Presencial");
   assertModalidadTrabajoSinError(pagina);

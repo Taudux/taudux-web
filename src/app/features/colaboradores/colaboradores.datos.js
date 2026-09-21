@@ -35,9 +35,15 @@ const MODALIDADES_TRABAJO = Object.freeze(["Presencial", "Híbrido", "Remoto"]);
 // COLUMNAS_ROSTER fichas.
 const COLUMNAS_ROSTER = 4;
 
-// Todo lo que la vista de perfil escribe tal cual como texto: si falta uno,
-// quedaría un hueco en blanco en la ficha técnica.
-const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "puesto", "sector", "ubicacion", "bio"];
+// Todo lo que la vista de perfil escribe tal cual como texto y NO sabe
+// ocultar: si falta uno, quedaría un hueco en blanco en la ficha técnica.
+//
+// `sector` salió de esta lista con la 0042, que lo volvió opcional: su celda
+// se oculta sola, así que no dejaría hueco. Si siguiera acá, una ficha sin
+// sector no abriría perfil —que es bastante más grave que el hueco que esto
+// evita—. Lo mismo vale para empresa, habilidades e idiomas, que nunca
+// estuvieron.
+const CAMPOS_DE_TEXTO_DEL_PERFIL = ["nombre", "corto", "puesto", "ubicacion", "bio"];
 
 function esTextoConContenido(valor) {
   return typeof valor === "string" && valor.trim() !== "";

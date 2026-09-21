@@ -103,8 +103,8 @@ const MENSAJES_MI_FICHA = Object.freeze({
     largo: "El puesto debe tener entre 2 y 60 caracteres.",
     caracteres: "El puesto tiene caracteres no permitidos.",
   }),
+  // Sin `vacio`: desde la 0042 el sector es opcional y esa rama no se alcanza.
   sector: Object.freeze({
-    vacio: "Escribe tu sector.",
     largo: "El sector debe tener entre 2 y 80 caracteres.",
     caracteres: "El sector tiene caracteres no permitidos.",
   }),
@@ -209,7 +209,9 @@ function anioMiFicha(valor) {
   return /^\d+$/.test(texto) ? Number(texto) : null;
 }
 
-function enlaceMiFicha(valor) {
+// Un texto OPCIONAL: vacío es null, nunca "". Lo usan los enlaces y también
+// sector y empresa, que no lo son —de ahí el nombre genérico—.
+function textoOpcionalMiFicha(valor) {
   const texto = textoMiFicha(valor);
   return texto === "" ? null : texto;
 }
@@ -228,7 +230,7 @@ function normalizarMiFicha(valores) {
   const origen = valores && typeof valores === "object" ? valores : {};
   return {
     puesto: textoMiFicha(origen.puesto),
-    sector: textoMiFicha(origen.sector),
+    sector: textoOpcionalMiFicha(origen.sector),
     ubicacion: textoMiFicha(origen.ubicacion),
     herramientas: normalizarEtiquetasMiFicha(origen.herramientas),
     habilidades: normalizarEtiquetasMiFicha(origen.habilidades),
@@ -236,14 +238,14 @@ function normalizarMiFicha(valores) {
     // La ausencia de empresa se escribe null, nunca "": el CHECK de la 0041
     // deja pasar el nulo (un CHECK con null da `unknown`) y rechaza la cadena
     // vacía, así que dos maneras de decir "ninguna" sólo traerían problemas.
-    empresa: enlaceMiFicha(origen.empresa),
-    empresa_enlace: enlaceMiFicha(origen.empresa_enlace),
+    empresa: textoOpcionalMiFicha(origen.empresa),
+    empresa_enlace: textoOpcionalMiFicha(origen.empresa_enlace),
     modalidad_trabajo: textoMiFicha(origen.modalidad_trabajo),
     anio_inicio: anioMiFicha(origen.anio_inicio),
     bio: textoMiFicha(origen.bio),
-    linkedin: enlaceMiFicha(origen.linkedin),
-    github: enlaceMiFicha(origen.github),
-    correo: enlaceMiFicha(origen.correo),
+    linkedin: textoOpcionalMiFicha(origen.linkedin),
+    github: textoOpcionalMiFicha(origen.github),
+    correo: textoOpcionalMiFicha(origen.correo),
   };
 }
 
@@ -357,7 +359,7 @@ function validarMiFicha(valores, anioActual) {
 
   const errores = {
     puesto: errorDeTextoMiFicha("puesto", ficha.puesto),
-    sector: errorDeTextoMiFicha("sector", ficha.sector),
+    sector: errorDeTextoOpcionalMiFicha("sector", ficha.sector),
     ubicacion: errorDeTextoMiFicha("ubicacion", ficha.ubicacion),
     herramientas: errorDeListaDeEtiquetasMiFicha("herramientas", ficha.herramientas),
     habilidades: errorDeListaDeEtiquetasMiFicha("habilidades", ficha.habilidades),

@@ -40,6 +40,7 @@ const {
 const SQL = leer("supabase/migrations/0039_fichas_colaborador.sql");
 const SQL_0040 = leer("supabase/migrations/0040_modalidad_trabajo_colaborador.sql");
 const SQL_0041 = leer("supabase/migrations/0041_etiquetas_empresa.sql");
+const SQL_0042 = leer("supabase/migrations/0042_sector_opcional.sql");
 
 // Año fijo: la validación recibe el año en curso como argumento, así que los
 // casos no cambian con el reloj.
@@ -174,7 +175,9 @@ test("normalizing a tools list that is not an array, or that has non-text items,
 test("normalizing an empty form gives empty texts, an empty tools list, no year and null links", () => {
   assert.deepEqual(normalizarMiFicha({}), {
     puesto: "",
-    sector: "",
+    // El sector es opcional desde la 0042: su ausencia se escribe null, como
+    // la de empresa y la de los enlaces, no como la de los textos obligatorios.
+    sector: null,
     ubicacion: "",
     herramientas: [],
     habilidades: [],
@@ -200,14 +203,24 @@ test("a valid form validates into the normalized card", () => {
 
 const TEXTOS_CORTOS = [
   { campo: "puesto", min: 2, max: 60 },
-  { campo: "sector", min: 2, max: 80 },
+  // El sector es el único opcional de los tres (0042). Se queda en esta tabla
+  // porque todo lo DEMÁS —largo, recorte, emojis, controles, bidi— lo sigue
+  // cumpliendo igual: lo único que cambia es que vacío pasa.
+  { campo: "sector", min: 2, max: 80, opcional: true },
   { campo: "ubicacion", min: 2, max: 80 },
 ];
 
-for (const { campo, min, max } of TEXTOS_CORTOS) {
-  test(`${campo}: required, between ${min} and ${max} characters after trimming`, () => {
-    assertSoloErrorEn(valoresValidos({ [campo]: "" }), campo, "vacío");
-    assertSoloErrorEn(valoresValidos({ [campo]: "     " }), campo, "sólo espacios");
+for (const { campo, min, max, opcional = false } of TEXTOS_CORTOS) {
+  test(`${campo}: ${opcional ? "optional" : "required"}, between ${min} and ${max} characters after trimming`, () => {
+    if (opcional) {
+      // Vacío no es un error, y lo que llega a la base es null y no "": el
+      // CHECK de la 0040 rechaza la cadena vacía aunque acepte el nulo.
+      assert.equal(assertValido(valoresValidos({ [campo]: "" }), "vacío")[campo], null);
+      assert.equal(assertValido(valoresValidos({ [campo]: "     " }), "sólo espacios")[campo], null);
+    } else {
+      assertSoloErrorEn(valoresValidos({ [campo]: "" }), campo, "vacío");
+      assertSoloErrorEn(valoresValidos({ [campo]: "     " }), campo, "sólo espacios");
+    }
     assertSoloErrorEn(valoresValidos({ [campo]: "a".repeat(min - 1) }), campo, "uno menos que el mínimo");
     assertSoloErrorEn(valoresValidos({ [campo]: "a".repeat(max + 1) }), campo, "uno más que el máximo");
 
@@ -492,6 +505,31 @@ test("links: length limits of 200, 200 and 254 characters", () => {
   assertSoloErrorEn(valoresValidos({ correo: correo(255) }), "correo", "correo de 255");
 });
 
+/*
+  Que el sector sea opcional no es una decisión del formulario: es la 0042
+  soltando su NOT NULL. Si esa migración se revirtiera y el front siguiera
+  mandando null, cada guardado terminaría en un 23502 que el formulario
+  traduce a "Faltan datos obligatorios" sin decir cuál. Por eso se leen las
+  dos puntas: la migración y la validación.
+*/
+test("the sector is optional because the 0042 dropped its NOT NULL, and both ends agree", () => {
+  assert.match(
+    SQL_0042,
+    /alter\s+column\s+sector\s+drop\s+not\s+null/,
+    "la 0042 tiene que soltar el NOT NULL de sector",
+  );
+  // Y el CHECK que lo valida NO se toca: sigue viviendo en la 0040.
+  assert.equal(/constraint\s+fichas_colaborador_sector_valido/.test(SQL_0042), false,
+    "la 0042 no reescribe el CHECK del sector");
+  assert.match(SQL_0040, /constraint\s+fichas_colaborador_sector_valido/);
+
+  // La otra punta: vacío es válido y viaja como null.
+  assert.equal(assertValido(valoresValidos({ sector: "" }), "sector vacío").sector, null);
+  // Pero el largo lo sigue mandando el CHECK de la 0040, no el capricho del front.
+  assert.deepEqual(LIMITES_MI_FICHA.sector, { min: 2, max: 80 });
+  assert.match(SQL_0040, /char_length\(sector\)\s+between\s+2\s+and\s+80/);
+});
+
 /* ---------- Las reglas están repartidas entre la 0039, la 0040 y la 0041 ---------- */
 
 /*
@@ -656,7 +694,8 @@ test("an empty form reports every required field at once, in form order, and no 
   assert.equal(resultado.ok, false);
   assert.deepEqual(
     resultado.errores.map(({ campo }) => campo),
-    ["puesto", "sector", "ubicacion", "herramientas", "modalidad_trabajo", "anio_inicio", "bio"],
+    // Sin "sector": opcional desde la 0042, un formulario vacío no lo reclama.
+    ["puesto", "ubicacion", "herramientas", "modalidad_trabajo", "anio_inicio", "bio"],
   );
   for (const { mensaje } of resultado.errores) {
     assert.equal(typeof mensaje, "string");
@@ -671,7 +710,9 @@ test("errors follow the card order and each field reports only one message", () 
 
 test("error messages speak in tuteo, never voseo", () => {
   const { errores } = validarMiFicha({
-    puesto: "a", sector: "", ubicacion: "\u202e", herramientas: [], modalidad_trabajo: "x",
+    // El sector también es opcional ya (0042): vacío no fallaría, así que falla
+    // por contenido como los de abajo.
+    puesto: "a", sector: "\u202e", ubicacion: "\u202e", herramientas: [], modalidad_trabajo: "x",
     // Vacías no fallarían: son opcionales. El motivo tiene que salir del
     // contenido, no de la cantidad.
     habilidades: ["‮"], idiomas: ["‮"],

@@ -67,6 +67,7 @@
       perfilEmpresa: porId("perfilEmpresa"),
       perfilEmpresaCelda: porId("perfilEmpresaCelda"),
       perfilSector: porId("perfilSector"),
+      perfilSectorCelda: porId("perfilSectorCelda"),
       perfilUbicacion: porId("perfilUbicacion"),
       perfilExperiencia: porId("perfilExperiencia"),
       perfilModalidadTrabajo: porId("perfilModalidadTrabajo"),
@@ -489,15 +490,17 @@
       escribir(el.perfilNombre, ficha.nombre);
       escribir(el.perfilPuesto, ficha.puesto);
       pintarEmpresa(ficha);
-      escribir(el.perfilSector, ficha.sector);
+      escribirEnCelda(el.perfilSector, el.perfilSectorCelda, ficha.sector);
       escribir(el.perfilUbicacion, ficha.ubicacion);
       // La base guarda el año de inicio; los años se cuentan al pintar.
       escribir(el.perfilExperiencia, experienciaDesde(ficha.anio_inicio, new Date().getFullYear()));
       escribir(el.perfilModalidadTrabajo, ficha.modalidad_trabajo);
-      pintarEtiquetas(el.perfilHerramientas, ficha.herramientas);
-      // Herramientas no lleva celda: es obligatoria, su fila siempre tiene
-      // algo que mostrar. Las otras dos son opcionales y se ocultan enteras.
+      // En el mismo orden que el marcado: primero lo que la persona sabe
+      // hacer, después con qué lo hace. Herramientas no lleva celda porque es
+      // obligatoria: su fila siempre tiene algo que mostrar. Las otras dos son
+      // opcionales y se ocultan enteras.
       pintarEtiquetas(el.perfilHabilidades, ficha.habilidades, el.perfilHabilidadesCelda);
+      pintarEtiquetas(el.perfilHerramientas, ficha.herramientas);
       pintarEtiquetas(el.perfilIdiomas, ficha.idiomas, el.perfilIdiomasCelda);
       escribir(el.perfilBio, ficha.bio);
 
@@ -601,6 +604,19 @@
 
   function escribir(nodo, texto) {
     if (nodo.textContent !== texto) nodo.textContent = texto;
+  }
+
+  /*
+    Un texto opcional de la ficha técnica: se escribe si hay algo y su celda
+    ENTERA desaparece si no, por lo mismo que las listas de etiquetas —dejar
+    sólo el <dd> vacío abandona su rótulo en versalitas sobre la nada—. El
+    texto se limpia igual al ocultar: una celda escondida que se guarda lo
+    viejo adentro lo muestra en cuanto vuelve a aparecer con otra ficha.
+  */
+  function escribirEnCelda(nodo, celda, texto) {
+    const valor = typeof texto === "string" ? texto.trim() : "";
+    celda.hidden = valor === "";
+    escribir(nodo, valor);
   }
 
   function inicialDe(ficha) {

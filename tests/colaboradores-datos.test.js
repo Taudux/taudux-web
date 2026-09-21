@@ -153,14 +153,18 @@ test("a public record without a card yet has no profile", () => {
 
 /*
   La base garantiza que una ficha guardada está completa, pero tienePerfil()
-  no se fía: una columna que mañana se vuelva opcional no debe dejar huecos en
-  blanco en la ficha técnica. Cada campo que la vista pinta es obligatorio.
+  no se fía: cada campo que la vista pinta SIN saber ocultarlo es obligatorio,
+  o quedaría un hueco en blanco en la ficha técnica.
+  Ése es el corte, y no "obligatorio en la base": los campos cuya celda se
+  oculta sola —empresa, habilidades, idiomas y, desde la 0042, sector— quedan
+  fuera a propósito. Exigirlos no evitaría ningún hueco y costaría el perfil
+  entero.
 */
 test("a single missing, blank or unknown field is enough to have no profile", () => {
   const base = MUESTRA[0];
   assert.equal(tienePerfil({ ...base }), true, "premisa: la base sí tiene ficha");
 
-  for (const campo of ["nombre", "corto", "puesto", "sector", "ubicacion", "bio"]) {
+  for (const campo of ["nombre", "corto", "puesto", "ubicacion", "bio"]) {
     for (const valor of [undefined, null, "", "   ", 7]) {
       assert.equal(tienePerfil({ ...base, [campo]: valor }), false, `${campo} = ${JSON.stringify(valor)}`);
     }
@@ -184,7 +188,11 @@ test("a single missing, blank or unknown field is enough to have no profile", ()
 
   // La empresa y su enlace, igual: opcionales en la 0041 y fuera de
   // tienePerfil(). Sin nombre, el perfil abre y su celda no aparece.
-  for (const campo of ["empresa", "empresa_enlace"]) {
+  //
+  // Y el sector desde la 0042, que lo volvió opcional. Es el único de los
+  // tres que ANTES contaba: si volviera a contar, quien borre su sector
+  // desaparecería del roster entero en vez de perder una fila.
+  for (const campo of ["empresa", "empresa_enlace", "sector"]) {
     for (const valor of [undefined, null, "", "   ", 7]) {
       assert.equal(tienePerfil({ ...base, [campo]: valor }), true, `${campo} = ${JSON.stringify(valor)}`);
     }
