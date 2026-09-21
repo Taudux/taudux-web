@@ -299,9 +299,9 @@
       aviso ni reintento (a quien edita su ficha no le toca resolver eso).
     */
     async function cargarCatalogoHerramientas() {
-      if (typeof cargarCatalogoDeTecnologias !== "function") return;
-      const resultado = await cargarCatalogoDeTecnologias();
-      if (resultado?.ok) editorHerramientas.fijarCatalogo(resultado.tecnologias);
+      if (typeof cargarCatalogoDeEtiquetas !== "function") return;
+      const resultado = await cargarCatalogoDeEtiquetas("herramientas");
+      if (resultado?.ok) editorHerramientas.fijarCatalogo(resultado.etiquetas);
     }
 
     /* ---------- Arranque ---------- */

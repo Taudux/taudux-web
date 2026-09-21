@@ -327,7 +327,7 @@ function montarEsqueleto(documento, html) {
     perfil        el obtenerPerfil() falso (por defecto, una colaboradora).
     ficha         el obtenerMiFicha() falso (por defecto, sin ficha todavía).
     guardar       el guardarMiFicha() falso (por defecto, devuelve lo que recibe).
-    catalogo      arreglo de tecnologías para el cargarCatalogoDeTecnologias()
+    catalogo      arreglo de etiquetas para el cargarCatalogoDeEtiquetas()
                   falso; sin pasarlo, la función no existe (el script no
                   llegó), como en la mayoría de las páginas de verdad.
     sin           nombres de funciones globales que NO se inyectan (un script
@@ -378,10 +378,11 @@ function abrirPagina({
     // auth-ui.js la llama al cargar (agregarDestinoAEnlaces): sin destino.
     obtenerDestinoAuth: () => "",
   };
-  // Sin `catalogo`, cargarCatalogoDeTecnologias no existe: el script del
+  // Sin `catalogo`, cargarCatalogoDeEtiquetas no existe: el script del
   // catálogo no llegó, y el editor de etiquetas se degrada solo a texto libre.
   if (catalogo !== undefined) {
-    globales.cargarCatalogoDeTecnologias = async () => ({ ok: true, tecnologias: structuredClone(catalogo) });
+    globales.cargarCatalogoDeEtiquetas = async (nombre) =>
+      (nombre === "herramientas" ? { ok: true, etiquetas: structuredClone(catalogo) } : { ok: false });
   }
   for (const nombre of sin) delete globales[nombre];
 
