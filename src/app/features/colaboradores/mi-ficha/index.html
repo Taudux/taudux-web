@@ -92,23 +92,16 @@
             <p class="mi-ficha__error" id="miFichaUbicacionError" hidden></p>
           </div>
 
-          <div class="mi-ficha__grupo">
-            <label class="mi-ficha__etiqueta" for="miFichaHerramientas">Herramientas</label>
-            <div class="mi-ficha__etiquetas">
-              <input class="field" type="text" id="miFichaHerramientas" name="herramientas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHerramientasOpciones" autocomplete="off" aria-describedby="miFichaHerramientasAyuda">
-              <ul class="mi-ficha__etiquetas-opciones" id="miFichaHerramientasOpciones" role="listbox" aria-label="Sugerencias de herramientas" hidden></ul>
-              <ul class="mi-ficha__etiquetas-lista" id="miFichaHerramientasLista"></ul>
-            </div>
-            <p class="u-visually-hidden" id="miFichaHerramientasEstado" role="status" aria-live="polite"></p>
-            <small class="mi-ficha__ayuda" id="miFichaHerramientasAyuda">Los lenguajes, frameworks y productos con los que trabajas. Por ejemplo: Python, PostgreSQL, Figma. Hasta 12.</small>
-            <p class="mi-ficha__error" id="miFichaHerramientasError" hidden></p>
-          </div>
+          <!-- Habilidades, herramientas e idiomas son la MISMA pieza: el
+               mismo marcado, cada una con su propio id de listbox y de
+               opciones. El aria-label de cada listbox nombra su campo, porque
+               con tres desplegables en la página "Sugerencias" a secas no
+               distingue nada. Habilidades e idiomas son opcionales: se pueden
+               guardar vacías; herramientas pide al menos una.
 
-          <!-- Habilidades e idiomas son la MISMA pieza que Herramientas: el
-               mismo marcado, con su propio id de listbox y de opciones. El
-               aria-label de cada listbox nombra su campo, porque con tres
-               desplegables en la página "Sugerencias" a secas no distingue
-               nada. Las dos son opcionales: se pueden guardar vacías. -->
+               El orden —habilidades, herramientas, idiomas— es el mismo que
+               el del perfil público, y lo sigue CAMPOS_MI_FICHA para que el
+               foco al primer error caiga en el primer campo de la pantalla. -->
           <div class="mi-ficha__grupo">
             <label class="mi-ficha__etiqueta" for="miFichaHabilidades">Habilidades</label>
             <div class="mi-ficha__etiquetas">
@@ -119,6 +112,18 @@
             <p class="u-visually-hidden" id="miFichaHabilidadesEstado" role="status" aria-live="polite"></p>
             <small class="mi-ficha__ayuda" id="miFichaHabilidadesAyuda">Lo que sabes hacer: prácticas, disciplinas y metodologías. Por ejemplo: TDD, REST API, Scrum. Opcional, hasta 12.</small>
             <p class="mi-ficha__error" id="miFichaHabilidadesError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaHerramientas">Herramientas</label>
+            <div class="mi-ficha__etiquetas">
+              <input class="field" type="text" id="miFichaHerramientas" name="herramientas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHerramientasOpciones" autocomplete="off" aria-describedby="miFichaHerramientasAyuda">
+              <ul class="mi-ficha__etiquetas-opciones" id="miFichaHerramientasOpciones" role="listbox" aria-label="Sugerencias de herramientas" hidden></ul>
+              <ul class="mi-ficha__etiquetas-lista" id="miFichaHerramientasLista"></ul>
+            </div>
+            <p class="u-visually-hidden" id="miFichaHerramientasEstado" role="status" aria-live="polite"></p>
+            <small class="mi-ficha__ayuda" id="miFichaHerramientasAyuda">Los lenguajes, frameworks y productos con los que trabajas. Por ejemplo: Python, PostgreSQL, Figma. Hasta 12.</small>
+            <p class="mi-ficha__error" id="miFichaHerramientasError" hidden></p>
           </div>
 
           <div class="mi-ficha__grupo">

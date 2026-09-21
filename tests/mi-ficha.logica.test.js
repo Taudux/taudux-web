@@ -116,7 +116,7 @@ test("the card keys are exactly the columns the service writes, in the same orde
 
   assert.deepEqual([...CAMPOS_MI_FICHA], columnas);
   assert.deepEqual([...CAMPOS_MI_FICHA], [
-    "puesto", "sector", "ubicacion", "herramientas", "habilidades", "idiomas",
+    "puesto", "sector", "ubicacion", "habilidades", "herramientas", "idiomas",
     "empresa", "empresa_enlace", "modalidad_trabajo", "anio_inicio", "bio",
     "linkedin", "github", "correo",
   ]);

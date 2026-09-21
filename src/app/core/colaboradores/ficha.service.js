@@ -17,12 +17,20 @@
 // Columnas que el dueño escribe y que se le devuelven. Lista explícita, nunca
 // `*`: una columna que la tabla gane después no se lee ni se escribe por
 // accidente.
+//
+// EL ORDEN ES EL DE LA PANTALLA, NO EL DE LA TABLA. Espejaba el orden físico
+// de las columnas hasta que habilidades subió encima de herramientas en el
+// formulario y en el perfil. A Postgres el orden le da igual —esto es una
+// lista de `select` y el payload de un `insert`—, pero CAMPOS_MI_FICHA lo
+// copia, y ÉSE decide a qué campo se manda el foco al primer error: tiene que
+// ser el primero de la pantalla, no el primero de la tabla. Un test compara
+// las dos listas, así que no pueden separarse en silencio.
 const COLUMNAS_MI_FICHA = Object.freeze([
   "puesto",
   "sector",
   "ubicacion",
-  "herramientas",
   "habilidades",
+  "herramientas",
   "idiomas",
   "empresa",
   "empresa_enlace",

@@ -249,6 +249,39 @@ test("the name is read-only text with a link to change it in Mi cuenta", () => {
   assert.doesNotMatch(nombre, /^<(?:input|textarea|select)\b/, "el nombre no es un campo de este formulario");
 });
 
+/*
+  EL TEST QUE FALTABA. Las tres listas de etiquetas viven en dos marcados
+  distintos —el formulario y el perfil público— y nada las ataba: subir
+  Habilidades encima de Herramientas en el perfil dejó el formulario en el
+  orden viejo y ninguna suite lo notó, porque cada archivo era coherente
+  consigo mismo.
+
+  Que coincidan no es cosmético: se llena en un orden y se lee el resultado
+  en otro. Se comparan los dos HTML entre sí, sin una lista escrita a mano
+  que habría que acordarse de actualizar.
+*/
+test("the tag fields follow the same order in the form and in the public profile", () => {
+  const PERFIL = read("src/app/features/colaboradores/index.html");
+  const LISTAS = ["habilidades", "herramientas", "idiomas"];
+
+  const orden = (html, comoId) => LISTAS
+    .map((campo) => ({ campo, en: html.indexOf(comoId(campo)) }))
+    .map((entrada) => {
+      assert.notEqual(entrada.en, -1, `no se encontró ${entrada.campo}`);
+      return entrada;
+    })
+    .sort((a, b) => a.en - b.en)
+    .map(({ campo }) => campo);
+
+  const enElFormulario = orden(HTML, (campo) => `name="${campo}"`);
+  const enElPerfil = orden(PERFIL, (campo) => `id="perfil${campo[0].toUpperCase()}${campo.slice(1)}"`);
+
+  assert.deepEqual(enElFormulario, enElPerfil,
+    "el formulario y el perfil tienen que listar las etiquetas en el mismo orden");
+  // Y el orden acordado es ése: primero lo que la persona sabe hacer.
+  assert.deepEqual(enElPerfil, LISTAS);
+});
+
 test("the named controls follow the card order, so the first invalid field is the first on screen", () => {
   const nombres = [];
   for (const [etiqueta] of MARCADO.matchAll(/<(?:input|textarea|select)\b[^>]*>/g)) {
