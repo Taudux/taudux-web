@@ -1,6 +1,18 @@
 -- El trigger del slug pasa a SECURITY DEFINER: sin esto, ningún colaborador
 -- puede cambiarse el nombre.
 --
+-- SU PAPEL CAMBIÓ: YA NO ES LA ÚNICA FUENTE DEL ATRIBUTO
+--
+-- La 0040 ahora declara `security definer` ella misma, en el propio `create
+-- or replace function` que crea `asignar_slug_colaborador()` (ver ese
+-- archivo). Una base nueva, o una que reaplique la 0040 entera, nunca vuelve
+-- a pasar por el estado inseguro. Esta migración sigue siendo necesaria como
+-- VÍA DE ACTUALIZACIÓN para cualquier base que ya haya corrido la 0040 vieja,
+-- sin el atributo: `alter function` es la única forma de agregárselo sin
+-- volver a pegar el cuerpo entero de la función. Sigue siendo idempotente y
+-- segura de reaplicar en cualquier momento, esté o no la base al día con la
+-- 0040 nueva.
+--
 -- EL DEFECTO
 --
 -- La 0040 ensanchó el trigger a `before insert or update of es_colaborador,

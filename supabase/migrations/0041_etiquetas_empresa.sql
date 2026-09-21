@@ -37,6 +37,12 @@
 -- nombran `stack` y la 0039 nombra `stack_colaborador_valido()`, que dejan de
 -- existir. Re-aplicar cualquiera de ellas obliga a re-aplicar la cola hasta
 -- acá, en la misma corrida.
+--
+-- LA 0043 QUEDA FUERA DE ESTA CADENA: no toca ninguna columna ni función que
+-- esta migración declare, así que reaplicar la 0041 (o la 0040, que ya trae
+-- `security definer` desde su propio `create or replace function`) no la
+-- obliga, y la 0043 sigue siendo segura de reaplicar en cualquier momento,
+-- antes o después de esta.
 
 begin;
 

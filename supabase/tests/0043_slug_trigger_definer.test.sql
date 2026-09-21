@@ -140,6 +140,16 @@ values
 \ir ../migrations/0041_etiquetas_empresa.sql
 \ir ../migrations/0042_sector_opcional.sql
 
+-- La 0040 ya declara `security definer` ella misma (ver ese archivo), así que
+-- a esta altura de la cadena la función YA quedó definer y la sección de
+-- abajo, tal como está escrita, no probaría nada. Se la vuelve a invoker a
+-- mano para reconstruir el estado exacto de una base que corrió la 0040
+-- VIEJA, sin el atributo — que es lo que existió en producción antes de este
+-- arreglo, y lo que la 0043 (ahora como vía de actualización) tiene que
+-- seguir pudiendo curar. Así la regresión real queda documentada y probada,
+-- en vez de un estado que ya no ocurre en una base creada desde cero.
+alter function public.asignar_slug_colaborador() security invoker;
+
 -- === 1. La precondición: hoy un colaborador NO puede cambiarse el nombre ====
 -- Si este 42501 dejara de ocurrir, la 0043 no estaría arreglando nada y el
 -- resto del archivo pasaría en verde sin probar su cambio.
@@ -278,5 +288,24 @@ select pg_temp.assert_true(
   (select slug = 'valentina' from public.perfiles where id = pg_temp.cuenta(1)),
   'y no pisa los slugs ya calculados'
 );
+
+-- === 6. Reaplicar la 0040 nueva no revierte el atributo ====================
+-- Guardia de regresión: antes de este arreglo, reaplicar la 0040 volvía la
+-- función a SECURITY INVOKER en silencio —CREATE OR REPLACE FUNCTION le
+-- asigna su default a todo atributo que el comando no nombra— y reabría el
+-- 42501 de la sección 1. Ahora la 0040 nombra `security definer` ella misma:
+-- si algún día alguien la vuelve a tocar y se lo olvida, esta guarda tiene
+-- que reventar acá, no en producción.
+
+\ir ../migrations/0040_modalidad_trabajo_colaborador.sql
+
+do $regresion$
+begin
+  if not (select prosecdef from pg_proc
+           where oid = 'public.asignar_slug_colaborador()'::regprocedure) then
+    raise exception 'regresión: reaplicar la 0040 volvió el trigger a SECURITY INVOKER';
+  end if;
+end
+$regresion$;
 
 select '0043 slug trigger definer PASS' as result;

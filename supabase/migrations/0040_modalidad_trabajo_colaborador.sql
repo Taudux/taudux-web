@@ -266,11 +266,29 @@ comment on column public.fichas_colaborador.bio is
 --
 -- Lo que NO cambia: slug_colaborador(), la unicidad, el formato, el CHECK
 -- cruzado con es_colaborador, y el desempate por primer apellido.
+--
+-- POR QUÉ SECURITY DEFINER DESDE ACÁ (y no INVOKER, el default que Postgres
+-- le asigna a todo atributo que un `create or replace function` no nombra)
+--
+-- El trigger ahora también despierta al editar `nombre`/`apellidos`, columnas
+-- que sí escribe `authenticated`. Su cuerpo llama a `public.slug_colaborador()`,
+-- cuyo EXECUTE la 0038 le revocó a `authenticated`: sin definer, ese llamado
+-- aborta el UPDATE entero con 42501 y se pierde la fila completa, no sólo el
+-- nombre. Es seguro declararlo acá porque la función ya trae
+-- `set search_path = ''` —la condición que hace segura a una definer, porque
+-- fija el esquema de cada objeto que toca y no deja que un `search_path`
+-- hostil sustituya `slug_colaborador` por otro—, sólo lee `public.perfiles` y
+-- no le devuelve nada a quien la invoca. Nombrarlo acá, y no sólo con un
+-- `alter function` aparte, importa: sin esta línea, CUALQUIER reaplicación de
+-- este archivo vuelve la función a SECURITY INVOKER en silencio y reabre el
+-- mismo 42501. Ver la 0043 para el historial completo del defecto y su vía de
+-- actualización para bases que ya corrieron esta migración sin el atributo.
 
 create or replace function public.asignar_slug_colaborador()
 returns trigger
 language plpgsql
 set search_path = ''
+security definer
 as $function$
 declare
   v_base text;
