@@ -512,3 +512,30 @@ test("each tag field's hint is written the same in the markup and in the script"
     assert.equal(enElMarcado[1], enElScript[1], `la ayuda de ${campo} dice dos cosas distintas`);
   }
 });
+
+/*
+  Empresa y su enlace: dos campos de texto normales (no comboboxes) que van
+  juntos y al final del bloque laboral, en el orden de la ficha. El enlace es
+  `type="url"` para que el teclado móvil ofrezca el teclado de direcciones;
+  la validación de verdad la hace mi-ficha.logica.js contra la expresión del
+  CHECK, no el navegador.
+*/
+test("the company fields are plain text inputs with their own hint and error slot", () => {
+  const empresa = MARCADO.match(/<input\b[^>]*\sname="empresa"[^>]*>/)[0];
+  assert.equal(atributo(empresa, "type"), "text");
+  assert.equal(atributo(empresa, "id"), "miFichaEmpresa");
+  assert.equal(atributo(empresa, "aria-describedby"), "miFichaEmpresaAyuda");
+  // Es el nombre de una organización: el navegador puede autocompletarlo.
+  assert.equal(atributo(empresa, "autocomplete"), "organization");
+
+  const enlace = MARCADO.match(/<input\b[^>]*\sname="empresa_enlace"[^>]*>/)[0];
+  assert.equal(atributo(enlace, "type"), "url");
+  assert.equal(atributo(enlace, "id"), "miFichaEmpresaEnlace");
+  assert.equal(atributo(enlace, "aria-describedby"), "miFichaEmpresaEnlaceAyuda");
+  // Sin `role="combobox"`: no son listas de etiquetas.
+  assert.equal(atributo(enlace, "role"), null);
+
+  for (const id of ["miFichaEmpresaAyuda", "miFichaEmpresaError", "miFichaEmpresaEnlaceAyuda", "miFichaEmpresaEnlaceError"]) {
+    assert.ok(porId(id), `el index.html no tiene #${id}`);
+  }
+});

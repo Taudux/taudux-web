@@ -488,3 +488,23 @@ test("the profile has one wide row per tag list, and only the optional ones star
     assert.match(lista[0], new RegExp(`aria-label="${etiqueta}"`), `#${id} no se nombra`);
   }
 });
+
+/*
+  La celda de la empresa va entre Puesto y Sector —se lee de corrido y
+  completa las dos filas de tres— y arranca oculta, como las dos filas
+  opcionales de etiquetas: sin nombre no hay nada que mostrar y quedan las
+  cinco celdas de antes.
+*/
+test("the company cell sits between the role and the sector, and starts hidden", () => {
+  const celda = HTML.match(/<div[^>]*\sid="perfilEmpresaCelda"[^>]*>/);
+  assert.ok(celda, "falta la celda #perfilEmpresaCelda");
+  assert.match(celda[0], /\shidden[\s>]/, "la celda tiene que arrancar oculta");
+  assert.equal(/colaboradores__dato--ancho/.test(celda[0]), false, "es una celda normal, no una fila ancha");
+
+  const orden = ["perfilPuesto", "perfilEmpresa", "perfilSector"].map((id) => {
+    const indice = HTML.indexOf(`id="${id}"`);
+    assert.notEqual(indice, -1, `falta #${id}`);
+    return indice;
+  });
+  assert.deepEqual([...orden].sort((a, b) => a - b), orden, "la empresa no está entre el puesto y el sector");
+});

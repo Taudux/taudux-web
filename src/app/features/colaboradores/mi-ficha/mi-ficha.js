@@ -97,6 +97,8 @@
     herramientas: "miFichaHerramientas",
     habilidades: "miFichaHabilidades",
     idiomas: "miFichaIdiomas",
+    empresa: "miFichaEmpresa",
+    empresa_enlace: "miFichaEmpresaEnlace",
     anio_inicio: "miFichaAnioInicio",
     bio: "miFichaBio",
     linkedin: "miFichaLinkedin",

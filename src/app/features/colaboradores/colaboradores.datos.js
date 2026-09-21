@@ -20,6 +20,9 @@
   tienePerfil(): si contaran, quien no las llenó se quedaría sin perfil
   abrible. Vienen siempre como arreglo (la 0041 las declara not null default
   '{}'), y vacías esconden su celda entera en la vista de perfil.
+
+  `empresa` y `empresa_enlace` corren la misma suerte y por el mismo motivo;
+  ver empresaDelPerfil(). Son nullable, así que la ausencia llega como null.
 */
 
 // Los mismos valores, en el mismo orden, que el CHECK
@@ -132,6 +135,34 @@ const PATRONES_DE_ENLACE = Object.freeze({
 });
 
 /*
+  La expresión del CHECK `fichas_colaborador_empresa_enlace_valido` (0041),
+  con la misma traducción que las de arriba (allá `[^[:space:]]`, acá `[^\s]`)
+  y sin bandera `i`. A diferencia de linkedin y github NO fija el host —la
+  empresa vive donde vive— pero sí el esquema: sólo https, porque este texto
+  sale de datos y termina en un href.
+*/
+const PATRON_ENLACE_EMPRESA = /^https:\/\/[^\s\/?#]+\.[^\s\/?#]+([\/?#][^\s]*)?$/;
+
+/*
+  La empresa que el perfil pinta, o null si no hay nombre que mostrar (sin
+  nombre la fila entera no aparece). Con un enlace válido el nombre es
+  clicable; con uno inválido —o sin enlace— queda como texto plano.
+
+  Se valida ACÁ, en la capa pura, y no al pintar: el href sale de datos, así
+  que pasa por lista blanca antes de tocar el DOM. Es la misma postura de
+  enlacesDisponibles(). Degradar a texto plano y no omitir la fila es
+  deliberado: el nombre de la empresa sigue siendo un dato bueno aunque su
+  enlace no lo sea.
+*/
+function empresaDelPerfil(ficha) {
+  const nombre = String(ficha?.empresa || "").trim();
+  if (nombre === "") return null;
+
+  const enlace = String(ficha?.empresa_enlace || "").trim();
+  return { nombre, href: PATRON_ENLACE_EMPRESA.test(enlace) ? enlace : null };
+}
+
+/*
   En el prototipo todos los enlaces eran "#". Un enlace muerto es peor que
   ninguno, así que sólo se ofrecen los que tienen destino real, en orden fijo.
   Sólo https al sitio que nombra la píldora y direcciones de correo: lo que
@@ -171,6 +202,7 @@ if (typeof module !== "undefined" && module.exports) {
     indicePorSlug,
     moverSeleccion,
     numeroDeFicha,
+    empresaDelPerfil,
     enlacesDisponibles,
   };
 }

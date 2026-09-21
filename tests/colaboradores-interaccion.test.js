@@ -254,6 +254,15 @@ function recorrer(raiz, visitar) {
   raiz.children.forEach((hijo) => { visitar(hijo); recorrer(hijo, visitar); });
 }
 
+// El primer descendiente con esa etiqueta, o null. El DOM falso no tiene
+// querySelector: sólo lo que la página de verdad usa. `tagName` va en
+// mayúsculas, como en el navegador.
+function porEtiqueta(raiz, etiqueta) {
+  let hallado = null;
+  recorrer(raiz, (nodo) => { if (!hallado && nodo.tagName === etiqueta.toUpperCase()) hallado = nodo; });
+  return hallado;
+}
+
 function porClase(raiz, clase) {
   const hallados = [];
   recorrer(raiz, (nodo) => { if (nodo.classList.contains(clase)) hallados.push(nodo); });
@@ -793,6 +802,65 @@ test("a technology name that contains a middle dot stays as a single tag", async
     etiquetasDe(conPuntoMedio, "herramientas"),
     ["System Architecture (GCloud · Supabase)", "Python"],
   );
+});
+
+/*
+  La empresa: con enlace válido el nombre es clicable, sin enlace queda como
+  texto plano, y sin nombre se oculta la celda entera.
+
+  El cuarto caso es el que de verdad vale: un `empresa_enlace` que la base
+  nunca habría aceptado —porque llegó por otro camino, o porque el CHECK
+  cambió— tiene que DEGRADAR a texto plano, nunca pintar el <a>. Es el que
+  falla si alguien "simplifica" empresaDelPerfil() más adelante.
+*/
+test("the company name links out only when its link passes the whitelist", async () => {
+  const anclaDeEmpresa = (pagina) => porEtiqueta(pagina.porId("perfilEmpresa"), "a");
+
+  const conEnlace = await cargarPagina();
+  conEnlace.fichas()[0].disparar("click");
+  assert.equal(conEnlace.porId("perfilEmpresaCelda").hidden, false);
+  assert.equal(conEnlace.texto("perfilEmpresa"), "Taudux");
+  const ancla = anclaDeEmpresa(conEnlace);
+  assert.ok(ancla, "con enlace válido el nombre tiene que ser clicable");
+  assert.equal(ancla.href, "https://taudux.com");
+  assert.equal(ancla.target, "_blank");
+  assert.equal(ancla.rel, "noopener noreferrer");
+
+  const sinEnlace = await cargarPagina();
+  sinEnlace.fichas()[1].disparar("click");
+  assert.equal(sinEnlace.porId("perfilEmpresaCelda").hidden, false);
+  assert.equal(sinEnlace.texto("perfilEmpresa"), "Nube Verde");
+  assert.equal(anclaDeEmpresa(sinEnlace), null, "sin enlace, texto plano");
+
+  const sinEmpresa = await cargarPagina({ retoques: { 0: { empresa: null, empresa_enlace: null } } });
+  sinEmpresa.fichas()[0].disparar("click");
+  assert.equal(sinEmpresa.porId("perfilEmpresaCelda").hidden, true, "sin nombre, la celda no se ve");
+  assert.equal(sinEmpresa.texto("perfilEmpresa"), "");
+
+  for (const enlaceMalo of ["javascript:alert(1)", "http://taudux.com", "https://intranet", "//taudux.com"]) {
+    const degradado = await cargarPagina({ retoques: { 0: { empresa_enlace: enlaceMalo } } });
+    degradado.fichas()[0].disparar("click");
+    assert.equal(degradado.texto("perfilEmpresa"), "Taudux", enlaceMalo);
+    assert.equal(anclaDeEmpresa(degradado), null, `${enlaceMalo} no puede terminar en un href`);
+  }
+});
+
+/*
+  Dos perfiles seguidos con el MISMO nombre de empresa, uno con enlace y otro
+  sin él. escribir() se salta la escritura cuando el texto no cambió, así que
+  pintar con ella dejaría el <a> del anterior pegado, apuntando a otro sitio.
+  Por eso pintarEmpresa() reemplaza siempre el contenido.
+*/
+test("going from a linked company to an unlinked one with the same name drops the anchor", async () => {
+  const pagina = await cargarPagina({ retoques: { 1: { empresa: "Taudux", empresa_enlace: null } } });
+
+  pagina.fichas()[0].disparar("click");
+  assert.ok(porEtiqueta(pagina.porId("perfilEmpresa"), "a"), "premisa: la primera sí enlaza");
+
+  pagina.irA("#/");
+  pagina.fichas()[1].disparar("click");
+  assert.equal(pagina.texto("perfilEmpresa"), "Taudux");
+  assert.equal(porEtiqueta(pagina.porId("perfilEmpresa"), "a"), null, "el <a> viejo no puede quedar pegado");
 });
 
 /*

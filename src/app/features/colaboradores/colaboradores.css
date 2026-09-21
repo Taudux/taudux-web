@@ -167,11 +167,29 @@
   /* El nombre del perfil está acá porque recibe el foco al abrir una ficha:
      con teclado, el anillo tiene que ser el mismo que el del resto. */
   .colaboradores__enlace:focus-visible,
+  .colaboradores__enlace-empresa:focus-visible,
   .colaboradores__editar:focus-visible,
   .colaboradores__perfil-nombre:focus-visible,
   .colaboradores__aviso:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
+  }
+
+  /* El enlace de la empresa NO es una píldora: vive dentro de una celda de
+     la ficha técnica, donde el resto de los valores es texto. Hereda el peso
+     y el tamaño de .colaboradores__dato-valor y sólo se distingue por el
+     subrayado — un nombre de empresa de 80 caracteres en una píldora con
+     `white-space: nowrap` metería scroll horizontal a 390px. */
+  .colaboradores__enlace-empresa {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-color: var(--color-text-subtle);
+    transition: text-decoration-color var(--transition-fast);
+  }
+
+  .colaboradores__enlace-empresa:hover {
+    text-decoration-color: var(--color-accent);
   }
 
   .colaboradores__enlace-sigla {
@@ -679,7 +697,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .colaboradores__ficha,
-    .colaboradores__enlace {
+    .colaboradores__enlace,
+    .colaboradores__enlace-empresa {
       transition: none;
     }
   }

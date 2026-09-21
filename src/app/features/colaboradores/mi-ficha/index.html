@@ -133,6 +133,25 @@
             <p class="mi-ficha__error" id="miFichaIdiomasError" hidden></p>
           </div>
 
+          <!-- Empresa y su enlace, los dos opcionales. Van juntos porque uno
+               depende del otro: con enlace el nombre es clicable en el perfil
+               público, sin enlace es texto plano, y sin nombre la fila entera
+               no aparece. El enlace sin nombre es el único error cruzado del
+               formulario. -->
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaEmpresa">Empresa</label>
+            <input class="field" type="text" id="miFichaEmpresa" name="empresa" autocomplete="organization" aria-describedby="miFichaEmpresaAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaEmpresaAyuda">Dónde trabajas hoy. Opcional; si lo dejas vacío, tu perfil no muestra esta fila.</small>
+            <p class="mi-ficha__error" id="miFichaEmpresaError" hidden></p>
+          </div>
+
+          <div class="mi-ficha__grupo">
+            <label class="mi-ficha__etiqueta" for="miFichaEmpresaEnlace">Enlace de la empresa</label>
+            <input class="field" type="url" id="miFichaEmpresaEnlace" name="empresa_enlace" autocomplete="off" aria-describedby="miFichaEmpresaEnlaceAyuda">
+            <small class="mi-ficha__ayuda" id="miFichaEmpresaEnlaceAyuda">Su sitio, para que el nombre sea clicable. Tiene que empezar con https. Opcional.</small>
+            <p class="mi-ficha__error" id="miFichaEmpresaEnlaceError" hidden></p>
+          </div>
+
           <!-- Sin aria-describedby de partida: sólo apunta al error cuando lo
                hay. Los valores son los del CHECK de la 0040. -->
           <fieldset class="mi-ficha__grupo mi-ficha__opciones" id="miFichaModalidadTrabajo">

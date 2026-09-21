@@ -70,6 +70,8 @@ function valoresValidos(cambios = {}) {
     herramientas: ["PostgreSQL", "Python", "GCP"],
     habilidades: ["Modelado de datos", "ETL"],
     idiomas: ["Español", "Inglés"],
+    empresa: "Taudux",
+    empresa_enlace: "https://taudux.com",
     modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -114,11 +116,12 @@ test("the card keys are exactly the columns the service writes, in the same orde
   assert.deepEqual([...CAMPOS_MI_FICHA], columnas);
   assert.deepEqual([...CAMPOS_MI_FICHA], [
     "puesto", "sector", "ubicacion", "herramientas", "habilidades", "idiomas",
-    "modalidad_trabajo", "anio_inicio", "bio", "linkedin", "github", "correo",
+    "empresa", "empresa_enlace", "modalidad_trabajo", "anio_inicio", "bio",
+    "linkedin", "github", "correo",
   ]);
 });
 
-test("normalizing always returns exactly the twelve card keys", () => {
+test("normalizing always returns exactly the fourteen card keys", () => {
   for (const valores of [valoresValidos(), {}, undefined, null]) {
     assert.deepEqual(Object.keys(normalizarMiFicha(valores)), [...CAMPOS_MI_FICHA]);
   }
@@ -132,6 +135,8 @@ test("normalizing trims texts, trims each tool item and drops the empty ones, pa
     herramientas: [" PostgreSQL ", "Python", "", "  ", " GCP "],
     habilidades: [" ETL ", "", " Modelado de datos"],
     idiomas: ["  Español  ", "   "],
+    empresa: "  Taudux  ",
+    empresa_enlace: "   ",
     modalidad_trabajo: "Híbrido",
     anio_inicio: " 2018 ",
     bio: "\n\n  Primera línea.\nSegunda línea.  \n",
@@ -147,6 +152,8 @@ test("normalizing trims texts, trims each tool item and drops the empty ones, pa
     herramientas: ["PostgreSQL", "Python", "GCP"],
     habilidades: ["ETL", "Modelado de datos"],
     idiomas: ["Español"],
+    empresa: "Taudux",
+    empresa_enlace: null,
     modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Primera línea.\nSegunda línea.",
@@ -172,6 +179,8 @@ test("normalizing an empty form gives empty texts, an empty tools list, no year 
     herramientas: [],
     habilidades: [],
     idiomas: [],
+    empresa: null,
+    empresa_enlace: null,
     modalidad_trabajo: "",
     anio_inicio: null,
     bio: "",
@@ -529,15 +538,114 @@ test("the length limits are the ones each CHECK declares today: 0039 for most fi
   assert.equal(LIMITES_MI_FICHA.correo, hasta("correo"));
 });
 
-test("the link patterns are the 0039 expressions, without the i flag", () => {
+/*
+  Las expresiones de los CHECK, traducidas: la clase POSIX `[:space:]` de
+  Postgres es `\s` en JavaScript. La traducción es un replaceAll y no un
+  replace: con un string, replace sustituye UNA ocurrencia, y la expresión del
+  enlace de empresa tiene DOS clases de no-espacio (una con caracteres extra
+  adentro). Con el replace de antes, el segundo `[:space:]` quedaba sin
+  traducir y el assert fallaba por algo que estaba bien.
+*/
+test("the link patterns are the ones each CHECK declares, without the i flag", () => {
+  const deLaBase = (campo, fuente, nombreFuente) => {
+    const encontrado = fuente.match(new RegExp(`${campo} ~ '([^']+)'`));
+    assert.ok(encontrado, `no se encontró la expresión de ${campo} en la ${nombreFuente}`);
+    return encontrado[1].replaceAll("[:space:]", "\\s");
+  };
+
+  // En el `source` de JS la barra va escapada; en el SQL, no.
+  const comoSql = (patron) => patron.source.replace(/\\\//g, "/");
+
   for (const campo of ["linkedin", "github", "correo"]) {
-    const encontrado = SQL.match(new RegExp(`${campo} ~ '([^']+)'`));
-    assert.ok(encontrado, `no se encontró la expresión de ${campo} en la 0039`);
-    // Allá `[^[:space:]]`, acá `[^\s]`; en el `source` de JS la barra va escapada.
-    const deLaBase = encontrado[1].replace("[^[:space:]]", "[^\\s]");
     const patron = PATRONES_ENLACE_MI_FICHA[campo];
-    assert.equal(patron.source.replace(/\\\//g, "/"), deLaBase, campo);
+    assert.equal(comoSql(patron), deLaBase(campo, SQL, "0039"), campo);
     assert.equal(patron.flags, "", `${campo}: el ~ de la base distingue mayúsculas`);
+  }
+
+  const empresaEnlace = PATRONES_ENLACE_MI_FICHA.empresa_enlace;
+  assert.equal(comoSql(empresaEnlace), deLaBase("empresa_enlace", SQL_0041, "0041"));
+  assert.equal(empresaEnlace.flags, "", "empresa_enlace: el ~ de la base distingue mayúsculas");
+});
+
+/*
+  Lo que el enlace de la empresa tiene que rechazar, y por qué: este texto
+  sale de datos y termina en un href del perfil público.
+*/
+test("the company link only accepts https with a dotted authority", () => {
+  const patron = PATRONES_ENLACE_MI_FICHA.empresa_enlace;
+  for (const bueno of [
+    "https://taudux.com",
+    "https://www.taudux.com/nosotros",
+    "https://taudux.com/equipo?de=perfil#ancla",
+  ]) {
+    assert.equal(patron.test(bueno), true, bueno);
+  }
+  for (const malo of [
+    "javascript:alert(1)",          // la razón de que haya lista blanca
+    "http://taudux.com",            // sin cifrar
+    "//taudux.com",                 // sin esquema
+    "https://intranet",             // sin punto: no es un destino público
+    "https://taudux .com",          // con espacio
+    "HTTPS://TAUDUX.COM",           // el ~ de la base distingue mayúsculas
+    "data:text/html,<script>",
+  ]) {
+    assert.equal(patron.test(malo), false, malo);
+  }
+});
+
+/*
+  La asimetría del CHECK fichas_colaborador_empresa_enlace_con_nombre: un
+  nombre sin enlace es un estado útil (se muestra como texto plano), pero un
+  enlace sin nombre quedaría guardado e invisible para siempre, porque sin
+  nombre la fila del perfil no aparece.
+*/
+test("the company link needs a company name, but not the other way round", () => {
+  assert.equal(erroresDe(valoresValidos({ empresa: "Taudux", empresa_enlace: "" })).empresa_enlace, undefined);
+  assert.equal(erroresDe(valoresValidos({ empresa: "", empresa_enlace: "" })).empresa_enlace, undefined);
+
+  assert.equal(
+    erroresDe(valoresValidos({ empresa: "", empresa_enlace: "https://taudux.com" })).empresa_enlace,
+    "Escribe el nombre de la empresa para poder enlazarla.",
+  );
+  // El cruzado gana al formato: de nada sirve decir "el enlace está mal" de un
+  // enlace que igual no se podría pintar.
+  assert.equal(
+    erroresDe(valoresValidos({ empresa: "   ", empresa_enlace: "javascript:alert(1)" })).empresa_enlace,
+    "Escribe el nombre de la empresa para poder enlazarla.",
+  );
+});
+
+test("the company name is optional, but when present it follows the 0041 rules", () => {
+  assert.equal(erroresDe(valoresValidos({ empresa: "" })).empresa, undefined, "vacía es válida");
+  assert.equal(erroresDe(valoresValidos({ empresa: "   " })).empresa, undefined, "en blanco también");
+
+  assert.equal(
+    erroresDe(valoresValidos({ empresa: "T" })).empresa,
+    "El nombre de la empresa debe tener entre 2 y 80 caracteres.",
+  );
+  assert.equal(
+    erroresDe(valoresValidos({ empresa: "T".repeat(81) })).empresa,
+    "El nombre de la empresa debe tener entre 2 y 80 caracteres.",
+  );
+  for (const bidi of BIDI) {
+    assert.equal(
+      erroresDe(valoresValidos({ empresa: `Taudux${bidi}` })).empresa,
+      "El nombre de la empresa tiene caracteres no permitidos.",
+      JSON.stringify(bidi),
+    );
+  }
+});
+
+/*
+  Las dos columnas nuevas son nullable: la ausencia se escribe null y NUNCA
+  "", que es lo que el CHECK de la 0041 rechaza (char_length 0 no entra en el
+  rango, pero un CHECK con null da `unknown` y pasa).
+*/
+test("an absent company is normalized to null, never to an empty string", () => {
+  for (const vacio of ["", "   ", undefined, null]) {
+    const ficha = normalizarMiFicha(valoresValidos({ empresa: vacio, empresa_enlace: vacio }));
+    assert.equal(ficha.empresa, null, JSON.stringify(vacio));
+    assert.equal(ficha.empresa_enlace, null, JSON.stringify(vacio));
   }
 });
 
@@ -567,6 +675,9 @@ test("error messages speak in tuteo, never voseo", () => {
     // Vacías no fallarían: son opcionales. El motivo tiene que salir del
     // contenido, no de la cantidad.
     habilidades: ["‮"], idiomas: ["‮"],
+    // Ídem: opcionales, así que el motivo sale del contenido. El enlace falla
+    // por formato y no por el cruzado, porque acá sí hay nombre de empresa.
+    empresa: "‮", empresa_enlace: "x",
     anio_inicio: "abc", bio: "", linkedin: "x", github: "x", correo: "x",
   }, ANIO);
   assert.equal(errores.length, CAMPOS_MI_FICHA.length, "premisa: todos los campos fallan");
@@ -592,6 +703,8 @@ test("a saved card becomes form values: texts as is, tools as a copied array, ye
     herramientas: guardadas.herramientas,
     habilidades: guardadas.habilidades,
     idiomas: guardadas.idiomas,
+    empresa: "Taudux",
+    empresa_enlace: null,
     modalidad_trabajo: "Remoto",
     anio_inicio: 2018,
     bio: "Primera.\nSegunda.",
@@ -607,6 +720,9 @@ test("a saved card becomes form values: texts as is, tools as a copied array, ye
     herramientas: ["PostgreSQL", "Python", "GCP"],
     habilidades: ["Modelado de datos", "ETL"],
     idiomas: ["Español"],
+    empresa: "Taudux",
+    // Un enlace ausente llega como null y el formulario lo muestra vacío.
+    empresa_enlace: "",
     modalidad_trabajo: "Remoto",
     anio_inicio: "2018",
     bio: "Primera.\nSegunda.",

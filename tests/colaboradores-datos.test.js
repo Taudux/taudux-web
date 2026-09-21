@@ -182,6 +182,14 @@ test("a single missing, blank or unknown field is enough to have no profile", ()
     }
   }
 
+  // La empresa y su enlace, igual: opcionales en la 0041 y fuera de
+  // tienePerfil(). Sin nombre, el perfil abre y su celda no aparece.
+  for (const campo of ["empresa", "empresa_enlace"]) {
+    for (const valor of [undefined, null, "", "   ", 7]) {
+      assert.equal(tienePerfil({ ...base, [campo]: valor }), true, `${campo} = ${JSON.stringify(valor)}`);
+    }
+  }
+
   for (const modalidad_trabajo of [undefined, null, "", "Ocupado", "remoto", " Remoto"]) {
     assert.equal(tienePerfil({ ...base, modalidad_trabajo }), false, `modalidad_trabajo = ${JSON.stringify(modalidad_trabajo)}`);
   }

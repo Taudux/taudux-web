@@ -64,6 +64,8 @@
       perfilEnlaces: porId("perfilEnlaces"),
       perfilNombre: porId("perfilNombre"),
       perfilPuesto: porId("perfilPuesto"),
+      perfilEmpresa: porId("perfilEmpresa"),
+      perfilEmpresaCelda: porId("perfilEmpresaCelda"),
       perfilSector: porId("perfilSector"),
       perfilUbicacion: porId("perfilUbicacion"),
       perfilExperiencia: porId("perfilExperiencia"),
@@ -486,6 +488,7 @@
       escribir(el.perfilInicial, inicialDe(ficha));
       escribir(el.perfilNombre, ficha.nombre);
       escribir(el.perfilPuesto, ficha.puesto);
+      pintarEmpresa(ficha);
       escribir(el.perfilSector, ficha.sector);
       escribir(el.perfilUbicacion, ficha.ubicacion);
       // La base guarda el año de inicio; los años se cuentan al pintar.
@@ -529,6 +532,42 @@
       }));
       lista.hidden = elementos.length === 0;
       if (celda) celda.hidden = elementos.length === 0;
+    }
+
+    /*
+      La empresa: con enlace válido el nombre es clicable, sin enlace queda
+      como texto plano, y sin nombre se oculta la celda entera (si no, quedaría
+      "EMPRESA" en versalitas sobre el vacío).
+
+      Quién decide es empresaDelPerfil(), en la capa pura: el href sale de
+      datos y pasa por lista blanca ANTES de tocar el DOM. Acá no se vuelve a
+      mirar el texto del enlace — si esta función empezara a decidir por su
+      cuenta, habría dos criterios y uno de los dos se quedaría viejo.
+
+      `target="_blank"` con `rel="noopener noreferrer"`, los dos y siempre,
+      como el resto de los enlaces externos de la app.
+
+      El contenido se REEMPLAZA siempre, nunca con escribir(): esa se salta la
+      escritura cuando el texto no cambió, y una empresa que se llama igual
+      que la del perfil anterior pero perdió su enlace dejaría el <a> viejo
+      pegado, apuntando a otro sitio.
+    */
+    function anclaDeEmpresa({ nombre, href }) {
+      const ancla = document.createElement("a");
+      ancla.className = "colaboradores__enlace-empresa";
+      ancla.href = href;
+      ancla.target = "_blank";
+      ancla.rel = "noopener noreferrer";
+      ancla.textContent = nombre;
+      return ancla;
+    }
+
+    function pintarEmpresa(ficha) {
+      const empresa = empresaDelPerfil(ficha);
+      el.perfilEmpresaCelda.hidden = !empresa;
+      if (!empresa) { el.perfilEmpresa.replaceChildren(); return; }
+
+      el.perfilEmpresa.replaceChildren(empresa.href ? anclaDeEmpresa(empresa) : document.createTextNode(empresa.nombre));
     }
 
     // La lista queda `hidden` si no hay ninguno: una <ul> vacía igual ocupa su

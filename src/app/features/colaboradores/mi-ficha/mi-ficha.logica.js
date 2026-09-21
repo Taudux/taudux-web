@@ -25,6 +25,8 @@ const CAMPOS_MI_FICHA = Object.freeze([
   "herramientas",
   "habilidades",
   "idiomas",
+  "empresa",
+  "empresa_enlace",
   "modalidad_trabajo",
   "anio_inicio",
   "bio",
@@ -52,11 +54,13 @@ const LIMITES_MI_FICHA = Object.freeze({
   sector: Object.freeze({ min: 2, max: 80 }),
   ubicacion: Object.freeze({ min: 2, max: 80 }),
   bio: Object.freeze({ min: 10, max: 240 }),
+  empresa: Object.freeze({ min: 2, max: 80 }),
   herramientas: Object.freeze({ min: 1, max: 12 }),
   habilidades: Object.freeze({ min: 0, max: 12 }),
   idiomas: Object.freeze({ min: 0, max: 12 }),
   etiqueta: Object.freeze({ min: 1, max: 40 }),
   anio_inicio: Object.freeze({ min: 1950, max: 2100 }),
+  empresa_enlace: 200,
   linkedin: 200,
   github: 200,
   correo: 254,
@@ -68,6 +72,15 @@ const LIMITES_MI_FICHA = Object.freeze({
   la bandera `i`, igual que el `~` de la base.
 */
 const PATRONES_ENLACE_MI_FICHA = Object.freeze({
+  /*
+    El de `fichas_colaborador_empresa_enlace_valido` (0041). A diferencia de
+    linkedin y github, acá NO se fija el host: la empresa vive donde vive. Lo
+    que se fija es el esquema —https y nada más, porque este texto termina en
+    un href y un `javascript:` ahí sería una puerta abierta— y que la
+    autoridad tenga un punto, para que "https://intranet" no se guarde como
+    enlace público.
+  */
+  empresa_enlace: /^https:\/\/[^\s\/?#]+\.[^\s\/?#]+([\/?#][^\s]*)?$/,
   linkedin: /^https:\/\/([a-z0-9-]+\.)?linkedin\.com\/[^\s]+$/,
   github: /^https:\/\/(www\.)?github\.com\/[^\s]+$/,
   correo: /^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
@@ -126,6 +139,22 @@ const MENSAJES_MI_FICHA = Object.freeze({
     muchas: "Escribe como máximo 12 idiomas.",
     largo: "Cada idioma puede tener hasta 40 caracteres.",
     caracteres: "Algún idioma tiene caracteres no permitidos.",
+  }),
+  /*
+    Empresa y su enlace son opcionales y por eso tampoco tienen `vacio`. El
+    cruzado va del lado del enlace: un nombre sin enlace es un estado útil —se
+    muestra como texto plano—, pero un enlace sin nombre no se puede pintar
+    (sin nombre la fila no aparece) y quedaría guardado e invisible. Es la
+    misma asimetría del CHECK fichas_colaborador_empresa_enlace_con_nombre.
+  */
+  empresa: Object.freeze({
+    largo: "El nombre de la empresa debe tener entre 2 y 80 caracteres.",
+    caracteres: "El nombre de la empresa tiene caracteres no permitidos.",
+  }),
+  empresa_enlace: Object.freeze({
+    formato: "Usa un enlace https, por ejemplo https://tuempresa.com.",
+    largo: "El enlace de la empresa puede tener hasta 200 caracteres.",
+    sinEmpresa: "Escribe el nombre de la empresa para poder enlazarla.",
   }),
   modalidad_trabajo: "Elige tu modalidad de trabajo.",
   anio_inicio: Object.freeze({
@@ -204,6 +233,11 @@ function normalizarMiFicha(valores) {
     herramientas: normalizarEtiquetasMiFicha(origen.herramientas),
     habilidades: normalizarEtiquetasMiFicha(origen.habilidades),
     idiomas: normalizarEtiquetasMiFicha(origen.idiomas),
+    // La ausencia de empresa se escribe null, nunca "": el CHECK de la 0041
+    // deja pasar el nulo (un CHECK con null da `unknown`) y rechaza la cadena
+    // vacía, así que dos maneras de decir "ninguna" sólo traerían problemas.
+    empresa: enlaceMiFicha(origen.empresa),
+    empresa_enlace: enlaceMiFicha(origen.empresa_enlace),
     modalidad_trabajo: textoMiFicha(origen.modalidad_trabajo),
     anio_inicio: anioMiFicha(origen.anio_inicio),
     bio: textoMiFicha(origen.bio),
@@ -261,6 +295,34 @@ function errorDeListaDeEtiquetasMiFicha(campo, lista) {
   return null;
 }
 
+/*
+  Un texto OPCIONAL ya normalizado: null es válido. Cuando hay algo, se juzga
+  con las mismas reglas que un obligatorio, menos la de estar presente.
+*/
+function errorDeTextoOpcionalMiFicha(campo, valor) {
+  if (valor === null) return null;
+  const mensajes = MENSAJES_MI_FICHA[campo];
+  const { min, max } = LIMITES_MI_FICHA[campo];
+  if (tieneCaracteresProhibidosMiFicha(valor)) return mensajes.caracteres;
+  const largo = largoMiFicha(valor);
+  if (largo < min || largo > max) return mensajes.largo;
+  return null;
+}
+
+/*
+  El enlace de la empresa: el único campo de la ficha con validación CRUZADA.
+  El orden importa — primero se revisa que haya nombre, porque de nada sirve
+  decir "el formato está mal" de un enlace que igual no se podría pintar.
+*/
+function errorDeEnlaceDeEmpresaMiFicha(enlace, empresa) {
+  if (enlace === null) return null;
+  const mensajes = MENSAJES_MI_FICHA.empresa_enlace;
+  if (empresa === null) return mensajes.sinEmpresa;
+  if (!PATRONES_ENLACE_MI_FICHA.empresa_enlace.test(enlace)) return mensajes.formato;
+  if (largoMiFicha(enlace) > LIMITES_MI_FICHA.empresa_enlace) return mensajes.largo;
+  return null;
+}
+
 // El tope es el año en curso, que entra como argumento para que esto sea puro:
 // la página le pasa el del reloj y los tests, uno fijo. Nunca pasa del máximo
 // de la base, que es fijo para que un respaldo restaurado siga siendo válido.
@@ -300,6 +362,8 @@ function validarMiFicha(valores, anioActual) {
     herramientas: errorDeListaDeEtiquetasMiFicha("herramientas", ficha.herramientas),
     habilidades: errorDeListaDeEtiquetasMiFicha("habilidades", ficha.habilidades),
     idiomas: errorDeListaDeEtiquetasMiFicha("idiomas", ficha.idiomas),
+    empresa: errorDeTextoOpcionalMiFicha("empresa", ficha.empresa),
+    empresa_enlace: errorDeEnlaceDeEmpresaMiFicha(ficha.empresa_enlace, ficha.empresa),
     modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(ficha.modalidad_trabajo) ? null : MENSAJES_MI_FICHA.modalidad_trabajo,
     anio_inicio: errorDeAnioMiFicha(origen.anio_inicio, ficha.anio_inicio, anioActual),
     bio: errorDeTextoMiFicha("bio", ficha.bio, { conSaltos: true }),
@@ -331,6 +395,8 @@ function valoresFormularioMiFicha(ficha) {
     herramientas: Array.isArray(origen.herramientas) ? [...origen.herramientas] : [],
     habilidades: Array.isArray(origen.habilidades) ? [...origen.habilidades] : [],
     idiomas: Array.isArray(origen.idiomas) ? [...origen.idiomas] : [],
+    empresa: texto(origen.empresa),
+    empresa_enlace: texto(origen.empresa_enlace),
     modalidad_trabajo: MODALIDADES_TRABAJO_MI_FICHA.includes(origen.modalidad_trabajo) ? origen.modalidad_trabajo : "",
     anio_inicio: Number.isInteger(origen.anio_inicio) ? String(origen.anio_inicio) : "",
     bio: texto(origen.bio),

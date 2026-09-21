@@ -17,10 +17,11 @@
   Sin clase, atributos ni proyectos: la página los retiró (2026-09-19) y una
   ficha que todavía los trajera escondería que tienePerfil() ya no los pide.
 
-  Las tres primeras estrenan habilidades e idiomas y el resto los deja
-  vacíos: son opcionales (0041, `between 0 and 12`), no entran en
-  tienePerfil() y con la lista vacía el perfil oculta su celda ENTERA. Hace
-  falta tener de los dos casos.
+  Las tres primeras estrenan habilidades, idiomas y empresa; el resto los
+  deja vacíos o en null. Todos son opcionales (0041), ninguno entra en
+  tienePerfil() y vacíos ocultan su celda ENTERA en el perfil: hace falta
+  tener de los dos casos. La primera trae además el enlace de la empresa, que
+  es lo que hace su nombre clicable.
 
   Congeladas a fondo, sus tres listas de etiquetas incluidas: un test que quiera retocar una ficha
   trabaja sobre structuredClone(COLABORADORES_MUESTRA). Un Object.assign o un
@@ -36,6 +37,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Arquitectura de datos", sector: "Data warehousing", ubicacion: "Querétaro, MX",
     herramientas: ["PostgreSQL", "Python", "GCP"], modalidad_trabajo: "Remoto", anio_inicio: 2018,
     habilidades: ["Modelado de datos", "ETL"], idiomas: ["Español", "Inglés"],
+    empresa: "Taudux", empresa_enlace: "https://taudux.com",
     bio: "Diseña pipelines y modelos de datos que aguantan crecimiento. Convierte tablas desordenadas en decisiones.",
     linkedin: null, github: null, correo: null,
   },
@@ -44,6 +46,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Backend & APIs", sector: "Sistemas distribuidos", ubicacion: "CDMX, MX",
     herramientas: ["Node.js", "Docker", "AWS"], modalidad_trabajo: "Presencial", anio_inicio: 2016,
     habilidades: ["Microservicios"], idiomas: ["Español"],
+    empresa: "Nube Verde", empresa_enlace: null,
     bio: "Servicios estables bajo carga. Si el sistema no se cae, probablemente él lo construyó.",
     linkedin: null, github: null, correo: null,
   },
@@ -52,6 +55,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Frontend & UX", sector: "Design systems", ubicacion: "Guadalajara, MX",
     herramientas: ["HTML/CSS", "JavaScript", "Figma"], modalidad_trabajo: "Híbrido", anio_inicio: 2020,
     habilidades: [], idiomas: ["Español", "Inglés", "Portugués"],
+    empresa: "Estudio Mena", empresa_enlace: null,
     bio: "Interfaces rápidas que la gente entiende sin manual. Detalle obsesivo en animación y accesibilidad.",
     linkedin: null, github: null, correo: null,
   },
@@ -60,6 +64,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Modelos de IA", sector: "ML aplicado", ubicacion: "Querétaro, MX",
     herramientas: ["Python", "R", "Vertex AI"], modalidad_trabajo: "Remoto", anio_inicio: 2019,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Predicción de demanda, clasificación, LLMs aplicados. Traduce el negocio a features y las features a resultados.",
     linkedin: null, github: "https://github.com/ejemplo-ivan-torres", correo: null,
   },
@@ -68,6 +73,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Cloud & DevOps", sector: "IaC y observabilidad", ubicacion: "Monterrey, MX",
     herramientas: ["Docker", "Git", "AWS"], modalidad_trabajo: "Presencial", anio_inicio: 2017,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Infraestructura como código, despliegues sin sustos y facturas de nube que sí cierran.",
     linkedin: null, github: null, correo: null,
   },
@@ -76,6 +82,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Capacitación técnica", sector: "Formación técnica", ubicacion: "Querétaro, MX",
     herramientas: ["Python", "SQL", "Docencia"], modalidad_trabajo: "Híbrido", anio_inicio: 2014,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Cursos y talleres para equipos que quieren dejar de depender de terceros. Explica lo difícil sin simplificarlo de más.",
     linkedin: null, github: null, correo: null,
   },
@@ -84,6 +91,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Analítica de negocio", sector: "BI y forecasting", ubicacion: "Puebla, MX",
     herramientas: ["Power BI", "SQL", "Python"], modalidad_trabajo: "Remoto", anio_inicio: 2020,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Tableros que responden preguntas, no que las generan. KPIs, forecasting y storytelling con datos.",
     linkedin: "https://www.linkedin.com/in/ejemplo-camila-ruiz", github: null, correo: "camila@example.com",
   },
@@ -92,6 +100,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Apps móviles", sector: "Apps nativas", ubicacion: "CDMX, MX",
     herramientas: ["Java", "C++", "APIs"], modalidad_trabajo: "Presencial", anio_inicio: 2021,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Del prototipo a la tienda. Apps que se sienten nativas y hablan con el backend sin fricción.",
     linkedin: null, github: null, correo: null,
   },
@@ -100,6 +109,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "QA & Automatización", sector: "Testing automatizado", ubicacion: "León, MX",
     herramientas: ["Cypress", "Jest", "CI/CD"], modalidad_trabajo: "Híbrido", anio_inicio: 2019,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Pruebas que atrapan el bug antes que el cliente. Pipelines de CI que no dejan pasar nada roto.",
     linkedin: null, github: null, correo: null,
   },
@@ -108,6 +118,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Gestión de proyectos", sector: "Delivery ágil", ubicacion: "Querétaro, MX",
     herramientas: ["Scrum", "Jira", "Notion"], modalidad_trabajo: "Remoto", anio_inicio: 2015,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Alcance claro, entregas a tiempo y cero sorpresas. Traduce entre negocio y equipo técnico.",
     linkedin: null, github: null, correo: null,
   },
@@ -116,6 +127,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Ciencia de datos", sector: "Estadística aplicada", ubicacion: "Mérida, MX",
     herramientas: ["Python", "R", "SQL"], modalidad_trabajo: "Presencial", anio_inicio: 2020,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Estadística aplicada, experimentos A/B y modelos que explican por qué, no solo qué.",
     linkedin: null, github: null, correo: null,
   },
@@ -124,6 +136,7 @@ const COLABORADORES_MUESTRA = [
     puesto: "Seguridad", sector: "Ciberseguridad", ubicacion: "CDMX, MX",
     herramientas: ["Pentesting", "SIEM", "IAM"], modalidad_trabajo: "Híbrido", anio_inicio: 2017,
     habilidades: [], idiomas: [],
+    empresa: null, empresa_enlace: null,
     bio: "Auditorías, hardening y respuesta a incidentes. Que lo tuyo siga siendo tuyo.",
     linkedin: "https://mx.linkedin.com/in/ejemplo-jorge-castillo",
     github: "https://github.com/ejemplo-jorge-castillo",

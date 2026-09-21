@@ -49,7 +49,7 @@ const PERFIL = Object.freeze({
 });
 const NO_COLABORADOR = Object.freeze({ ...PERFIL, es_colaborador: false, slug: null });
 
-// Una ficha como la devuelve obtenerMiFicha(): las doce columnas.
+// Una ficha como la devuelve obtenerMiFicha(): las catorce columnas.
 const FICHA = Object.freeze({
   puesto: "Desarrolladora backend",
   sector: "Bases de datos",
@@ -57,6 +57,8 @@ const FICHA = Object.freeze({
   herramientas: Object.freeze(["PostgreSQL", "Python", "GCP"]),
   habilidades: Object.freeze(["Modelado de datos", "ETL"]),
   idiomas: Object.freeze(["Español", "Inglés"]),
+  empresa: "Taudux",
+  empresa_enlace: "https://taudux.com",
   modalidad_trabajo: "Híbrido",
   anio_inicio: 2018,
   bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -77,6 +79,8 @@ const ID_DE = Object.freeze({
   herramientas: "miFichaHerramientas",
   habilidades: "miFichaHabilidades",
   idiomas: "miFichaIdiomas",
+  empresa: "miFichaEmpresa",
+  empresa_enlace: "miFichaEmpresaEnlace",
   anio_inicio: "miFichaAnioInicio",
   bio: "miFichaBio",
   linkedin: "miFichaLinkedin",
@@ -560,6 +564,8 @@ const VALORES_VALIDOS = Object.freeze({
   herramientas: Object.freeze(["PostgreSQL", "Python", "GCP"]),
   habilidades: Object.freeze(["Modelado de datos", "ETL"]),
   idiomas: Object.freeze(["Español", "Inglés"]),
+  empresa: "Taudux",
+  empresa_enlace: "https://taudux.com",
   modalidad_trabajo: "Híbrido",
   anio_inicio: "2018",
   bio: "\nDiseño esquemas y migraciones.\nMe gusta que los datos cuadren.\n",
@@ -752,6 +758,8 @@ test("a collaborator with a card gets it prefilled, with the tools shown as tags
     herramientas: ["PostgreSQL", "Python", "GCP"],
     habilidades: ["Modelado de datos", "ETL"],
     idiomas: ["Español", "Inglés"],
+    empresa: "Taudux",
+    empresa_enlace: "https://taudux.com",
     modalidad_trabajo: "Híbrido",
     anio_inicio: "2018",
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -850,6 +858,8 @@ test("a valid submit sends the exact normalized card, toasts, and offers the pub
     herramientas: ["PostgreSQL", "Python", "GCP"],
     habilidades: ["Modelado de datos", "ETL"],
     idiomas: ["Español", "Inglés"],
+    empresa: "Taudux",
+    empresa_enlace: "https://taudux.com",
     modalidad_trabajo: "Híbrido",
     anio_inicio: 2018,
     bio: "Diseño esquemas y migraciones.\nMe gusta que los datos cuadren.",
@@ -1388,5 +1398,83 @@ test("two open listboxes point at option ids of their own, never at each other's
   for (const [indice, campo] of LISTAS_DE_ETIQUETAS.entries()) {
     const opciones = pagina.porId(`${ID_DE[campo]}Opciones`).children;
     assert.deepEqual(opciones.map((opcion) => opcion.attributes.id), [activos[indice]], campo);
+  }
+});
+
+/* ---------- Empresa y su enlace ---------- */
+
+/*
+  El único error CRUZADO del formulario: el enlace se marca por un valor que
+  no está en él, sino en el campo de al lado. Se marca en el enlace y no en la
+  empresa porque el enlace es el que sobra — quien no quiere poner empresa
+  tiene que poder guardar, y el que estorba es el enlace huérfano.
+*/
+test("a company link without a company name marks the link, not the name", async () => {
+  const pagina = await cargarPagina();
+  llenar(pagina, { ...VALORES_VALIDOS, empresa: "", empresa_enlace: "https://taudux.com" });
+
+  await pagina.enviar();
+
+  assert.equal(pagina.texto("miFichaEmpresaEnlaceError"), "Escribe el nombre de la empresa para poder enlazarla.");
+  assert.equal(pagina.porId("miFichaEmpresaError").hidden, true, "el nombre vacío no es un error: es opcional");
+  assert.equal(pagina.guardarMiFicha.llamadas.length, 0);
+  assertFocoEn(pagina, "miFichaEmpresaEnlace");
+});
+
+// Escribir el nombre desbloquea el envío sin tocar el enlace: el error se
+// arregla desde el OTRO campo.
+test("writing the company name fixes the link error without touching the link", async () => {
+  const pagina = await cargarPagina();
+  llenar(pagina, { ...VALORES_VALIDOS, empresa: "", empresa_enlace: "https://taudux.com" });
+  await pagina.enviar();
+
+  pagina.escribir("empresa", "Taudux");
+  await pagina.enviar();
+
+  assert.equal(pagina.guardarMiFicha.llamadas.length, 1);
+  const [, ficha] = pagina.guardarMiFicha.llamadas[0];
+  assert.equal(ficha.empresa, "Taudux");
+  assert.equal(ficha.empresa_enlace, "https://taudux.com");
+});
+
+/*
+  Los dos son opcionales y su ausencia viaja como null, nunca como "": el
+  CHECK de la 0041 deja pasar el nulo y rechaza la cadena vacía.
+*/
+test("a card saves with no company at all, and the absence travels as null", async () => {
+  const pagina = await cargarPagina();
+  llenar(pagina, { ...VALORES_VALIDOS, empresa: "", empresa_enlace: "" });
+
+  await pagina.enviar();
+
+  assert.equal(pagina.guardarMiFicha.llamadas.length, 1);
+  const [, ficha] = pagina.guardarMiFicha.llamadas[0];
+  assert.equal(ficha.empresa, null);
+  assert.equal(ficha.empresa_enlace, null);
+});
+
+// El nombre sin enlace es un estado útil: se guarda y el perfil lo muestra
+// como texto plano.
+test("a company name without a link is a valid card", async () => {
+  const pagina = await cargarPagina();
+  llenar(pagina, { ...VALORES_VALIDOS, empresa: "  Taudux  ", empresa_enlace: "" });
+
+  await pagina.enviar();
+
+  const [, ficha] = pagina.guardarMiFicha.llamadas[0];
+  assert.equal(ficha.empresa, "Taudux", "el nombre se recorta como cualquier otro texto");
+  assert.equal(ficha.empresa_enlace, null);
+});
+
+// Un enlace que la base rechazaría se avisa acá, antes de enviarlo.
+test("a company link the database would reject is caught before sending", async () => {
+  for (const malo of ["javascript:alert(1)", "http://taudux.com", "https://intranet"]) {
+    const pagina = await cargarPagina();
+    llenar(pagina, { ...VALORES_VALIDOS, empresa: "Taudux", empresa_enlace: malo });
+
+    await pagina.enviar();
+
+    assert.equal(pagina.texto("miFichaEmpresaEnlaceError"), "Usa un enlace https, por ejemplo https://tuempresa.com.", malo);
+    assert.equal(pagina.guardarMiFicha.llamadas.length, 0, malo);
   }
 });

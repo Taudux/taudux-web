@@ -24,6 +24,8 @@ const COLUMNAS_MI_FICHA = Object.freeze([
   "herramientas",
   "habilidades",
   "idiomas",
+  "empresa",
+  "empresa_enlace",
   "modalidad_trabajo",
   "anio_inicio",
   "bio",
