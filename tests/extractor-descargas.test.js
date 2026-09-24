@@ -237,6 +237,48 @@ test("the page gives the quota counter a handle to hide it by", () => {
                "el atributo `hidden` necesita su regla o no hace nada");
 });
 
+/* ------------------------------------------------------------------------
+ * El atajo al panel de administración.
+ *
+ * Vivió en el menú de cuenta de todo el sitio desde el 2026-08-20. Volvió a
+ * esta página el 2026-09-24 como la píldora "⚙ Administración", centrada sobre la
+ * barra: es el panel del extractor y se siente parte de él, no del sitio.
+ * ------------------------------------------------------------------------ */
+
+test("the page carries the admin shortcut, hidden until the server says so", () => {
+  const pagina = read(PAGINA);
+  const inicio = pagina.indexOf('id="enlaceAdmin"');
+  assert.notEqual(inicio, -1, "la página debe tener el atajo al panel");
+  const etiqueta = pagina.slice(pagina.lastIndexOf("<a", inicio), pagina.indexOf(">", inicio) + 1);
+
+  // Con `.html`: sin la extensión sólo la resuelve `cleanUrls` de Vercel y en
+  // local da 404 (F39).
+  assert.match(etiqueta, /href="\/app\/features\/transactions\/admin\.html"/);
+  // Nace oculto: si `/api/cuota` falla o tarda, se ve de menos y nunca de más.
+  assert.match(etiqueta, /\shidden[\s>]/, "sin `hidden` se le anuncia a cualquiera antes de saber");
+  // El nombre accesible CONTIENE el texto visible ("Administración"): quien
+  // maneja la página por voz dice lo que ve, y el enlace responde.
+  assert.match(etiqueta, /aria-label="Panel de administración"/);
+});
+
+test("the admin shortcut is revealed by the server's es_admin and nothing else", () => {
+  const js = codigo();
+  const inicio = js.indexOf("function actualizarCuota(");
+  const cuerpo = js.slice(inicio, js.indexOf("\n}", inicio));
+
+  // `cuota.es_admin` lo resuelve el servidor leyendo `perfiles.rol`: el front
+  // no deduce el rol por su cuenta.
+  assert.match(cuerpo, /enlaceAdmin[\s\S]*?hidden\s*=\s*!cuota\.es_admin/,
+               "actualizarCuota() debe gobernar el atajo con cuota.es_admin");
+});
+
+test("the admin shortcut's display does not defeat its hidden attribute", () => {
+  // `.admin-atajo` declara `display: inline-flex`, que le gana al `[hidden]`
+  // del navegador por ser regla de autor. Mismo tropiezo que `.cuota[hidden]`.
+  assert.match(read(ESTILOS), /\.admin-atajo\[hidden\]/,
+               "sin esta regla el atajo se le mostraría a cualquiera");
+});
+
 test("the disabled download button tells whoever has no account what to do", () => {
   const js = codigo();
   const inicio = js.indexOf("function aplicarBloqueo(");

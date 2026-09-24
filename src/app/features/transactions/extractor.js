@@ -2040,6 +2040,9 @@ function actualizarCuota(cuota) {
   // cuando el servidor manda `limite: null`. Atarla a "anonimo" ya se rompió
   // una vez con un vaivén legítimo del catálogo.
   siExiste("cajaCuota", (n) => { n.hidden = cuota.limite === null; });
+  // El atajo al panel, con la misma bandera que el evento de permanencia de
+  // arriba: el servidor ya resolvió el rol y el front no lo deduce.
+  siExiste("enlaceAdmin", (n) => { n.hidden = !cuota.es_admin; });
 
   // Sólo del simulador: en producción estos tres no existen.
   siExiste("planActual", (n) => { n.textContent = cuota.plan; });

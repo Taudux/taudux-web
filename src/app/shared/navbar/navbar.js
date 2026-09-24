@@ -10,45 +10,14 @@
   dentro del propio panel desplegable, nunca en una navegación a una página
   índice (ver crearAcordeonMenu).
 */
+/*
+  El "Panel de administración" encabezó esta lista del 2026-08-20 al
+  2026-09-24. Ya no está en el menú: vive en la página de transacciones como la
+  píldora "⚙ Administración" (ver `#enlaceAdmin` en features/transactions/), porque
+  administra el extractor y no el sitio. Su ausencia la fija
+  tests/navbar-jerarquia.test.js.
+*/
 const ENLACES_NAVEGACION_BASE = [
-  {
-    /*
-      Encabeza esta lista, y en primer nivel: no es una herramienta más, y a
-      dos clics dentro de "Tools" un admin no lo encontraría. Estuvo al final
-      hasta el 2026-08-20; se movió arriba porque quien lo usa lo usa seguido y
-      no tiene por qué recorrer el menú entero cada vez. Para quien no es admin
-      la entrada no existe (ver filtrarEnlacesVisibles). El orden está fijado en
-      tests/navbar-jerarquia.test.js.
-
-      Encabezar el array NO significa encabezar lo que el usuario ve: este
-      array se renderiza en dos puntos y ninguno lo muestra tal cual.
-      montarPanelNavegacion antepone las anclas de la página y un <hr>, así que
-      en la hamburguesa de una página con anclas el panel va después de ellas;
-      y en el desplegable de cuenta lo precede el nav-menu__header con el
-      nombre del usuario. Encabeza el grupo de enlaces, no el menú.
-
-      Vivía dentro de `features/transactions/extractor.js`, así que sólo existía
-      en esa página: un admin parado en Cursos o en el Portal no tenía cómo
-      llegar al panel desde el menú. Al traerlo acá aparece en todas.
-
-      El criterio de rol NO cambió con la mudanza, aunque lo parezca: el
-      `es_admin` que devolvía el backend del extractor sale de consultar
-      `public.perfiles.rol` (ver `_es_admin()` en extractor/app.py), que es la
-      misma fila que lee esto. Cambia quién pregunta, no la fuente.
-
-      Con una excepción que sólo existe en local: si el extractor corre en modo
-      simulador, `_es_admin()` se resuelve contra un `set` de correos del código
-      en vez de la base. Ahí sí pueden discrepar, y por eso el panel podría
-      aparecer o faltar en local sin que signifique nada sobre producción.
-
-      El `.html` no es decorativo: sin él la URL sólo la resuelve `cleanUrls` de
-      Vercel y el enlace da 404 en local (F39).
-    */
-    texto: "Panel de administración",
-    href: "/app/features/transactions/admin.html",
-    habilitado: true,
-    soloAdmin: true,
-  },
   {
     /*
       `soloSesion` porque el portal es lo único del menú que exige sesión
@@ -73,10 +42,6 @@ const ENLACES_NAVEGACION_BASE = [
       { texto: "Código", href: "/app/features/codigo/", habilitado: true },
     ],
   },
-  // Entrada propia y no un hijo de Academy: es el equipo, no material de
-  // estudio. Va pegada al grupo para quedar justo debajo de "Código" con el
-  // acordeón abierto, y entre Academy y Noticias con el acordeón cerrado.
-  { texto: "Colaboradores", href: "/app/features/colaboradores/", habilitado: true },
   { texto: "Noticias", habilitado: false },
   {
     texto: "Tools",
@@ -97,6 +62,10 @@ const ENLACES_NAVEGACION_BASE = [
     ],
   },
   { texto: "Proyectos", habilitado: false },
+  // Entrada propia y no un hijo de Academy: es el equipo, no material de
+  // estudio. Cierra el menú, justo antes del divisor de "Salir" (desde el
+  // 2026-09-24; antes iba pegada a Academy, debajo de "Código").
+  { texto: "Colaboradores", href: "/app/features/colaboradores/", habilitado: true },
 ];
 
 /*

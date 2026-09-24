@@ -1054,6 +1054,34 @@
     color: var(--color-text-subtle); font-variant-numeric: tabular-nums;
   }
 
+  /* Atajo al panel de administración ("⚙ Administración").
+     Centrado sobre la barra: se ancla a su borde inferior real
+     (--tope-flotante, que publica ajustarTopeFlotante() en extractor.js) y
+     sube medio alto de barra, así sigue centrado aunque la barra del
+     simulador la empuje hacia abajo.
+     z-index un escalón sobre la barra: sin él la tapa. Los desplegables de la
+     barra abren DEBAJO de ella, así que no se encuentran con el atajo. */
+  .admin-atajo {
+    position: fixed; left: 50%;
+    top: calc(var(--tope-flotante, var(--navbar-height)) - var(--navbar-height) / 2);
+    transform: translate(-50%, -50%);
+    z-index: calc(var(--z-navbar) + 1);
+    display: inline-flex; gap: 0.45rem; align-items: center;
+    padding: 0.5rem 0.95rem; white-space: nowrap; text-decoration: none;
+    border: 1px solid var(--color-accent-dark); border-radius: var(--radius-pill);
+    background: rgba(16, 19, 22, 0.92); color: var(--color-text-muted);
+    font-size: 0.78rem;
+    transition: border-color var(--transition-base), color var(--transition-base);
+  }
+  /* `display: inline-flex` le gana al `[hidden]` del navegador. */
+  .admin-atajo[hidden] { display: none; }
+  .admin-atajo:hover, .admin-atajo:focus-visible {
+    border-color: var(--color-accent); color: var(--color-text);
+  }
+  .admin-atajo__texto {
+    letter-spacing: 0.18em; color: var(--color-accent); font-weight: 600;
+  }
+
   /* Feedback */
   /* Errores y comentarios flotantes.
      z-index 1150: por debajo de la pestaña de planes (1200) y su panel (1250),

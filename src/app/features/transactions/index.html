@@ -466,6 +466,21 @@
   </main>
 
   <!--
+    Atajo al panel de administración, centrado sobre la barra. Vive acá y no
+    en el menú de cuenta (donde estuvo del 2026-08-20 al 2026-09-24) porque
+    administra el extractor, no el sitio. Es un hermano de la barra y no un
+    hijo: la barra es de shared/navbar/, y esta página no la toca.
+
+    Nace oculto y lo revela `actualizarCuota()` (extractor.js) sólo si el
+    servidor dice `es_admin`. Esconderlo es cosmética: el candado son los
+    endpoints /api/admin/*.
+  -->
+  <a class="admin-atajo" id="enlaceAdmin" href="/app/features/transactions/admin.html"
+     aria-label="Panel de administración" hidden>
+    <span aria-hidden="true">⚙</span> <strong class="admin-atajo__texto">Administración</strong>
+  </a>
+
+  <!--
     Errores y comentarios acompañan al usuario en toda la página como botones
     flotantes: reportar un problema no puede depender de encontrar una sección
     al fondo. Discretos (una píldora en la esquina), pero siempre a un click.

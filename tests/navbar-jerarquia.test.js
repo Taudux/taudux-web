@@ -82,11 +82,13 @@ test("'Transacciones financieras' under Tools is enabled for everyone and has it
 
 /*
   Colaboradores es una entrada propia, no un hijo de Academy: es el equipo, no
-  material de estudio. Va inmediatamente después del grupo Academy, así que en
-  el menú desplegado queda justo debajo de "Código" y, con Academy cerrado,
-  entre Academy y Noticias. Para todos: sin sesión y sin rol.
+  material de estudio. Para todos: sin sesión y sin rol.
+
+  Cierra el menú, debajo de "Proyectos" y justo antes del divisor de "Salir"
+  (decisión del 2026-09-24). Hasta entonces iba pegada a Academy para quedar
+  debajo de "Código" con el grupo desplegado.
 */
-test("'Colaboradores' sits right after the Academy group, open to everyone, with its own route", () => {
+test("'Colaboradores' closes the menu, right after 'Proyectos', open to everyone, with its own route", () => {
   const { ENLACES_NAVEGACION_BASE } = cargarNavbar();
 
   const posicion = ENLACES_NAVEGACION_BASE.findIndex((enlace) => enlace.texto === "Colaboradores");
@@ -99,9 +101,8 @@ test("'Colaboradores' sits right after the Academy group, open to everyone, with
   assert.equal(entrada.soloAdmin, undefined, "no debe esconderse: es para todos");
   assert.equal(entrada.soloSesion, undefined, "no exige sesión");
 
-  const anterior = ENLACES_NAVEGACION_BASE[posicion - 1];
-  assert.equal(anterior.texto, "Academy", "va justo después de Academy, cuyo último hijo es Código");
-  assert.equal(anterior.hijos.at(-1).texto, "Código", "si Código deja de ser el último hijo, la entrada ya no queda debajo de él");
+  assert.equal(ENLACES_NAVEGACION_BASE[posicion - 1].texto, "Proyectos", "va justo debajo de Proyectos");
+  assert.equal(posicion, ENLACES_NAVEGACION_BASE.length - 1, "es la última entrada, antes del divisor de Salir");
 
   // La página a la que apunta tiene que existir: un enlace del menú a un 404
   // se vería desde todas las páginas del sitio a la vez.
@@ -504,7 +505,17 @@ test("no feature script writes over the navbar's own menu", () => {
   });
 });
 
-test("the admin panel is reachable from every page, not just its own", () => {
+test("the shared menu no longer offers the admin panel; the extractor page does", () => {
+  /*
+    Estuvo en el menú de cuenta de todo el sitio del 2026-08-20 al 2026-09-24,
+    encabezando los enlaces. Se sacó a pedido: el panel administra el
+    extractor, y ahora vive en esa página como la píldora "⚙ Administración" (ver
+    tests/extractor-descargas.test.js). Costo asumido: desde Cursos o el Portal
+    ya no se llega por el menú.
+
+    Se fija la ausencia para que nadie la devuelva al menú sin decidirlo: el
+    array es un literal y agregar una entrada no rompe nada por sí solo.
+  */
   const { ENLACES_NAVEGACION_BASE, filtrarEnlacesVisibles } = cargarNavbar();
 
   // Aplanar y buscar son dos pasos: mezclarlos hace que la recursión devuelva
@@ -512,63 +523,16 @@ test("the admin panel is reachable from every page, not just its own", () => {
   // array.
   const aplanar = (enlaces) =>
     enlaces.flatMap((enlace) => (enlace.hijos ? aplanar(enlace.hijos) : [enlace]));
-  const buscar = (enlaces) =>
-    aplanar(enlaces).find((enlace) => /administraci/i.test(enlace.texto || ""));
+  const lleva = (enlace) =>
+    /administraci/i.test(enlace.texto || "") || /admin\.html/.test(enlace.href || "");
 
-  const panel = buscar(ENLACES_NAVEGACION_BASE);
-  assert.ok(
-    panel,
-    "el panel de administración debe vivir en el navbar compartido: mientras " +
-    "estuvo dentro de features/transactions/, un admin parado en Cursos no " +
-    "tenía cómo llegar a él desde el menú"
-  );
-  // Con la extensión, como cursos.html y detector.html. Sin ella la URL sólo la
-  // resuelve `cleanUrls` de Vercel: abría en el deploy y daba 404 en local.
-  assert.equal(panel.href, "/app/features/transactions/admin.html");
-  assert.equal(panel.habilitado, true);
+  assert.ok(!aplanar(ENLACES_NAVEGACION_BASE).some(lleva),
+    "el menú compartido no debe ofrecer el panel de administración");
 
-  // Es cosmética, no control de acceso: el candado son los endpoints
-  // /api/admin/*. Pero anunciarle el panel a quien no es admin sólo confunde.
-  assert.equal(panel.soloAdmin, true);
-  assert.ok(
-    !buscar(filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: false, haySesion: true })),
-    "quien no es admin no debe ver la entrada"
-  );
-  assert.ok(
-    buscar(filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: true, haySesion: true })),
-    "quien es admin sí debe verla"
-  );
-});
-
-test("the admin panel leads the site links, above 'Mi cuenta'", () => {
-  /*
-    Antes iba al último. El argumento de entonces —"no es una herramienta más,
-    y a dos clics dentro de Tools un admin no lo encontraría"— defendía que
-    estuviera en **primer nivel**, no que estuviera al final; y quien lo usa lo
-    usa seguido, así que recorrer el menú entero cada vez no se justifica.
-
-    Se fija el orden porque nada más lo sujeta: `ENLACES_NAVEGACION_BASE` es un
-    array literal y mover una entrada no rompe nada por sí solo.
-
-    Ojo con el alcance: esto fija el orden del **array**, que no es el orden de
-    lo que se ve. El array se renderiza en dos puntos y los dos le anteponen
-    algo —las anclas de la página en la hamburguesa, el nombre del usuario en
-    el desplegable de cuenta—. Ese orden visual vive en el DOM y lo verifica el
-    navegador, no esta suite.
-  */
-  const { ENLACES_NAVEGACION_BASE, filtrarEnlacesVisibles } = cargarNavbar();
-
-  assert.match(
-    ENLACES_NAVEGACION_BASE[0].texto || "", /administraci/i,
-    "el panel de administración encabeza los enlaces del sitio"
-  );
-
-  // Y para quien no es admin la entrada desaparece, así que el primer enlace
-  // del grupo vuelve a ser "Mi cuenta": no queda un hueco donde estaba.
+  // Ni siquiera para un admin: el primer enlace de su menú es "Mi cuenta".
   assert.equal(
-    filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: false, haySesion: true })[0].texto,
-    "Mi cuenta",
-    "sin el panel, los enlaces arrancan en 'Mi cuenta'"
+    filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: true, haySesion: true })[0].texto,
+    "Mi cuenta"
   );
 });
 
