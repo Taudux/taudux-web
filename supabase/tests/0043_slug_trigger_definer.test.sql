@@ -120,7 +120,12 @@ from (values
 
 update public.perfiles set es_colaborador = true where id = pg_temp.cuenta(1);
 update public.perfiles set es_colaborador = true where id = pg_temp.cuenta(2);
-update public.perfiles set es_colaborador = true where id = pg_temp.cuenta(3);
+
+-- LA CUENTA 3 NO SE MARCA, A PROPÓSITO: es el control de la sección 1, la que
+-- prueba que a quien no colabora el trigger no le hace nada. Este preludio se
+-- reusó del de la 0041, donde las tres sí colaboraban; marcarla acá hacía que
+-- el control probara lo contrario de lo que dice su mensaje, y el test moría
+-- con el mismo 42501 que decía estar descartando.
 
 \ir ../migrations/0039_fichas_colaborador.sql
 \ir ../migrations/0040_modalidad_trabajo_colaborador.sql
@@ -139,6 +144,18 @@ values
 
 \ir ../migrations/0041_etiquetas_empresa.sql
 \ir ../migrations/0042_sector_opcional.sql
+
+-- === 0. La 0040 sola ya deja el trigger en DEFINER ========================
+-- Acá está el valor del arreglo, y es la guarda de regresión de verdad: la
+-- cadena de arriba llega hasta la 0042 SIN pasar por la 0043, y aun así el
+-- atributo tiene que estar puesto, porque ahora lo declara la 0040 en su
+-- propio `create or replace`. Si alguien se lo saca de ahí, esto revienta.
+
+select pg_temp.assert_true(
+  (select prosecdef from pg_proc
+     where oid = 'public.asignar_slug_colaborador()'::regprocedure),
+  'la 0040 deja el trigger en SECURITY DEFINER sin ayuda de la 0043'
+);
 
 -- La 0040 ya declara `security definer` ella misma (ver ese archivo), así que
 -- a esta altura de la cadena la función YA quedó definer y la sección de
@@ -289,23 +306,22 @@ select pg_temp.assert_true(
   'y no pisa los slugs ya calculados'
 );
 
--- === 6. Reaplicar la 0040 nueva no revierte el atributo ====================
--- Guardia de regresión: antes de este arreglo, reaplicar la 0040 volvía la
--- función a SECURITY INVOKER en silencio —CREATE OR REPLACE FUNCTION le
--- asigna su default a todo atributo que el comando no nombra— y reabría el
--- 42501 de la sección 1. Ahora la 0040 nombra `security definer` ella misma:
--- si algún día alguien la vuelve a tocar y se lo olvida, esta guarda tiene
--- que reventar acá, no en producción.
-
-\ir ../migrations/0040_modalidad_trabajo_colaborador.sql
-
-do $regresion$
-begin
-  if not (select prosecdef from pg_proc
-           where oid = 'public.asignar_slug_colaborador()'::regprocedure) then
-    raise exception 'regresión: reaplicar la 0040 volvió el trigger a SECURITY INVOKER';
-  end if;
-end
-$regresion$;
+-- === 6. Por qué NO hay una prueba de reaplicación ========================
+-- La primera versión de esta sección reaplicaba la 0040 para ver si el
+-- atributo sobrevivía. No se puede, y averiguarlo costó correr el archivo:
+--
+--   * la 0040 suelta muere con «no existe la columna stack», porque da `grant`
+--     sobre una columna que la 0041 ya renombró a `herramientas`;
+--   * agregarle la 0039 por delante tampoco alcanza: la 0039 muere con «no
+--     existe la columna rol», que la 0040 renombró a `puesto`.
+--
+-- O sea que la cadena de reaplicación que prometen las cabeceras de la 0040
+-- y la 0041 no corre sobre una base que ya pasó la 0041: se frena en la
+-- primera columna renombrada. El "alguien reaplica la 0040 y revierte el
+-- atributo en silencio" no puede pasar así -- fallaría ruidosamente antes.
+--
+-- Por eso la guarda vive en la sección 0, que no reaplica nada: afirma que
+-- una base armada desde cero llega a la 0042 con el atributo ya puesto. Es la
+-- propiedad que el arreglo de la 0040 realmente garantiza.
 
 select '0043 slug trigger definer PASS' as result;
