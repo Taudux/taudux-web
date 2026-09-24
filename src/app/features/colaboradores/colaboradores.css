@@ -1,0 +1,705 @@
+/* Roster de colaboradores: pantalla de selección de personaje + ficha de perfil. */
+
+@layer features {
+  /*
+    EL FONDO. Mismo orden de capas que el inicio (ver home.css):
+
+        body (color plano)  <  degradado  <  #particles-fondo  <  contenido
+
+    Va acotado a `.colaboradores-page` para que nada de esto se filtre a otra
+    página que cargue esta hoja por error. Las dos capas van en PAREJA y
+    comparten alto (`100lvh`): anclar una sola deja una costura visible cuando
+    la barra del navegador móvil aparece o se va.
+
+    Los dos radiales son la atmósfera del prototipo; viven en la misma capa que
+    el degradado para no sumar otro elemento fijo a pantalla completa.
+  */
+  body.colaboradores-page::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-behind);
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 40% 55% at 22% 60%, rgba(0, 180, 220, 0.14), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 72% 50%, rgba(24, 82, 210, 0.14), transparent 70%),
+      linear-gradient(180deg, #020408 0%, #050a11 62%, #06131b 100%);
+  }
+
+  .colaboradores-page #particles-fondo {
+    position: fixed;
+    inset: 0 0 auto 0;
+    /* `lvh` y no el viewport dinámico: tsParticles reconstruye su canvas cada
+       vez que la caja cambia de tamaño, y en móvil eso pasaba justo al empezar
+       a deslizar. El `vh` es el respaldo para navegadores sin `lvh`. */
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-base);
+    pointer-events: none;
+  }
+
+  /* El glow lo dibuja tsParticles por partícula; un filter sobre el canvas se
+     re-aplicaría al lienzo completo en cada frame. */
+  .colaboradores-page #particles-fondo canvas {
+    opacity: 0.88;
+  }
+
+  /*
+    La página FLUYE y scrollea como el resto del sitio. El prototipo era una
+    app de `100dvh` con zonas de scroll internas; acá eso sólo habría escondido
+    fichas detrás de una barra de scroll dentro de otra.
+
+    El relleno lateral va en el padre y el contenedor compartido queda sin
+    relleno, igual que .extractor / .contact.
+  */
+  .colaboradores {
+    /* El aire de abajo es un token propio porque el roster lo resta para
+       calcular su alto: escrito dos veces, tarde o temprano se desfasa. */
+    --colaboradores-aire-inferior: 1.5rem;
+
+    position: relative;
+    z-index: var(--z-content);
+    padding-block: var(--espacio-bajo-navbar) var(--colaboradores-aire-inferior);
+    padding-inline: 2rem;
+  }
+
+  /* `hidden` pierde contra cualquier `display` de autor; las dos vistas y
+     varios bloques opcionales dependen de él. */
+  .colaboradores [hidden] {
+    display: none;
+  }
+
+  /* ---------- Piezas compartidas por las dos vistas ---------- */
+
+  .colaboradores__etiqueta {
+    margin-block-end: 0.5rem;
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #5ad7ff;
+  }
+
+  .colaboradores__bio {
+    /* Tres renglones reservados: la bio cambia con cada ficha y sin este piso
+       el panel —y todo lo que tiene debajo— saltaría al pasar el cursor. */
+    min-block-size: 4.5em;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__bio--vacia {
+    color: var(--color-text-subtle);
+  }
+
+  /*
+    El marco rayado que hace de "retrato" mientras no haya fotos. Se disuelve
+    hacia abajo para que el nombre, que se le monta encima, no pelee con un
+    borde duro.
+  */
+  .colaboradores__retrato {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-panel);
+    background: repeating-linear-gradient(135deg, rgba(0, 225, 255, 0.06) 0 6px, transparent 6px 22px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+    mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  }
+
+  .colaboradores__inicial {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font: 900 clamp(200px, 24vw, 300px) / 1 var(--font-display);
+    color: rgba(0, 225, 255, 0.07);
+  }
+
+  .colaboradores__silueta {
+    position: absolute;
+  }
+
+  .colaboradores__silueta--cabeza {
+    inset: 12% 30% auto;
+    block-size: 26%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .colaboradores__silueta--torso {
+    inset: 40% 10% 0;
+    border-radius: 45% 45% 0 0 / 60% 60% 0 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  }
+
+  /* Píldoras de contacto. Sólo existen las que enlacesDisponibles() devuelve. */
+  .colaboradores__enlaces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    list-style: none;
+  }
+
+  .colaboradores__enlace {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5625rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-pill);
+    color: var(--color-text-muted);
+    font: 500 0.8125rem var(--font-body);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+  }
+
+  .colaboradores__enlace:hover {
+    border-color: var(--color-accent);
+    color: var(--color-text);
+  }
+
+  /* El nombre del perfil está acá porque recibe el foco al abrir una ficha:
+     con teclado, el anillo tiene que ser el mismo que el del resto. */
+  .colaboradores__enlace:focus-visible,
+  .colaboradores__enlace-empresa:focus-visible,
+  .colaboradores__editar:focus-visible,
+  .colaboradores__perfil-nombre:focus-visible,
+  .colaboradores__aviso:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /* El enlace de la empresa NO es una píldora: vive dentro de una celda de
+     la ficha técnica, donde el resto de los valores es texto. Hereda el peso
+     y el tamaño de .colaboradores__dato-valor y sólo se distingue por el
+     subrayado — un nombre de empresa de 80 caracteres en una píldora con
+     `white-space: nowrap` metería scroll horizontal a 390px. */
+  .colaboradores__enlace-empresa {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-color: var(--color-text-subtle);
+    transition: text-decoration-color var(--transition-fast);
+  }
+
+  .colaboradores__enlace-empresa:hover {
+    text-decoration-color: var(--color-accent);
+  }
+
+  .colaboradores__enlace-sigla {
+    font: 700 0.8125rem var(--font-display);
+    color: var(--color-text);
+  }
+
+  /* ---------- Vista roster ---------- */
+
+  /*
+    Una pantalla de selección, no una página larga: en escritorio el roster
+    entra ENTERO en el alto de la ventana, sin scroll. El alto es la ventana
+    menos lo que ya reserva `.colaboradores` arriba (el despeje del navbar) y
+    abajo (el aire inferior); adentro, la previa y la grilla de fichas son las
+    piezas elásticas y absorben lo que sobre o falte.
+
+    El piso evita aplastar las fichas en una ventana muy baja: por debajo de él
+    la página scrollea, que es preferible a fichas ilegibles. En ≤760px todo
+    esto se desactiva (ver el bloque del final).
+  */
+  .colaboradores__roster {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: clamp(24px, 3vw, 40px);
+    block-size: calc(100dvh - var(--espacio-bajo-navbar) - var(--colaboradores-aire-inferior));
+    /* 480 deja entrar sin scroll una laptop de 1366×768, cuya ventana útil ronda
+       los 650px de alto: 650 − despeje del navbar − aire inferior ≈ 498. */
+    min-block-size: 480px;
+  }
+
+  .colaboradores__previa {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: hidden;
+  }
+
+  /* El retrato ocupa todo menos la franja del nombre, que se le monta encima. */
+  .colaboradores__previa .colaboradores__retrato {
+    position: absolute;
+    inset: 0 0 120px;
+  }
+
+  .colaboradores__identidad {
+    position: relative;
+    padding: 0 6px 8px;
+  }
+
+  .colaboradores__nombre {
+    font: 900 clamp(32px, 3.4vw, 44px) / 1 var(--font-display);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__rol {
+    margin-block-start: 8px;
+    font: 500 1.0625rem var(--font-body);
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__seleccion {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .colaboradores__titulo {
+    font-size: clamp(22px, 2.4vw, 30px);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  /* Aviso de carga, error o lista vacía. Mismo patrón que el estado de datos
+     del catálogo de cursos (.courses__data-status); el botón de reintentar
+     sólo aparece con el error. */
+  .colaboradores__aviso {
+    display: grid;
+    justify-items: start;
+    gap: 1rem;
+    padding: 1rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+  }
+
+  .colaboradores__aviso--error {
+    border-color: color-mix(in srgb, var(--color-error) 38%, transparent);
+  }
+
+  .colaboradores__aviso-mensaje {
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .colaboradores__aviso--error .colaboradores__aviso-mensaje {
+    color: var(--color-error);
+  }
+
+  /* El marco de las fichas es lo único elástico de la columna: el título y la
+     tarjeta de perfil miden lo que mide su contenido, y él se queda el resto. */
+  .colaboradores__marco {
+    flex: 1 1 0;
+    display: flex;
+    min-block-size: 0;
+    padding: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  /*
+    CUATRO columnas en TODOS los anchos, sin excepción por breakpoint:
+    moverSeleccion (colaboradores.datos.js) salta de a COLUMNAS_ROSTER fichas.
+    Las flechas del teclado TODAVÍA no están conectadas en colaboradores.js;
+    cuando lo estén, un breakpoint con otro número haría que ↑/↓ no caigan en
+    la ficha de arriba/abajo. Hay un test que fija las columnas.
+  */
+  .colaboradores__grilla {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* Tres filas fijas se reparten el alto del marco aunque haya pocas fichas:
+       con una sola, ésta ocupa su celda y no se estira al alto entero de la
+       grilla. Con más de doce, las filas extra entran por grid-auto-rows y se
+       reparten el mismo alto (con 16 serían cuatro filas más bajas). */
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 3px;
+    min-block-size: 0;
+    list-style: none;
+  }
+
+  /* Relativa para anclar el enlace de "Mi ficha", que se apila sobre la ficha.
+     SIN z-index propio: con uno, la celda crearía un contexto de apilamiento y
+     encerraría a la ficha activa, cuyo resplandor volvería a quedar debajo de
+     las vecinas. */
+  .colaboradores__celda {
+    position: relative;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  /*
+    "EDITAR" en la esquina de la ficha propia. Vive en la CELDA y no dentro del
+    <button> (un <a> ahí sería HTML inválido), así que se apila encima con
+    posición absoluta.
+
+    Arriba a la derecha: el pie de la ficha es la franja del nombre (27% del
+    alto) y el enlace no debe taparlo. A 360px la ficha mide ~78px y el texto
+    entra en ~48px, pegado a la esquina y sin partirse.
+  */
+  .colaboradores__editar {
+    position: absolute;
+    inset: 4px 4px auto auto;
+    /* Por encima de la ficha, que sube a --z-elevated cuando está activa. */
+    z-index: var(--z-highlight);
+    padding: 2px 5px;
+    border-radius: var(--radius-pill);
+    background: rgba(4, 6, 10, 0.85);
+    font: 500 0.5625rem var(--font-mono);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .colaboradores__editar:hover {
+    background: rgba(4, 6, 10, 0.95);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .colaboradores__ficha {
+    --ficha-cielo: #1a1f26;
+
+    position: relative;
+    z-index: var(--z-content);
+    display: block;
+    inline-size: 100%;
+    /* Llena su celda en vez de ser cuadrada: el alto lo dicta la ventana. Su
+       interior ya está medido en porcentajes, así que escala sin deformarse. */
+    block-size: 100%;
+    overflow: hidden;
+    border: 0;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    background: linear-gradient(180deg, var(--ficha-cielo) 0%, #07090c 100%);
+    color: #d8dde3;
+    cursor: pointer;
+    transition: outline-color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  /*
+    La ficha encendida: la que está bajo el CURSOR, y ninguna otra. `--activa`
+    la pone colaboradores.js. Sube de nivel para que su resplandor no quede
+    debajo de las vecinas.
+  */
+  .colaboradores__ficha--activa {
+    --ficha-cielo: rgba(0, 120, 150, 0.55);
+
+    z-index: var(--z-elevated);
+    outline-color: var(--color-accent);
+    box-shadow: 0 0 22px rgba(0, 225, 255, 0.45), inset 0 0 30px rgba(0, 225, 255, 0.18);
+    color: var(--color-text);
+  }
+
+  /* Con teclado no hay cursor, así que la ficha enfocada se distingue con el
+     anillo del sistema. Va hacia ADENTRO: las fichas están a 3px una de otra y
+     uno hacia afuera quedaría tapado por las vecinas. */
+  .colaboradores__ficha:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: -3px;
+  }
+
+  /*
+    Y un realce tenue, para que el anillo no sea lo único que la distinga del
+    fondo. Deliberadamente por debajo del resplandor de arriba: con las dos al
+    mismo brillo, tabular con el mouse apoyado en otra ficha dejaba dos
+    encendidas y ninguna mandando.
+
+    Sólo si NO está bajo el cursor: cuando coinciden manda el resplandor
+    fuerte. Sin el `:not()` ganaría esta regla —una pseudo-clase pesa más que
+    una clase— y la ficha se vería MÁS apagada justo al tabular hasta ella.
+  */
+  .colaboradores__ficha:focus-visible:not(.colaboradores__ficha--activa) {
+    --ficha-cielo: rgba(0, 80, 110, 0.35);
+
+    color: var(--color-text);
+  }
+
+  .colaboradores__ficha-cabeza {
+    position: absolute;
+    inset: 12% auto auto 50%;
+    /* Redonda por proporción, y medida por el ALTO: la ficha ya no es cuadrada
+       (llena una celda cuyo alto dicta la ventana). Con ancho y alto en % por
+       separado salía un óvalo; y el alto es el recurso escaso, así que manda
+       él y el ancho lo sigue. */
+    block-size: 34%;
+    aspect-ratio: 1 / 1;
+    translate: -50% 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .colaboradores__ficha-torso {
+    position: absolute;
+    inset: 46% 16% 24%;
+    border-radius: 45% 45% 0 0 / 100% 100% 0 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  }
+
+  .colaboradores__ficha-inicial {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding-block-end: 22%;
+    font: 900 clamp(1.1rem, 5vw, 2.125rem) var(--font-display);
+    color: rgba(0, 225, 255, 0.16);
+    pointer-events: none;
+  }
+
+  .colaboradores__ficha-nombre {
+    position: absolute;
+    inset: auto 0 0;
+    display: grid;
+    place-items: center;
+    block-size: 27%;
+    padding-inline: 6px;
+    background: linear-gradient(to top, #04060a 60%, rgba(4, 6, 10, 0));
+    /* El piso en vw es para 360px: ahí una ficha mide ~78px y "SEBASTIÁN" a
+       12px fijos se salía de su caja. */
+    font: 700 clamp(0.5rem, 2.4vw, 0.75rem) / 1.15 var(--font-display);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    text-align: center;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__resumen {
+    padding: 18px 22px;
+  }
+
+  /* Acotado a la tarjeta: en el perfil, la separación de las píldoras la pone
+     el `gap` de .colaboradores__figura. */
+  .colaboradores__resumen .colaboradores__enlaces {
+    margin-block-start: 0.875rem;
+  }
+
+  /* ---------- Vista perfil ---------- */
+
+  .colaboradores__perfil {
+    display: grid;
+    grid-template-columns: minmax(280px, 4fr) minmax(0, 6fr);
+    gap: 20px clamp(24px, 3vw, 48px);
+  }
+
+  .colaboradores__barra {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .colaboradores__numero {
+    font: 500 0.75rem var(--font-mono);
+    letter-spacing: 2px;
+    color: #5ad7ff;
+  }
+
+  /* Columna en flex y no retrato absoluto: cuando no hay píldoras de contacto
+     (los enlaces de la ficha son opcionales) el retrato ocupa todo el alto. */
+  .colaboradores__figura {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-inline-size: 0;
+    min-block-size: 360px;
+  }
+
+  .colaboradores__retrato--perfil {
+    flex: 1 1 auto;
+    border-color: rgba(0, 225, 255, 0.25);
+    box-shadow: inset 0 0 60px rgba(0, 225, 255, 0.08);
+    -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+    mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  }
+
+  .colaboradores__retrato--perfil .colaboradores__inicial {
+    font-size: clamp(160px, 20vw, 260px);
+  }
+
+  .colaboradores__ficha-tecnica {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-inline-size: 0;
+  }
+
+  /* Flex con un solo hijo a propósito: el nombre mide lo que mide su texto y
+     el degradado de .colaboradores__perfil-nombre lo recorre entero. Como
+     bloque se estiraría al ancho de la columna y el texto sólo mostraría el
+     arranque del degradado. */
+  .colaboradores__cabecera {
+    display: flex;
+  }
+
+  .colaboradores__perfil-nombre {
+    min-inline-size: 0;
+    font: 900 clamp(28px, 4.6vw, 68px) / 1 var(--font-display);
+    letter-spacing: -1px;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+    background: linear-gradient(90deg, #c8f7ff, var(--color-text) 45%, #5ad7ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .colaboradores__datos {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 20px;
+    padding: 14px 20px;
+  }
+
+  .colaboradores__dato {
+    min-inline-size: 0;
+  }
+
+  .colaboradores__dato--ancho {
+    grid-column: 1 / -1;
+  }
+
+  .colaboradores__dato-etiqueta {
+    margin-block-end: 3px;
+    font: 500 0.625rem var(--font-mono);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+  }
+
+  .colaboradores__dato-valor {
+    font: 700 0.875rem var(--font-body);
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  /* Píldoras de las herramientas, en la ficha de perfil. Mismo patrón que
+     .colaboradores__enlace(s) (arriba), con una diferencia deliberada: SIN
+     white-space: nowrap. "LinkedIn" y "GitHub" son etiquetas cortas y fijas;
+     un elemento de herramientas es texto libre de hasta 40 caracteres (por
+     ejemplo "System Architecture (GCloud · Supabase)") y tiene que poder
+     envolver DENTRO de su propia píldora, o a 390px de ancho mete scroll
+     horizontal y rompe el invariante de layout.
+
+     El ítem NO se llama `.colaboradores__etiqueta` (a secas): esa clase ya
+     existe para el eyebrow "PERFIL" (arriba, chica y en mayúsculas) y
+     colisionaría con esta píldora, que es un elemento visual completamente
+     distinto. */
+  .colaboradores__etiquetas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    list-style: none;
+  }
+
+  .colaboradores__etiquetas-item {
+    display: inline-flex;
+    align-items: center;
+    max-inline-size: 100%;
+    padding: 0.5625rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-pill);
+    color: var(--color-text-muted);
+    font: 500 0.8125rem var(--font-body);
+    overflow-wrap: anywhere;
+  }
+
+  .colaboradores__detalle {
+    padding: 14px 20px;
+  }
+
+  /* En el perfil la bio no cambia bajo el cursor: no necesita el piso que la
+     tarjeta del roster le reserva. */
+  .colaboradores__detalle .colaboradores__bio {
+    min-block-size: 0;
+  }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 760px) {
+    .colaboradores {
+      padding-inline: 1rem;
+    }
+
+    /* Una sola columna en las dos vistas. La grilla de fichas NO cambia: sigue
+       en cuatro columnas (ver el comentario de .colaboradores__grilla). */
+    .colaboradores__roster,
+    .colaboradores__perfil {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* En una pantalla de teléfono no caben la previa, doce fichas y la tarjeta:
+       el roster deja de medirse contra la ventana y la página vuelve a fluir. */
+    .colaboradores__roster {
+      grid-template-rows: none;
+      block-size: auto;
+      min-block-size: 0;
+    }
+
+    .colaboradores__marco {
+      flex: none;
+    }
+
+    /* Sin alto que repartir, las tres filas `fr` quedarían como filas
+       cuadradas vacías debajo de la última ficha. */
+    .colaboradores__grilla {
+      grid-template-rows: none;
+      grid-auto-rows: auto;
+    }
+
+    .colaboradores__ficha {
+      block-size: auto;
+      aspect-ratio: 1 / 1;
+    }
+
+    .colaboradores__previa {
+      min-block-size: 240px;
+    }
+
+    .colaboradores__previa .colaboradores__retrato {
+      inset-block-end: 96px;
+    }
+
+    .colaboradores__figura {
+      min-block-size: 280px;
+    }
+
+    .colaboradores__datos {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 360px) {
+    .colaboradores__resumen,
+    .colaboradores__datos,
+    .colaboradores__detalle {
+      padding-inline: 14px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .colaboradores__ficha,
+    .colaboradores__enlace,
+    .colaboradores__enlace-empresa {
+      transition: none;
+    }
+  }
+}

@@ -1,0 +1,659 @@
+/*
+  La página "Mi ficha". Como colaboradores-pagina.test.js, éstas leen la
+  fuente: fijan invariantes de maquetado, accesibilidad y seguridad que ningún
+  test de comportamiento notaría si se rompen. El comportamiento se prueba en
+  mi-ficha.interaccion.test.js y la lógica pura en mi-ficha.logica.test.js.
+*/
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const ROOT = path.resolve(__dirname, "..");
+const read = (relativo) => fs.readFileSync(path.join(ROOT, relativo), "utf8");
+
+const CARPETA = "src/app/features/colaboradores/mi-ficha";
+const HTML = read(`${CARPETA}/index.html`);
+const CSS = read(`${CARPETA}/mi-ficha.css`);
+const JS = read(`${CARPETA}/mi-ficha.js`);
+const ETIQUETAS = read(`${CARPETA}/mi-ficha.etiquetas.js`);
+const LOGICA = read(`${CARPETA}/mi-ficha.logica.js`);
+
+const { CAMPOS_MI_FICHA, MODALIDADES_TRABAJO_MI_FICHA } = require(`../${CARPETA}/mi-ficha.logica.js`);
+
+const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
+// Comentarios de bloque y de línea. El `[^:]` deja pasar los `//` de una URL.
+const sinComentariosJs = (js) => js
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+const MARCADO = sinComentariosHtml(HTML);
+
+// Las etiquetas de apertura de un tipo, con sus atributos.
+const etiquetas = (nombre) => [...MARCADO.matchAll(new RegExp(`<${nombre}\\b[^>]*>`, "g"))].map(([etiqueta]) => etiqueta);
+const atributo = (etiqueta, nombre) => etiqueta.match(new RegExp(`\\s${nombre}="([^"]*)"`))?.[1] ?? null;
+const tieneAtributo = (etiqueta, nombre) => new RegExp(`\\s${nombre}(?:[\\s=>]|$)`).test(etiqueta);
+const porId = (id) => {
+  const encontrada = MARCADO.match(new RegExp(`<\\w+\\b[^>]*\\sid="${id}"[^>]*>`));
+  assert.ok(encontrada, `falta #${id}`);
+  return encontrada[0];
+};
+
+/* ---------- Cabecera ---------- */
+
+test("the page stays out of the index", () => {
+  assert.match(HTML, /<meta name="robots" content="noindex">/);
+});
+
+test("the page loads the shared stylesheets its markup uses, then its own", () => {
+  const hojas = [
+    "/styles.css",
+    "/app/shared/floating-menu/floating-menu.css",
+    "/app/shared/navbar/navbar.css",
+    "/app/shared/button/button.css",
+    "/app/shared/panel/panel.css",
+    "/app/shared/field/field.css",
+    "/app/shared/toast/toast.css",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.css",
+  ];
+  const posiciones = hojas.map((hoja) => {
+    const indice = HTML.indexOf(`<link rel="stylesheet" href="${hoja}">`);
+    assert.notEqual(indice, -1, `falta la hoja ${hoja}`);
+    return indice;
+  });
+  assert.equal(Math.max(...posiciones), posiciones.at(-1), "la hoja propia va al final: le gana a las compartidas en la misma capa");
+});
+
+test("the page mounts the shared navbar without a hardcoded state", () => {
+  assert.ok(HTML.includes('<nav class="navbar" aria-label="Navegación principal">'));
+  // El href real es el respaldo si navbar.js no corre; acá no va un "#".
+  assert.match(MARCADO, /<a href="\/app\/features\/auth\/login\/" id="accessBtn" class="navbar__link button button--access">Acceder<\/a>/);
+  assert.ok(!HTML.includes("navbar--scrolled"));
+});
+
+test("scripts load in dependency order", () => {
+  const orden = [
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
+    "/app/core/supabase/supabase-client.js",
+    "/app/core/auth/auth.service.js",
+    "/app/shared/navbar/navbar.js",
+    "/app/shared/toast/toast.js",
+    "/app/features/auth/auth-ui.js",
+    "/app/core/colaboradores/ficha.service.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.logica.js",
+    "/app/core/etiquetas/catalogo.service.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.logica.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.js",
+  ];
+  const posiciones = orden.map((src) => {
+    const indice = HTML.indexOf(`<script src="${src}"></script>`);
+    assert.notEqual(indice, -1, `falta el script ${src}`);
+    return indice;
+  });
+  assert.deepEqual([...posiciones].sort((a, b) => a - b), posiciones, "los scripts no están en orden de dependencia");
+
+  // Ni un script más que los de la lista: cada uno declara globales, y uno de
+  // más puede chocar con otro sin que nada lo anuncie.
+  const todos = [...MARCADO.matchAll(/<script\b[^>]*\ssrc="([^"]+)"/g)].map(([, src]) => src);
+  assert.deepEqual(todos, orden);
+});
+
+/*
+  Los scripts clásicos comparten el ámbito global: un `const` repetido en dos
+  archivos tira un SyntaxError al cargar el segundo, y la página queda muerta.
+  mi-ficha.js vive en un IIFE; su lógica, no.
+*/
+test("the pure logic declares no global that another script of the page already declares", () => {
+  const globalesDe = (fuente) => new Set(
+    [...fuente.matchAll(/^(?:async\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)/gm)].map(([, nombre]) => nombre),
+  );
+  const propias = globalesDe(LOGICA);
+  assert.ok(propias.has("validarMiFicha"), "premisa: el barrido encuentra las declaraciones");
+
+  for (const otro of [
+    "src/app/core/supabase/supabase-client.js",
+    "src/app/core/auth/auth.service.js",
+    "src/app/shared/navbar/navbar.js",
+    "src/app/shared/toast/toast.js",
+    "src/app/features/auth/auth-ui.js",
+    "src/app/core/colaboradores/ficha.service.js",
+  ]) {
+    const repetidas = [...globalesDe(read(otro))].filter((nombre) => propias.has(nombre));
+    assert.deepEqual(repetidas, [], `${otro} ya declara ${repetidas.join(", ")}`);
+  }
+
+  assert.deepEqual([...globalesDe(JS)], [], "mi-ficha.js no deja nada en el ámbito global");
+});
+
+test("no inline scripts or on* handlers, no inline styles and no dead links", () => {
+  assert.doesNotMatch(MARCADO, /<script(?![^>]*\ssrc=)[^>]*>/i);
+  assert.doesNotMatch(MARCADO, /<\w+[^>]*\son[a-z]+\s*=/i);
+  assert.doesNotMatch(MARCADO, /\sstyle="/);
+  assert.doesNotMatch(MARCADO, /href="#"/);
+});
+
+/* ---------- Scripts ---------- */
+
+test("the page never reports failures through the global operation channel", () => {
+  // reportarFallo dispara un toast genérico en navbar.js: sumado al aviso
+  // propio de la página serían dos avisos por un mismo fallo.
+  assert.doesNotMatch(JS, /reportarFallo/);
+  assert.doesNotMatch(LOGICA, /reportarFallo/);
+});
+
+test("the scripts never write markup from data", () => {
+  for (const fuente of [JS, LOGICA]) {
+    assert.doesNotMatch(sinComentariosJs(fuente), /innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
+  }
+  assert.doesNotMatch(sinComentariosJs(JS), /\.style\b/, "los estados cambian por atributo o clase, no con estilos en línea");
+});
+
+test("the pure logic touches no DOM and exports through the module guard", () => {
+  const logica = sinComentariosJs(LOGICA);
+  assert.doesNotMatch(logica, /\b(?:document|window|localStorage|fetch)\b/);
+  assert.match(LOGICA, /if \(typeof module === "object" && module\.exports\) \{/);
+});
+
+test("the page gates on a session and reads the collaborator mark from the profile", () => {
+  const js = sinComentariosJs(JS);
+  assert.match(js, /requerirSesion\(/);
+  assert.match(js, /obtenerPerfil\(/);
+  assert.match(js, /es_colaborador/);
+  assert.match(js, /obtenerMiFicha\(/);
+  assert.match(js, /guardarMiFicha\(/);
+  assert.match(js, /establecerFormularioOcupado\(/);
+});
+
+/*
+  obtenerPerfil() es la única lectura del perfil propio que tiene la página:
+  sin estas dos columnas, nadie sería colaborador y no habría enlace al
+  perfil público.
+
+  Las columnas viven en dos constantes y no en un select suelto, porque la
+  lectura ancha tiene un reintento angosto detrás (ver abajo). Se leen las
+  constantes: un select literal ya no describe lo que la función hace.
+*/
+const columnasDe = (servicio, constante) => {
+  const encontrado = servicio.match(new RegExp(`const ${constante} = "([^"]*)"`));
+  assert.ok(encontrado, `falta la constante ${constante}`);
+  return encontrado[1].split(",").map((columna) => columna.trim());
+};
+
+test("the auth service's profile read brings the collaborator mark and the slug", () => {
+  const servicio = read("src/app/core/auth/auth.service.js");
+  const base = columnasDe(servicio, "COLUMNAS_PERFIL_BASE");
+  const nuevas = columnasDe(servicio, "COLUMNAS_PERFIL_0038");
+
+  for (const columna of ["nombre", "apellidos", "telefono", "rol", "avisos_curso_nuevo"]) {
+    assert.ok(base.includes(columna), `la lectura base no trae ${columna}`);
+  }
+  assert.deepEqual(nuevas, ["es_colaborador", "slug"]);
+  // Y la lectura ancha es la suma de las dos: si alguien dejara de pedir las
+  // nuevas, nadie sería colaborador y el fallo sería mudo.
+  assert.match(servicio, /leer\(`\$\{COLUMNAS_PERFIL_BASE\}, \$\{COLUMNAS_PERFIL_0038\}`\)/);
+});
+
+/*
+  El comportamiento de esa red de seguridad —el reintento angosto ante 42703 y
+  el no-reintento ante cualquier otro error— NO se prueba acá. Se ejecuta en
+  tests/auth-perfil.test.js contra un cliente de Supabase falso.
+
+  La distinción importó: la primera versión de esta comprobación buscaba
+  "42703" en la fuente y sobrevivía a dos mutantes que borraban la rama,
+  porque el único "42703" que quedaba vivía en un comentario. Un grep no
+  puede probar una rama.
+*/
+
+
+/* ---------- Estructura ---------- */
+
+test("the content sits in the shared container and the offset derives from the navbar token", () => {
+  assert.ok(HTML.includes('<main class="mi-ficha">'), "el <main> lleva sólo el bloque: el contenedor va en un hijo");
+  assert.match(MARCADO, /class="mi-ficha__contenido u-contenedor u-contenedor--lectura"/);
+
+  const css = sinComentariosCss(CSS);
+  const regla = css.match(/\.mi-ficha\s*\{([^}]*)\}/);
+  assert.ok(regla, "falta la regla .mi-ficha");
+  assert.match(regla[1], /padding-block-start:\s*var\(--espacio-bajo-navbar\)/);
+  assert.match(regla[1], /padding-inline:/);
+  assert.doesNotMatch(css, /\.u-contenedor\s*\{/, "la hoja no redeclara el contenedor compartido");
+});
+
+test("the loading notice is a focusable status region with a hidden retry button and a hidden link to Colaboradores", () => {
+  const aviso = porId("miFichaAviso");
+  assert.equal(atributo(aviso, "role"), "status");
+  assert.equal(atributo(aviso, "tabindex"), "-1");
+  assert.ok(!tieneAtributo(aviso, "hidden"), "el aviso de carga se ve desde el primer momento");
+
+  const reintentar = porId("miFichaReintentar");
+  assert.equal(atributo(reintentar, "type"), "button");
+  assert.ok(tieneAtributo(reintentar, "hidden"));
+
+  const colaboradores = porId("miFichaIrColaboradores");
+  assert.equal(atributo(colaboradores, "href"), "/app/features/colaboradores/");
+  assert.ok(tieneAtributo(colaboradores, "hidden"));
+});
+
+test("the form panel starts hidden, the form skips native validation and has a focusable alert for server errors", () => {
+  assert.ok(tieneAtributo(porId("miFichaContenido"), "hidden"));
+
+  const form = porId("formMiFicha");
+  assert.match(form, /^<form\b/);
+  assert.ok(tieneAtributo(form, "novalidate"));
+
+  const estado = porId("miFichaStatus");
+  assert.equal(atributo(estado, "role"), "alert");
+  assert.equal(atributo(estado, "tabindex"), "-1");
+  assert.ok(tieneAtributo(estado, "hidden"));
+});
+
+test("the public-data warning comes before any field and the form points to it", () => {
+  const aviso = "Todo lo que escribas aquí se muestra en la página pública de Colaboradores.";
+  const posicion = MARCADO.indexOf(aviso);
+  assert.notEqual(posicion, -1, "falta el aviso de datos públicos");
+  assert.ok(posicion < MARCADO.indexOf("<input"), "el aviso va antes del primer campo");
+
+  const publico = porId("miFichaPublico");
+  assert.equal(atributo(publico, "tabindex"), "-1", "recibe el foco al mostrarse el formulario tras un reintento");
+  assert.match(atributo(porId("formMiFicha"), "aria-describedby") || "", /\bmiFichaPublico\b/);
+});
+
+test("the name is read-only text with a link to change it in Mi cuenta", () => {
+  // El destino es el mismo "Mi cuenta" del menú, en su sección de perfil.
+  const navbar = read("src/app/shared/navbar/navbar.js");
+  const miCuenta = navbar.match(/texto: "Mi cuenta",\s*href: "([^"]+)"/);
+  assert.ok(miCuenta, "no se encontró la entrada Mi cuenta del navbar");
+
+  const enlace = MARCADO.match(/<a\b[^>]*href="([^"]*)"[^>]*>Cambia tu nombre en Mi cuenta<\/a>/);
+  assert.ok(enlace, "falta el enlace para cambiar el nombre");
+  assert.equal(enlace[1], `${miCuenta[1]}#perfil`);
+
+  const nombre = porId("miFichaNombre");
+  assert.doesNotMatch(nombre, /^<(?:input|textarea|select)\b/, "el nombre no es un campo de este formulario");
+});
+
+/*
+  EL TEST QUE FALTABA. Las tres listas de etiquetas viven en dos marcados
+  distintos —el formulario y el perfil público— y nada las ataba: subir
+  Habilidades encima de Herramientas en el perfil dejó el formulario en el
+  orden viejo y ninguna suite lo notó, porque cada archivo era coherente
+  consigo mismo.
+
+  Que coincidan no es cosmético: se llena en un orden y se lee el resultado
+  en otro. Se comparan los dos HTML entre sí, sin una lista escrita a mano
+  que habría que acordarse de actualizar.
+*/
+test("the tag fields follow the same order in the form and in the public profile", () => {
+  const PERFIL = read("src/app/features/colaboradores/index.html");
+  const LISTAS = ["habilidades", "herramientas", "idiomas"];
+
+  const orden = (html, comoId) => LISTAS
+    .map((campo) => ({ campo, en: html.indexOf(comoId(campo)) }))
+    .map((entrada) => {
+      assert.notEqual(entrada.en, -1, `no se encontró ${entrada.campo}`);
+      return entrada;
+    })
+    .sort((a, b) => a.en - b.en)
+    .map(({ campo }) => campo);
+
+  const enElFormulario = orden(HTML, (campo) => `name="${campo}"`);
+  const enElPerfil = orden(PERFIL, (campo) => `id="perfil${campo[0].toUpperCase()}${campo.slice(1)}"`);
+
+  assert.deepEqual(enElFormulario, enElPerfil,
+    "el formulario y el perfil tienen que listar las etiquetas en el mismo orden");
+  // Y el orden acordado es ése: primero lo que la persona sabe hacer.
+  assert.deepEqual(enElPerfil, LISTAS);
+});
+
+test("the named controls follow the card order, so the first invalid field is the first on screen", () => {
+  const nombres = [];
+  for (const [etiqueta] of MARCADO.matchAll(/<(?:input|textarea|select)\b[^>]*>/g)) {
+    const nombre = atributo(etiqueta, "name");
+    if (nombre && nombres.at(-1) !== nombre) nombres.push(nombre);
+  }
+  assert.deepEqual(nombres, [...CAMPOS_MI_FICHA]);
+});
+
+test("every control has a label tied by for", () => {
+  const controles = [...MARCADO.matchAll(/<(?:input|textarea|select)\b[^>]*>/g)].map(([etiqueta]) => etiqueta);
+  assert.ok(controles.length >= 12, "premisa: el barrido encuentra los campos");
+  for (const control of controles) {
+    const id = atributo(control, "id");
+    assert.ok(id, `un control sin id no se puede etiquetar: ${control}`);
+    assert.match(MARCADO, new RegExp(`<label\\b[^>]*\\sfor="${id}"`), `#${id} no tiene <label for>`);
+  }
+});
+
+test("every text control describes its hint and has a hidden error slot", () => {
+  const campos = CAMPOS_MI_FICHA.filter((campo) => campo !== "modalidad_trabajo");
+  for (const campo of campos) {
+    const control = MARCADO.match(new RegExp(`<(?:input|textarea)\\b[^>]*\\sname="${campo}"[^>]*>`));
+    assert.ok(control, `falta el control ${campo}`);
+    const id = atributo(control[0], "id");
+
+    const error = porId(`${id}Error`);
+    assert.ok(tieneAtributo(error, "hidden"), `el error de ${campo} arranca oculto`);
+
+    const describe = atributo(control[0], "aria-describedby");
+    assert.ok(describe, `${campo} no describe su ayuda`);
+    for (const referido of describe.split(/\s+/)) porId(referido);
+  }
+});
+
+test("the bio is a textarea and the texts are plain text inputs, with the right input types for links", () => {
+  assert.match(MARCADO, /<textarea\b[^>]*\sclass="field field--textarea"[^>]*\sname="bio"/);
+  const tipoDe = (campo) => atributo(MARCADO.match(new RegExp(`<input\\b[^>]*\\sname="${campo}"[^>]*>`))[0], "type");
+  for (const campo of ["puesto", "sector", "ubicacion", "herramientas"]) assert.equal(tipoDe(campo), "text", campo);
+  assert.equal(tipoDe("anio_inicio"), "text", "type=number cambia con la rueda del mouse y acepta 1e3");
+  assert.equal(atributo(MARCADO.match(/<input\b[^>]*\sname="anio_inicio"[^>]*>/)[0], "inputmode"), "numeric");
+  assert.equal(tipoDe("linkedin"), "url");
+  assert.equal(tipoDe("github"), "url");
+  assert.equal(tipoDe("correo"), "email");
+});
+
+/*
+  Sin maxlength a propósito: el navegador cuenta unidades UTF-16 (un emoji son
+  dos) y char_length() de la base cuenta puntos de código (un emoji es uno).
+  El freno vive en JS, con largoMiFicha() (mi-ficha.interaccion.test.js prueba
+  el recorte real).
+*/
+test("the bio has a countdown counter wired to its aria-describedby, and no maxlength", () => {
+  const bioTextarea = MARCADO.match(/<textarea\b[^>]*\sname="bio"[^>]*>/)[0];
+  assert.ok(!tieneAtributo(bioTextarea, "maxlength"), "el freno vive en JS, no en maxlength");
+
+  const describe = (atributo(bioTextarea, "aria-describedby") || "").split(/\s+/);
+  assert.ok(describe.includes("miFichaBioAyuda"), "el bio perdió su ayuda");
+  assert.ok(describe.includes("miFichaBioContador"), "el bio no describe su contador");
+
+  const contador = porId("miFichaBioContador");
+  assert.match(contador, /^<p\b/);
+  // Mudo salvo cerca del límite: mi-ficha.js lo alterna a "polite".
+  assert.equal(atributo(contador, "aria-live"), "off");
+});
+
+/*
+  Los TRES campos de etiquetas, no sólo herramientas: son la misma pieza
+  instanciada tres veces, y un marcado a medias en cualquiera de ellas deja su
+  editor sin nodos. `prefijoIds` es el mismo que usa mi-ficha.js.
+*/
+const CAMPOS_DE_ETIQUETAS = Object.freeze([
+  Object.freeze({ campo: "herramientas", prefijoIds: "miFichaHerramientas", etiquetaListbox: "Sugerencias de herramientas" }),
+  Object.freeze({ campo: "habilidades", prefijoIds: "miFichaHabilidades", etiquetaListbox: "Sugerencias de habilidades" }),
+  Object.freeze({ campo: "idiomas", prefijoIds: "miFichaIdiomas", etiquetaListbox: "Sugerencias de idiomas" }),
+]);
+
+for (const { campo, prefijoIds, etiquetaListbox } of CAMPOS_DE_ETIQUETAS) {
+  test(`the ${campo} field is a combobox wired to a listbox of suggestions and a tag list, with its own live region`, () => {
+    const entrada = MARCADO.match(new RegExp(`<input\\b[^>]*\\sname="${campo}"[^>]*>`))[0];
+    assert.equal(atributo(entrada, "role"), "combobox");
+    assert.equal(atributo(entrada, "aria-autocomplete"), "list");
+    assert.equal(atributo(entrada, "aria-expanded"), "false");
+    assert.equal(atributo(entrada, "aria-controls"), `${prefijoIds}Opciones`);
+
+    const opciones = porId(`${prefijoIds}Opciones`);
+    assert.match(opciones, /^<ul\b/);
+    assert.equal(atributo(opciones, "role"), "listbox");
+    assert.ok(tieneAtributo(opciones, "hidden"), "el desplegable arranca oculto");
+    // Con tres desplegables en la página, "Sugerencias" a secas no distingue
+    // ninguno: cada uno nombra su campo.
+    assert.equal(atributo(opciones, "aria-label"), etiquetaListbox);
+
+    const lista = porId(`${prefijoIds}Lista`);
+    assert.match(lista, /^<ul\b/);
+
+    // Región propia del widget, distinta de la de errores del servidor
+    // (#miFichaStatus, que sigue existiendo con su propio role="alert").
+    const estado = porId(`${prefijoIds}Estado`);
+    assert.equal(atributo(estado, "role"), "status");
+    assert.equal(atributo(estado, "aria-live"), "polite");
+    assert.equal(atributo(porId("miFichaStatus"), "role"), "alert");
+  });
+}
+
+/*
+  Tres instancias del mismo widget no pueden compartir ids: el prefijo de los
+  id de cada opción sale de `prefijoIds`, y dos listbox abiertos que generaran
+  el mismo id escribirían el mismo aria-activedescendant — el lector de
+  pantalla anunciaría la opción equivocada.
+*/
+test("the three tag fields use different ids for every node they own", () => {
+  const ids = CAMPOS_DE_ETIQUETAS.flatMap(({ prefijoIds }) => (
+    ["", "Opciones", "Lista", "Estado", "Ayuda", "Error"].map((sufijo) => `${prefijoIds}${sufijo}`)
+  ));
+  assert.equal(new Set(ids).size, ids.length, "hay un id repetido entre los tres campos");
+  for (const id of ids) assert.ok(porId(id), `el index.html no tiene #${id}`);
+});
+
+test("work modality is a radio group in a fieldset with a legend, with exactly the card values", () => {
+  const fieldset = MARCADO.match(/<fieldset\b[^>]*\sid="miFichaModalidadTrabajo"[^>]*>([\s\S]*?)<\/fieldset>/);
+  assert.ok(fieldset, "falta el fieldset de modalidad de trabajo");
+  assert.match(fieldset[1], /<legend\b[^>]*>[^<]*Modalidad de trabajo/);
+
+  const radios = [...fieldset[1].matchAll(/<input\b[^>]*>/g)].map(([etiqueta]) => etiqueta);
+  assert.deepEqual(radios.map((radio) => atributo(radio, "type")), radios.map(() => "radio"));
+  assert.deepEqual(radios.map((radio) => atributo(radio, "name")), radios.map(() => "modalidad_trabajo"));
+  assert.deepEqual(radios.map((radio) => atributo(radio, "value")), [...MODALIDADES_TRABAJO_MI_FICHA]);
+  assert.ok(radios.every((radio) => !tieneAtributo(radio, "checked")), "ninguna opción arranca marcada");
+
+  // Los value del HTML tienen que coincidir byte a byte con la constante: si
+  // "Híbrido" quedara en NFD (i + U+0301) se vería idéntico en pantalla, pero
+  // dejaría de ser el mismo texto que espera la base (ver la 0040).
+  for (const radio of radios) {
+    const valor = atributo(radio, "value");
+    assert.equal(valor, valor.normalize("NFC"), `el value "${valor}" no está en NFC`);
+  }
+
+  assert.ok(tieneAtributo(porId("miFichaModalidadTrabajoError"), "hidden"));
+});
+
+test("Proyectos is a disabled field with a note, and it is never sent", () => {
+  const proyectos = porId("miFichaProyectos");
+  assert.match(proyectos, /^<input\b/);
+  assert.ok(tieneAtributo(proyectos, "disabled"));
+  assert.equal(atributo(proyectos, "name"), null, "sin name no viaja con el formulario");
+  assert.match(MARCADO, /<label\b[^>]*for="miFichaProyectos"[^>]*>Proyectos<\/label>/);
+
+  const nota = porId(atributo(proyectos, "aria-describedby"));
+  assert.ok(nota);
+  assert.match(MARCADO, /Llegará cuando exista la sección de proyectos\./);
+});
+
+test("the submit button shows a loading text and the profile link starts hidden", () => {
+  const boton = MARCADO.match(/<button\b[^>]*type="submit"[^>]*>([^<]*)<\/button>/);
+  assert.ok(boton, "falta el botón de guardar");
+  assert.match(boton[0], /class="button button--glow"/);
+  assert.match(boton[0], /data-loading-text="Guardando…"/);
+  assert.equal(boton[1].trim(), "Guardar ficha");
+
+  const verPerfil = porId("miFichaVerPerfil");
+  assert.match(verPerfil, /^<a\b/);
+  assert.ok(tieneAtributo(verPerfil, "hidden"));
+  assert.equal(atributo(verPerfil, "href"), "/app/features/colaboradores/");
+});
+
+test("visible copy uses tuteo, never voseo", () => {
+  const texto = MARCADO.replace(/<[^>]+>/g, " ").toLowerCase();
+  const palabras = texto.split(/[^\p{L}]+/u);
+  for (const voseo of ["escribí", "elegí", "usá", "revisá", "poné", "podés", "tenés", "cambiá", "separalas", "separá"]) {
+    assert.ok(!palabras.includes(voseo), `la página dice "${voseo}"`);
+  }
+});
+
+/* ---------- Hoja de estilos ---------- */
+
+test("the stylesheet lives in the features layer", () => {
+  const css = sinComentariosCss(CSS).trim();
+  assert.match(css, /^@layer features\s*\{/);
+
+  // Una sola capa que envuelve TODO: al cerrar su llave no queda nada afuera.
+  let profundidad = 0;
+  let cierre = -1;
+  for (let i = css.indexOf("{"); i < css.length; i += 1) {
+    if (css[i] === "{") profundidad += 1;
+    if (css[i] === "}") profundidad -= 1;
+    if (profundidad === 0) { cierre = i; break; }
+  }
+  assert.equal(cierre, css.length - 1, "hay reglas fuera de @layer features");
+});
+
+/*
+  EL TEST QUE FALTABA. `.mi-ficha__etiqueta` llegó a estar declarada DOS veces
+  en esta hoja: arriba como rótulo de campo (color y peso) y más abajo como
+  píldora de etiqueta (inline-flex, borde, radio de píldora, fondo de campo).
+  Misma especificidad, misma capa: ganaba la de abajo, y cada <label>, el <p>
+  del nombre y el <legend> se pintaban como píldoras.
+
+  Ningún test lo vio. Los de esta hoja miran capas, breakpoints y tokens; los
+  de interacción asiertan estado del DOM y no estilo computado. Una colisión
+  de selector no rompe nada que se pueda consultar desde el DOM —sólo se ve—.
+
+  Esto es lo más barato que la detecta: dos reglas distintas con el MISMO
+  selector en la misma hoja. Repetir un selector puede ser legítimo con
+  @media o \supports de por medio, así que sólo se cuentan las que están al
+  mismo nivel del @layer.
+*/
+test("no selector is declared twice in the same stylesheet block", () => {
+  const cuerpo = sinComentariosCss(CSS);
+  // Se descartan los bloques anidados (@media, \supports) quedándose con el
+  // texto de primer nivel dentro del @layer.
+  const deMedia = /@(?:media|supports)[^{]*\{/g;
+  let plano = cuerpo;
+  let encontrado;
+  while ((encontrado = deMedia.exec(plano)) !== null) {
+    let profundidad = 1;
+    let i = encontrado.index + encontrado[0].length;
+    while (i < plano.length && profundidad > 0) {
+      if (plano[i] === "{") profundidad += 1;
+      if (plano[i] === "}") profundidad -= 1;
+      i += 1;
+    }
+    plano = plano.slice(0, encontrado.index) + plano.slice(i);
+    deMedia.lastIndex = 0;
+  }
+
+  const vistos = new Map();
+  for (const [, selector] of plano.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+    const limpio = selector.trim().replace(/\s+/g, " ");
+    if (limpio === "" || limpio.startsWith("@")) continue;
+    vistos.set(limpio, (vistos.get(limpio) ?? 0) + 1);
+  }
+
+  assert.ok(vistos.has(".mi-ficha__etiqueta"), "premisa: el barrido encuentra los selectores");
+  const repetidos = [...vistos].filter(([, veces]) => veces > 1).map(([selector]) => selector);
+  assert.deepEqual(repetidos, [], `selectores declarados dos veces: ${repetidos.join(", ")}`);
+});
+
+/*
+  Y la otra punta: la píldora y el rótulo tienen que seguir siendo clases
+  DISTINTAS. El test de arriba caería igual si alguien volviera a unirlas,
+  pero éste dice por qué importa.
+*/
+test("the tag pill and the field label are different classes", () => {
+  assert.match(CSS, /\.mi-ficha__etiquetas-item\s*\{/, "la píldora tiene su propia clase");
+  assert.match(ETIQUETAS, /mi-ficha__etiquetas-item/, "y el editor se la pone a cada etiqueta");
+  assert.equal(ETIQUETAS.includes('"mi-ficha__etiqueta"'), false,
+    "el editor no puede usar la clase del rótulo para sus píldoras");
+  assert.match(HTML, /class="mi-ficha__etiqueta"/, "los rótulos conservan la suya");
+});
+
+test("the stylesheet only uses the documented breakpoints", () => {
+  const BREAKPOINTS_DOCUMENTADOS = [360, 760, 900];
+  const fueraDelSet = [];
+  for (const [, condiciones] of sinComentariosCss(CSS).matchAll(/@media\s*\(([^)]*)\)/g)) {
+    assert.doesNotMatch(condiciones, /min-width/, `min-width no es parte del sistema: ${condiciones}`);
+    for (const [texto, valor] of condiciones.matchAll(/max-width:\s*(\d+)px/g)) {
+      if (!BREAKPOINTS_DOCUMENTADOS.includes(Number(valor))) fueraDelSet.push(texto);
+    }
+  }
+  assert.deepEqual(fueraDelSet, []);
+});
+
+test("the stylesheet takes its colors, radii and focus ring from the tokens", () => {
+  const css = sinComentariosCss(CSS);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/, "los colores salen de los tokens de styles.css");
+  assert.match(css, /outline:\s*var\(--focus-ring\)/);
+  assert.match(css, /outline-offset:\s*var\(--focus-ring-offset\)/);
+  // Ninguna regla de la página redefine el navbar compartido.
+  assert.doesNotMatch(css, /\.(?:navbar|nav-menu)/);
+});
+
+test("the disabled field style is scoped to this page, not to the shared .field", () => {
+  const css = sinComentariosCss(CSS);
+  // Lo que precede a cada `{`: selectores de regla y preludios de @layer/@media.
+  const selectores = [...css.matchAll(/([^{};]+)\{/g)].map(([, selector]) => selector.trim());
+  const deField = selectores.flatMap((lista) => lista.split(",").map((selector) => selector.trim()))
+    .filter((selector) => /\.field\b/.test(selector));
+  assert.ok(deField.length > 0, "premisa: la página le da estilo al campo apagado");
+  for (const selector of deField) {
+    assert.match(selector, /^\.mi-ficha/, `"${selector}" toca .field fuera de la página`);
+  }
+});
+
+/*
+  `element.children` es una HTMLCollection: se puede indexar y recorrer con
+  for...of, pero NO tiene .map, .filter, .forEach ni .slice. El DOM falso de
+  tests/mi-ficha.interaccion.test.js la finge con un arreglo de verdad, así
+  que un `.children.map(...)` pasa la suite en verde y revienta en el
+  navegador — y justo el arrastre, que es lo único que los tests no ejercitan.
+  Por eso el guardián se lee del código fuente y no de un comportamiento.
+  El arrastre de las herramientas vive en mi-ficha.etiquetas.js, así que el
+  guardián cubre los dos archivos.
+*/
+test("the wiring never calls array methods on a live HTMLCollection", () => {
+  for (const fuente of [JS, ETIQUETAS]) {
+    const sospechosos = [...fuente.matchAll(/\.children\s*\.\s*(\w+)/g)].map(([, metodo]) => metodo);
+    const deArreglo = sospechosos.filter((metodo) =>
+      ["map", "filter", "forEach", "slice", "reduce", "some", "every", "find", "findIndex", "flatMap", "includes", "indexOf", "sort", "reverse", "at", "join"].includes(metodo),
+    );
+    assert.deepEqual(deArreglo, [], "copia la colección con Array.from(...) antes de recorrerla");
+  }
+});
+
+/*
+  La ayuda de cada campo de etiquetas está escrita DOS veces: en el HTML, que
+  es lo que se ve antes de que corra el script, y en CAMPOS_DE_ETIQUETAS de
+  mi-ficha.js, que la reescribe en cuanto el editor se establece (y la cambia
+  por la versión "ya llegaste al máximo" cuando la lista se llena). Un desfase
+  entre las dos no lo nota nadie: el texto del HTML aparece un instante y lo
+  tapa el del script. Por eso se comparan acá.
+*/
+test("each tag field's hint is written the same in the markup and in the script", () => {
+  for (const { campo, prefijoIds } of CAMPOS_DE_ETIQUETAS) {
+    const enElScript = JS.match(new RegExp(`campo: "${campo}",[\\s\\S]*?ayuda: "([^"]*)"`));
+    assert.ok(enElScript, `mi-ficha.js no declara la ayuda de ${campo}`);
+
+    const enElMarcado = HTML.match(new RegExp(`<small[^>]*\\sid="${prefijoIds}Ayuda"[^>]*>([^<]*)</small>`));
+    assert.ok(enElMarcado, `el index.html no tiene la ayuda de ${campo}`);
+
+    assert.equal(enElMarcado[1], enElScript[1], `la ayuda de ${campo} dice dos cosas distintas`);
+  }
+});
+
+/*
+  Empresa y su enlace: dos campos de texto normales (no comboboxes) que van
+  juntos y al final del bloque laboral, en el orden de la ficha. El enlace es
+  `type="url"` para que el teclado móvil ofrezca el teclado de direcciones;
+  la validación de verdad la hace mi-ficha.logica.js contra la expresión del
+  CHECK, no el navegador.
+*/
+test("the company fields are plain text inputs with their own hint and error slot", () => {
+  const empresa = MARCADO.match(/<input\b[^>]*\sname="empresa"[^>]*>/)[0];
+  assert.equal(atributo(empresa, "type"), "text");
+  assert.equal(atributo(empresa, "id"), "miFichaEmpresa");
+  assert.equal(atributo(empresa, "aria-describedby"), "miFichaEmpresaAyuda");
+  // Es el nombre de una organización: el navegador puede autocompletarlo.
+  assert.equal(atributo(empresa, "autocomplete"), "organization");
+
+  const enlace = MARCADO.match(/<input\b[^>]*\sname="empresa_enlace"[^>]*>/)[0];
+  assert.equal(atributo(enlace, "type"), "url");
+  assert.equal(atributo(enlace, "id"), "miFichaEmpresaEnlace");
+  assert.equal(atributo(enlace, "aria-describedby"), "miFichaEmpresaEnlaceAyuda");
+  // Sin `role="combobox"`: no son listas de etiquetas.
+  assert.equal(atributo(enlace, "role"), null);
+
+  for (const id of ["miFichaEmpresaAyuda", "miFichaEmpresaError", "miFichaEmpresaEnlaceAyuda", "miFichaEmpresaEnlaceError"]) {
+    assert.ok(porId(id), `el index.html no tiene #${id}`);
+  }
+});

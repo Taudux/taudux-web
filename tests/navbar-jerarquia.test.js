@@ -80,6 +80,37 @@ test("'Transacciones financieras' under Tools is enabled for everyone and has it
   assert.doesNotMatch(hijo.href, /detector/, "ya no comparte ruta con el detector de IA");
 });
 
+/*
+  Colaboradores es una entrada propia, no un hijo de Academy: es el equipo, no
+  material de estudio. Va inmediatamente después del grupo Academy, así que en
+  el menú desplegado queda justo debajo de "Código" y, con Academy cerrado,
+  entre Academy y Noticias. Para todos: sin sesión y sin rol.
+*/
+test("'Colaboradores' sits right after the Academy group, open to everyone, with its own route", () => {
+  const { ENLACES_NAVEGACION_BASE } = cargarNavbar();
+
+  const posicion = ENLACES_NAVEGACION_BASE.findIndex((enlace) => enlace.texto === "Colaboradores");
+  assert.notEqual(posicion, -1, "falta la entrada Colaboradores en el menú");
+
+  const entrada = ENLACES_NAVEGACION_BASE[posicion];
+  assert.equal(entrada.href, "/app/features/colaboradores/");
+  assert.equal(entrada.habilitado, true);
+  assert.equal(entrada.hijos, undefined, "es un enlace, no un grupo");
+  assert.equal(entrada.soloAdmin, undefined, "no debe esconderse: es para todos");
+  assert.equal(entrada.soloSesion, undefined, "no exige sesión");
+
+  const anterior = ENLACES_NAVEGACION_BASE[posicion - 1];
+  assert.equal(anterior.texto, "Academy", "va justo después de Academy, cuyo último hijo es Código");
+  assert.equal(anterior.hijos.at(-1).texto, "Código", "si Código deja de ser el último hijo, la entrada ya no queda debajo de él");
+
+  // La página a la que apunta tiene que existir: un enlace del menú a un 404
+  // se vería desde todas las páginas del sitio a la vez.
+  assert.ok(
+    fs.existsSync(path.join(ROOT, "src/app/features/colaboradores/index.html")),
+    "el menú apunta a /app/features/colaboradores/ y esa página no existe",
+  );
+});
+
 /* Visibilidad por rol. El detector de IA volvió a su identidad y queda como
    sección deshabilitada que sólo el admin ve; el resto ni se entera. */
 
