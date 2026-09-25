@@ -399,8 +399,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
       try {
         const bytes = new Uint8Array(await archivo.arrayBuffer());
         pegado.value = decodificarTextoImportado(bytes);
-        // El nombre del archivo es el mejor candidato a nombre de la tabla.
-        nombre.value = archivo.name.replace(/\.[^.]+$/, "");
+        nombre.value = nombreTablaDesdeArchivo(archivo.name);
         refrescarPrevia();
         anunciar(`"${archivo.name}" cargado. Revisa la vista previa y crea la tabla.`, "exito");
       } catch (error) {
@@ -408,12 +407,86 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
       }
     }
 
+    /*
+      Varios archivos a la vez son varias tablas: volcarlos todos en el área de
+      pegado no tiene sentido, así que cada uno se crea directo con el nombre de
+      su archivo, sin vista previa. Uno que falla no frena a los demás; al final
+      se dice cuáles entraron y cuáles no. Un solo archivo sigue el camino de
+      siempre, con vista previa antes de crear.
+    */
+    async function cargarArchivos(lista) {
+      const archivos = Array.from(lista ?? []);
+      if (archivos.length <= 1) {
+        await cargarArchivo(archivos[0]);
+        return;
+      }
+
+      const creadas = [];
+      const fallidas = [];
+      let primeraCreada = null;
+      // Los motivos vienen como oraciones; entre paréntesis sobra su punto final.
+      const fallo = (archivo, motivo) => fallidas.push(`${archivo.name} (${motivo.replace(/\.$/, "")})`);
+
+      for (const archivo of archivos) {
+        const tabla = nombreTablaDesdeArchivo(archivo.name);
+        if (/\.(xlsx|xls)$/i.test(archivo.name)) {
+          fallo(archivo, "Excel no se lee directo, guárdalo como CSV");
+          continue;
+        }
+
+        try {
+          const texto = decodificarTextoImportado(new Uint8Array(await archivo.arrayBuffer()));
+          const analizada = analizarTablaPegada(texto);
+          if (analizada.error) {
+            fallo(archivo, analizada.error);
+            continue;
+          }
+
+          const resultado = await ejecutarSql(
+            construirSentenciasTabla({
+              nombre: tabla,
+              columnas: analizada.columnas,
+              filas: analizada.filas,
+            }),
+          );
+          if (resultado?.ok) {
+            const filas = analizada.filas.length;
+            creadas.push(`${tabla} (${filas} ${filas === 1 ? "fila" : "filas"})`);
+            primeraCreada ??= tabla;
+          } else {
+            fallo(archivo, resultado?.error || "no se pudo crear");
+          }
+        } catch (error) {
+          fallo(archivo, "no se pudo leer");
+        }
+      }
+
+      if (primeraCreada) {
+        tablaActiva = primeraCreada;
+        await refrescarTablas();
+      }
+
+      const partes = [];
+      if (creadas.length > 0) {
+        const cuantas = creadas.length === 1 ? "1 tabla creada" : `${creadas.length} tablas creadas`;
+        partes.push(`${cuantas}: ${creadas.join(", ")}.`);
+      }
+      if (fallidas.length > 0) {
+        partes.push(`No se pudieron crear: ${fallidas.join("; ")}.`);
+      }
+      anunciar(
+        partes.join(" "),
+        fallidas.length === 0 ? "exito" : creadas.length === 0 ? "error" : "aviso",
+      );
+    }
+
     const selectorArchivo = document.createElement("input");
     selectorArchivo.type = "file";
     selectorArchivo.accept = ".csv,.tsv,.txt,text/csv,text/plain";
+    selectorArchivo.multiple = true;
     selectorArchivo.hidden = true;
     selectorArchivo.addEventListener("change", () => {
-      cargarArchivo(selectorArchivo.files[0]);
+      cargarArchivos(selectorArchivo.files);
       // Permite volver a elegir el mismo archivo después de corregirlo.
       selectorArchivo.value = "";
     });
@@ -434,7 +507,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     }
     pegado.addEventListener("drop", (suceso) => {
       suceso.preventDefault();
-      cargarArchivo(suceso.dataTransfer?.files?.[0]);
+      cargarArchivos(suceso.dataTransfer?.files);
     });
 
     function refrescarPrevia() {

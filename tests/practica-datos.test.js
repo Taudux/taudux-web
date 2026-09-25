@@ -24,6 +24,7 @@ const {
   sentenciaInsertarFila,
   tipoSqlValido,
   decodificarTextoImportado,
+  nombreTablaDesdeArchivo,
 } = require(path.join(ROOT, "src/app/features/codigo/practica.datos.js"));
 
 /*
@@ -399,4 +400,16 @@ test("lo decodificado se puede analizar y volcar a SQL", () => {
   assert.deepEqual(columnas.map((columna) => columna.nombre), ["producto", "monto"]);
   assert.equal(filas.length, 2);
   assert.match(construirSentenciasTabla({ nombre: "t", columnas, filas }), /\('Silla', 100\)/);
+});
+
+test("el nombre del archivo da el nombre de la tabla", () => {
+  assert.equal(nombreTablaDesdeArchivo("clientes.csv"), "clientes");
+  assert.equal(nombreTablaDesdeArchivo("detalle_pedidos.csv"), "detalle_pedidos");
+  assert.equal(nombreTablaDesdeArchivo("Categorías 2024.CSV"), "categorias_2024");
+  // Sólo se quita la última extensión.
+  assert.equal(nombreTablaDesdeArchivo("ventas.2024.csv"), "ventas_2024");
+  assert.equal(nombreTablaDesdeArchivo("pedidos"), "pedidos");
+  // Un nombre que no deja nada usable cae al mismo respaldo que el campo.
+  assert.equal(nombreTablaDesdeArchivo(".csv"), "datos");
+  assert.equal(nombreTablaDesdeArchivo("select.csv"), "select_col");
 });

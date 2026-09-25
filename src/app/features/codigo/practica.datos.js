@@ -543,6 +543,16 @@ function decodificarTextoImportado(bytes) {
   }
 }
 
+/*
+  El nombre del archivo es el mejor candidato a nombre de la tabla: "clientes.csv"
+  entra como clientes. Sólo se quita la última extensión, así "ventas.2024.csv"
+  conserva el año.
+*/
+function nombreTablaDesdeArchivo(nombreArchivo) {
+  const sinExtension = String(nombreArchivo ?? "").replace(/\.[^.]+$/, "");
+  return normalizarNombreIdentificador(sinExtension, "datos");
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     FILAS_POR_INSERT,
@@ -565,5 +575,6 @@ if (typeof module === "object" && module.exports) {
     sentenciaInsertarFila,
     tipoSqlValido,
     decodificarTextoImportado,
+    nombreTablaDesdeArchivo,
   });
 }
