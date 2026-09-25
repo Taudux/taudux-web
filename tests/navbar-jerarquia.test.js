@@ -609,3 +609,23 @@ test("the dropdown scrollbar wears the same brand gradient as the page", () => {
     /@supports not selector\(::-webkit-scrollbar\)\s*\{\s*\.nav-menu__list\s*\{[^}]*scrollbar-color:\s*var\(--color-accent-dark\)\s+#0b0d10/
   );
 });
+
+test("the dropdown grows to the window height instead of a fixed cap", () => {
+  /*
+    Con el tope `min(70vh, 480px)` el menú de cuenta scrolleaba por apenas
+    30 px en una ventana de 620 px de alto con Tools abierto: 462 px de
+    contenido contra 434 de tope, con 150 px libres debajo. Desde el
+    2026-09-24 el tope es la ventana misma, menos la barra y un margen: la
+    barra de scroll aparece sólo cuando de verdad no cabe.
+  */
+  const css = sinComentariosCss(read("src/app/shared/navbar/navbar.css"));
+  // Anclada al inicio de la línea: `.nav-menu--site .nav-menu__list {` también
+  // contiene el texto y aparece antes en el archivo.
+  const regla = css.match(/(?:^|\n)\s*\.nav-menu__list\s*\{([^}]*)\}/);
+  assert.ok(regla, "falta la regla .nav-menu__list");
+  const cuerpo = regla[1];
+
+  assert.match(cuerpo, /max-block-size:\s*calc\(100dvh\s*-\s*var\(--navbar-height\)\s*-\s*1\.5rem\)/);
+  assert.doesNotMatch(cuerpo, /70vh|480px/, "el tope fijo no vuelve");
+  assert.match(cuerpo, /overflow-y:\s*auto/, "si igual no cabe, scrollea por dentro");
+});

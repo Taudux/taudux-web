@@ -369,8 +369,12 @@
     min-width: 160px;
     margin-top: 8px;
     /* El menú creció de 5 a 8 entradas con la jerarquía de 2 niveles; sin
-       este tope, en mobile podía desbordar el viewport. */
-    max-block-size: min(70vh, 480px);
+       tope, en mobile podía desbordar el viewport. El tope es la ventana
+       misma: su alto menos la barra, los 8px de margin-top y 16px de aire.
+       Hasta el 2026-09-24 era min(70vh, 480px), y con Tools abierto en una
+       ventana de 620px scrolleaba por 30px teniendo 150px libres debajo.
+       dvh y no vh: en mobile sigue el alto real con la barra del navegador. */
+    max-block-size: calc(100dvh - var(--navbar-height) - 1.5rem);
     overflow-y: auto;
   }
 
