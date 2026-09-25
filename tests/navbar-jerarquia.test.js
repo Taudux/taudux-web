@@ -576,3 +576,36 @@ test("every page that mounts the navbar loads the stylesheets it needs", () => {
     );
   });
 });
+
+test("the dropdown scrollbar wears the same brand gradient as the page", () => {
+  /*
+    Cuando el desplegable no cabe, scrollea por dentro (`overflow-y: auto` en
+    `.nav-menu__list`). Hasta el 2026-09-24 esa barra era la del sistema: en
+    Windows, un riel blanco con flechas dentro de un menú oscuro. Ahora es la
+    misma que la de la página (ver tests/barra-scroll-pagina.test.js).
+  */
+  const css = sinComentariosCss(read("src/app/shared/navbar/navbar.css"));
+  const regla = (selector) => {
+    const inicio = css.indexOf(`${selector} {`);
+    assert.notEqual(inicio, -1, `falta la regla ${selector} en navbar.css`);
+    return css.slice(inicio, css.indexOf("}", inicio));
+  };
+
+  assert.match(regla(".nav-menu__list::-webkit-scrollbar"), /width:\s*8px/);
+  assert.match(regla(".nav-menu__list::-webkit-scrollbar-track"), /background:\s*#0b0d10/);
+  // Con flechas, igual que la de la página: triángulos cian en SVG.
+  assert.match(regla(".nav-menu__list::-webkit-scrollbar-button:single-button:vertical"), /display:\s*block/);
+  assert.match(regla(".nav-menu__list::-webkit-scrollbar-button:single-button:vertical:decrement"), /background-image:\s*url\("data:image\/svg\+xml/);
+  assert.match(regla(".nav-menu__list::-webkit-scrollbar-button:single-button:vertical:increment"), /background-image:\s*url\("data:image\/svg\+xml/);
+  assert.match(
+    regla(".nav-menu__list::-webkit-scrollbar-thumb"),
+    /linear-gradient\(to bottom,\s*var\(--color-accent-dark\),\s*var\(--color-accent\)\)/
+  );
+
+  // Firefox recibe los colores dentro de @supports: en Chrome un
+  // `scrollbar-color` anula los `::-webkit-scrollbar` del mismo elemento.
+  assert.match(
+    css,
+    /@supports not selector\(::-webkit-scrollbar\)\s*\{\s*\.nav-menu__list\s*\{[^}]*scrollbar-color:\s*var\(--color-accent-dark\)\s+#0b0d10/
+  );
+});

@@ -374,6 +374,37 @@
     overflow-y: auto;
   }
 
+  /* Cuando no cabe, scrollea con la misma barra que la página (ver html en
+     styles.css): degradado de la marca, riel oscuro, flechas cian. */
+  .nav-menu__list::-webkit-scrollbar { width: 8px; }
+  .nav-menu__list::-webkit-scrollbar-track { background: #0b0d10; }
+  .nav-menu__list::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, var(--color-accent-dark), var(--color-accent));
+    border-radius: 99px;
+  }
+  .nav-menu__list::-webkit-scrollbar-button:single-button:vertical {
+    display: block;
+    height: 0.75rem;
+    background: #0b0d10 no-repeat center / 8px 8px;
+  }
+  .nav-menu__list::-webkit-scrollbar-button:single-button:vertical:decrement {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 2 L7 6 H1 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .nav-menu__list::-webkit-scrollbar-button:single-button:vertical:increment {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1 2 H7 L4 6 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .nav-menu__list::-webkit-scrollbar-button:vertical:start:increment,
+  .nav-menu__list::-webkit-scrollbar-button:vertical:end:decrement { display: none; }
+
+  /* Firefox: mismos colores, sin degradado. Dentro de @supports porque en
+     Chrome un `scrollbar-color` anula los ::-webkit-scrollbar. */
+  @supports not selector(::-webkit-scrollbar) {
+    .nav-menu__list {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-accent-dark) #0b0d10;
+    }
+  }
+
   .nav-menu__group {
     display: flex;
     flex-direction: column;
