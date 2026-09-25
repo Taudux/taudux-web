@@ -325,7 +325,7 @@ test("children render inside the accordion panel with the indentation class", ()
 
   const panelInterior = panel.children[0];
   const textos = panelInterior.children.map((hijo) => hijo.textContent);
-  assert.deepEqual(textos, ["Cursos", "Notas", "Código"]);
+  assert.deepEqual(textos, ["Cursos", "Slides", "Notas", "Código"]);
 
   panelInterior.children.forEach((hijo) => {
     assert.match(hijo.className, /\bnav-menu__link--child\b/, `${hijo.textContent} debe tener la clase de indentación`);

@@ -1,0 +1,289 @@
+/* Slides: catálogo de presentaciones y visor de diapositivas HTML. */
+
+@layer features {
+  /*
+    EL FONDO. Mismo orden de capas que colaboradores (ver colaboradores.css,
+    a su vez copiado del inicio):
+
+        body (color plano)  <  degradado  <  #particles-fondo  <  contenido
+
+    Va acotado a `.slides-page` para que nada de esto se filtre a otra página
+    que cargue esta hoja por error. Las dos capas comparten alto (`100lvh`):
+    anclar una sola deja una costura visible cuando la barra del navegador
+    móvil aparece o se va.
+  */
+  body.slides-page::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-behind);
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 40% 55% at 22% 60%, rgba(0, 180, 220, 0.14), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 72% 50%, rgba(24, 82, 210, 0.14), transparent 70%),
+      linear-gradient(180deg, #020408 0%, #050a11 62%, #06131b 100%);
+  }
+
+  .slides-page #particles-fondo {
+    position: fixed;
+    inset: 0 0 auto 0;
+    /* `lvh` y no el viewport dinámico: tsParticles reconstruye su canvas cada
+       vez que la caja cambia de tamaño, y en móvil eso pasaba justo al empezar
+       a deslizar. El `vh` es el respaldo para navegadores sin `lvh`. */
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-base);
+    pointer-events: none;
+  }
+
+  /* El glow lo dibuja tsParticles por partícula; un filter sobre el canvas se
+     re-aplicaría al lienzo completo en cada frame. */
+  .slides-page #particles-fondo canvas {
+    opacity: 0.88;
+  }
+
+  .slides-page [hidden] {
+    display: none;
+  }
+
+  .slides {
+    position: relative;
+    z-index: var(--z-content);
+    padding-block: var(--espacio-bajo-navbar) 3rem;
+    padding-inline: 2rem;
+  }
+
+  .slides__header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-block-end: 1.75rem;
+  }
+
+  .slides__eyebrow {
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  .slides__titulo {
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+
+  /* Aviso de carga, error o catálogo vacío: mismo patrón que
+     colaboradores__aviso, con el botón de reintentar oculto hasta el error. */
+  .slides__aviso {
+    display: grid;
+    justify-items: start;
+    gap: 1rem;
+    padding: 1rem;
+    margin-block-end: 1.5rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+  }
+
+  .slides__aviso--error {
+    border-color: color-mix(in srgb, var(--color-error) 38%, transparent);
+  }
+
+  .slides__aviso-mensaje {
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .slides__aviso--error .slides__aviso-mensaje {
+    color: var(--color-error);
+  }
+
+  .slides__grilla {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.25rem;
+    list-style: none;
+  }
+
+  .slides__celda {
+    min-inline-size: 0;
+  }
+
+  .slides__tarjeta {
+    display: block;
+    inline-size: 100%;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.05);
+    border: var(--border-subtle);
+    border-radius: var(--radius-panel);
+    padding: 1.25rem;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+  }
+
+  .slides__tarjeta:hover {
+    border-color: var(--color-accent);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .slides__tarjeta:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .slides__tarjeta-titulo {
+    font: 700 1.05rem var(--font-display);
+    margin-block-end: 0.4rem;
+    overflow-wrap: anywhere;
+  }
+
+  .slides__tarjeta-descripcion {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- Visor ---------- */
+
+  /*
+    Con el visor abierto la página entera cabe en la ventana, sin scroll: la
+    diapositiva se agranda hasta llenar el alto que dejan la navbar y la fila
+    de botones, y recién ahí la limita el ancho. Por eso el visor se libera
+    del tope de `.u-contenedor` —el catálogo lo conserva—.
+
+    `--slides-reservado` es todo lo que no es diapositiva en el eje vertical:
+    el padding de arriba (navbar + aire), el de abajo, el gap y los botones.
+    Si alguno cambia, cambia acá.
+  */
+  .slides:has(#slidesVisor:not([hidden])) {
+    --slides-aire: 1rem;
+    --slides-reservado: calc(var(--navbar-height) + var(--slides-aire) * 3 + 2.5rem);
+    padding-block: calc(var(--navbar-height) + var(--slides-aire)) var(--slides-aire);
+  }
+
+  .slides:has(#slidesVisor:not([hidden])) .slides__contenido {
+    max-inline-size: none;
+  }
+
+  .slides__visor {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /*
+    El marco mantiene 16:9 fuera de pantalla completa. Adentro, el <iframe>
+    llena el marco con posición absoluta — así el escalado interno de cada
+    diapositiva (container-type: size + cqw/cqh) hace el resto sin que este
+    marco le imponga un transform.
+  */
+  .slides__marco {
+    position: relative;
+    inline-size: min(100%, calc((100dvh - var(--slides-reservado, 0px)) * 16 / 9));
+    margin-inline: auto;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+  }
+
+  .slides__iframe {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    border: 0;
+  }
+
+  /*
+    Pantalla completa: el marco pasa a llenar la ventana, pero la diapositiva
+    sigue siendo 16:9 — el iframe se acota con min() a lo que entre sin
+    deformarse y el marco hace de "letterbox" negro alrededor. Sin esto, un
+    monitor que no sea 16:9 estiraría cada diapositiva.
+  */
+  .slides__marco:fullscreen,
+  .slides__marco:-webkit-full-screen {
+    inline-size: 100vw;
+    block-size: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    border-radius: 0;
+  }
+
+  .slides__marco:fullscreen .slides__iframe,
+  .slides__marco:-webkit-full-screen .slides__iframe {
+    position: static;
+    inline-size: min(100vw, calc(100vh * 16 / 9));
+    block-size: min(100vh, calc(100vw * 9 / 16));
+  }
+
+  .slides__controles {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .slides__control {
+    font: inherit;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    border-radius: var(--radius-pill);
+    border: var(--border-subtle);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 1.25rem;
+    line-height: 1;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+  }
+
+  .slides__control:hover {
+    border-color: var(--color-accent);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .slides__control:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .slides__control--pantalla {
+    font-size: 1rem;
+  }
+
+  .slides__control:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .slides__noscript {
+    margin-block-start: 1rem;
+  }
+
+  /* ---------- Responsive ---------- */
+
+  @media (max-width: 760px) {
+    .slides {
+      padding-inline: 1rem;
+    }
+  }
+
+
+  @media (prefers-reduced-motion: reduce) {
+    .slides__tarjeta,
+    .slides__control {
+      transition: none;
+    }
+  }
+}

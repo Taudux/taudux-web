@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="Presentaciones de Taudux Academy: cada una es un deck HTML navegable con el teclado y en pantalla completa." />
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Slides | Taudux</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/features/slides/slides.css">
+</head>
+
+<body class="slides-page">
+  <!-- El mismo fondo de estrellas del inicio y de colaboradores: fijo a la
+       ventana y fuera del contenido, para que acompañe el scroll. -->
+  <div id="particles-fondo" aria-hidden="true"></div>
+
+  <nav class="navbar" aria-label="Navegación principal">
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <!-- navbar.js reemplaza este botón por el menú de cuenta. El href real es
+           el respaldo si el script no llega a correr. -->
+      <a href="/app/features/auth/login/" id="accessBtn" class="navbar__link button button--access">Acceder</a>
+    </div>
+  </nav>
+
+  <main class="slides">
+    <div class="slides__contenido u-contenedor">
+
+      <section class="slides__catalogo" id="slidesCatalogo" aria-labelledby="slidesTitulo">
+        <header class="slides__header">
+          <p class="slides__eyebrow">Taudux Academy</p>
+          <h1 class="slides__titulo heading--gradient" id="slidesTitulo">Slides</h1>
+
+          <noscript>
+            <p class="slides__noscript panel">
+              El catálogo y el visor se arman en el navegador, así que esta
+              sección necesita JavaScript habilitado.
+            </p>
+          </noscript>
+        </header>
+
+        <!-- Carga, error o catálogo vacío. `status` y no `alert`: también
+             anuncia "Cargando…", y eso no amerita interrumpir. -->
+        <div class="slides__aviso" id="slidesAviso" role="status" tabindex="-1" hidden>
+          <p class="slides__aviso-mensaje" id="slidesAvisoMensaje"></p>
+          <button class="button button--outline" type="button" id="slidesReintentar" hidden>Reintentar carga</button>
+        </div>
+
+        <ul class="slides__grilla" id="slidesGrilla" aria-label="Presentaciones disponibles"></ul>
+      </section>
+
+      <section class="slides__visor" id="slidesVisor" aria-labelledby="slidesVisorTitulo" hidden>
+        <!-- Sin barra visible: la diapositiva ocupa todo el alto disponible.
+             El título y el contador siguen para el lector de pantalla —el
+             título nombra la sección y el contador avisa cada cambio—. -->
+        <h2 class="u-visually-hidden" id="slidesVisorTitulo" tabindex="-1"></h2>
+        <p class="u-visually-hidden" id="slidesContador" aria-live="polite"></p>
+
+        <div class="slides__marco" id="slidesMarco">
+          <!-- Sin `sandbox` a propósito: allow-scripts + allow-same-origin lo
+               anula del todo (el navegador lo avisa en consola), y el visor
+               necesita el mismo origen para escuchar el teclado adentro. Las
+               diapositivas son archivos propios del repo, no contenido ajeno. -->
+          <iframe class="slides__iframe" id="slidesIframe" title="Diapositiva"></iframe>
+        </div>
+
+        <div class="slides__controles">
+          <button type="button" class="slides__control" id="slidesAnterior" aria-label="Diapositiva anterior">‹</button>
+          <button type="button" class="slides__control slides__control--pantalla" id="slidesPantallaCompleta"
+            aria-label="Pantalla completa">⛶</button>
+          <button type="button" class="slides__control" id="slidesSiguiente" aria-label="Siguiente diapositiva">›</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/core/slides/slides.service.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script src="/app/features/slides/slides.logica.js"></script>
+  <script src="/app/features/slides/slides.fondo.js"></script>
+  <script src="/app/features/slides/slides.js"></script>
+</body>
+
+</html>

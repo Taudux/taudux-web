@@ -18,6 +18,10 @@ const CSS = read("src/app/features/colaboradores/colaboradores.css");
 const JS = read("src/app/features/colaboradores/colaboradores.js");
 const FONDO = read("src/app/features/colaboradores/colaboradores.fondo.js");
 const HOME_JS = read("src/app/features/home/home.js");
+// La misma copia deliberada existe una tercera vez, en Slides: ver
+// slides.fondo.js. Se compara acá y no en un archivo propio de esa página
+// porque es el mismo literal que ya vigila este test, no uno nuevo.
+const SLIDES_FONDO = read("src/app/features/slides/slides.fondo.js");
 
 const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
@@ -402,9 +406,10 @@ test("motion is switched off for people who asked for less of it", () => {
 });
 
 /*
-  colaboradores.fondo.js copia a propósito las opciones de cargarParticulasFondo()
-  para no tocar home.js. Una copia sin vigilancia se desfasa en silencio: acá se
-  comparan los dos literales y el primero que cambie solo rompe la suite.
+  colaboradores.fondo.js (y ahora slides.fondo.js) copian a propósito las
+  opciones de cargarParticulasFondo() para no tocar home.js. Una copia sin
+  vigilancia se desfasa en silencio: acá se comparan los tres literales y el
+  primero que cambie solo rompe la suite.
 */
 function opcionesDelFondo(fuente, nombre) {
   const marca = 'tsParticles.load("particles-fondo",';
@@ -424,7 +429,11 @@ function opcionesDelFondo(fuente, nombre) {
 test("the starfield options are the same literal the home uses", () => {
   const propias = opcionesDelFondo(FONDO, "colaboradores.fondo.js");
   assert.ok(propias.includes("fpsLimit: 30"), "la extracción debe traer el literal completo");
-  assert.equal(propias, opcionesDelFondo(HOME_JS, "home.js"));
+  const delHogar = opcionesDelFondo(HOME_JS, "home.js");
+  assert.equal(propias, delHogar);
+  // Slides es la tercera copia: si alguna de las tres se desajusta, la suite
+  // debe fallar acá y no dejar que el cielo se vea distinto en una página.
+  assert.equal(opcionesDelFondo(SLIDES_FONDO, "slides.fondo.js"), delHogar);
 });
 
 test("the starfield loader is a no-op without the library", () => {

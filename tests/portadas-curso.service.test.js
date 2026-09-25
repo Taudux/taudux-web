@@ -59,8 +59,12 @@ const FORM_SOURCE = [
   fs.readFileSync(FORM_CATEGORIES_PATH, "utf8"),
 ].join("\n");
 const FORM_HTML_SOURCE = fs.readFileSync(FORM_HTML_PATH, "utf8");
+// `assets/vendor/` queda fuera: es código de terceros servido tal cual (hoy,
+// plotly.min.js, que trae sus propios `.storage` minificados). El guard vigila
+// que NUESTRO código de navegador no toque Storage directo.
 const BROWSER_SOURCE = fs.readdirSync("src", { recursive: true })
   .filter((file) => /\.(?:html|js)$/.test(file))
+  .filter((file) => !file.split(path.sep).join("/").startsWith("assets/vendor/"))
   .map((file) => fs.readFileSync(path.join("src", file), "utf8")).join("\n");
 const validation = import(pathToFileURL(path.resolve(VALIDATION_PATH)).href);
 const endpoint = import(pathToFileURL(path.resolve(FUNCTION_PATH)).href);
