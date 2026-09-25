@@ -34,6 +34,8 @@ const ENLACES_NAVEGACION_BASE = [
     texto: "Academy",
     hijos: [
       { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
+      // El visor de presentaciones: cada una es un deck HTML autocontenido.
+      { texto: "Slides", href: "/app/features/slides/", habilitado: true },
       // Ya existía como marcador de posición; ahora la sección existe.
       { texto: "Notas", href: "/app/features/notas/", habilitado: true },
       // Va dentro de Academy y no en Tools: es para practicar lo que se

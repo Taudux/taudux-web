@@ -244,35 +244,81 @@ test("the other three hardening headers are served", () => {
                "strict-origin-when-cross-origin");
 });
 
-test("the deck runs under the general CSP: there is no per-path rule for /afgi", () => {
-  /*
-    Hubo una regla propia para `/afgi` con `'unsafe-inline'` porque el deck
-    traía su navegación en un `<script>` inline. Costó dos arreglos seguidos
-    (el orden de las reglas, medido en producción el 2026-09-05, y la forma del
-    `source`) y nunca fue necesaria: el script vive ahora en `afgi/deck.js` y
-    el deck corre bajo la política general como cualquier otra página. Sin
-    regla no hay excepción que mantener ni orden que cuidar.
-  */
-  const conAfgi = reglas().filter((r) => r.source.startsWith("/afgi"));
-  assert.deepEqual(conAfgi, [],
-    "el deck no necesita regla propia: su script ya no es inline");
+/*
+  Cada presentación de Slides es un deck HTML autocontenido bajo su propia
+  carpeta en `/content/slides/<slug>/` (hoy, `visualizacion-de-datos/`), que
+  el visor abre dentro de un `<iframe>` del propio sitio. Ese iframe es del
+  propio sitio, pero `frame-ancestors 'none'` de la regla general se lo
+  prohibiría a sí mismo, así que el catálogo entero necesita una regla propia
+  que relaje eso.
+
+  La misma regla abre `'unsafe-eval'`: la gráfica de coordenadas paralelas
+  (`parcoords`) de Plotly dibuja con WebGL a través de regl, que compila sus
+  shaders con `new Function()`. Sin eval sale vacía con "WebGL is not
+  supported" aunque el navegador tenga WebGL. Probado en Chrome el
+  2026-09-25: con la CSP general, la diapositiva 23 del taller queda vacía;
+  sin CSP, dibuja sus 12 ejes. Son decks propios y estáticos, sin datos de
+  usuarios, y la excepción no sale de `/content/slides/`.
+*/
+const RUTA_SLIDES = "/content/slides(.*)";
+
+test("the slides catalog has its own header rule, and it differs from the general CSP only in frame-ancestors and eval", () => {
+  const reglaSlides = reglaDe(RUTA_SLIDES);
+  assert.ok(reglaSlides, `falta la regla de ${RUTA_SLIDES}`);
+
+  const orden = reglas().map((r) => r.source);
+  assert.ok(orden.indexOf(RUTA_SLIDES) > orden.indexOf(RUTA_APP),
+    "la regla de slides debe ir DESPUÉS de la general, o la general la pisa");
+
+  const cspSlides = valorDe(reglaSlides, "Content-Security-Policy") || "";
+  assert.equal(
+    cspSlides
+      .replace("frame-ancestors 'self'", "frame-ancestors 'none'")
+      .replace(/ 'unsafe-eval'(?= )/, ""),
+    cspApp(),
+    "quitando frame-ancestors y 'unsafe-eval', la CSP de slides debe ser idéntica a la general: si difieren, se desviaron"
+  );
+
+  const partesSlides = cspSlides.split(";").map((p) => p.trim());
+  const scriptSlides = partesSlides.find((p) => p.startsWith("script-src ")) || "";
+  assert.match(scriptSlides, /(^|\s)'unsafe-eval'(\s|$)/,
+    "la gráfica parcoords de Plotly necesita 'unsafe-eval' o sale vacía");
+  assert.ok(partesSlides.includes("frame-ancestors 'self'"),
+    "el visor muestra cada diapositiva en un <iframe> del propio sitio");
+
+  // El mismo relajo, y sólo ahí: X-Frame-Options pasa de DENY a SAMEORIGIN,
+  // pero nunca a ALLOW-FROM ni se quita.
+  assert.equal(valorDe(reglaSlides, "X-Frame-Options"), "SAMEORIGIN");
+  assert.equal(
+    valorDe(reglaSlides, "X-Content-Type-Options"),
+    valorDe(reglaDe(RUTA_APP), "X-Content-Type-Options")
+  );
+  assert.equal(
+    valorDe(reglaSlides, "Referrer-Policy"),
+    valorDe(reglaDe(RUTA_APP), "Referrer-Policy")
+  );
+  // Las diapositivas sueltas (un enlace directo, sin el visor alrededor) no
+  // son un destino de búsqueda: son fragmentos de una presentación.
+  assert.equal(valorDe(reglaSlides, "X-Robots-Tag"), "noindex, nofollow");
 });
 
-test("the deck loads its script from an absolute path: /afgi is served without a trailing slash too", () => {
-  /*
-    Producción responde 200 tanto en `/afgi/` como en `/afgi`. Desde la segunda,
-    un `src="deck.js"` relativo resolvería a `/deck.js` y el deck quedaría sin
-    navegación sólo en esa forma de la URL: el tipo de bug que aparece en un
-    enlace y no en otro.
-  */
-  const html = leer("src/afgi/index.html");
-  assert.match(html, /<script[^>]*\ssrc="\/afgi\/deck\.js"/,
-    "el deck debe cargar /afgi/deck.js con ruta absoluta");
-  assert.ok(fs.existsSync(path.join(ROOT, "src/afgi/deck.js")),
-    "falta src/afgi/deck.js");
+test("no path other than the slides catalog relaxes frame-ancestors or X-Frame-Options", () => {
+  reglas().filter((r) => r.source !== RUTA_SLIDES).forEach((r) => {
+    const csp = valorDe(r, "Content-Security-Policy") || "";
+    assert.doesNotMatch(
+      csp.split(";").map((p) => p.trim()).find((p) => p.startsWith("frame-ancestors")) || "",
+      /'self'/,
+      `${r.source} no debe relajar frame-ancestors: sólo el visor de slides lo necesita`
+    );
+
+    const xfo = valorDe(r, "X-Frame-Options");
+    if (xfo !== undefined) {
+      assert.equal(xfo, "DENY", `${r.source} no debe relajar X-Frame-Options`);
+    }
+  });
 });
 
-test("only the R page may eval — webR's runtime needs it, nothing else does", () => {
+test("only the R page and the slides decks may eval — webR and Plotly's WebGL charts need it, nothing else does", () => {
   /*
     webR no arranca sin `'unsafe-eval'`: su `R.js` importa
     `emscripten_run_script`, que es `eval()` sobre una cadena, y R lo llama al
@@ -305,9 +351,10 @@ test("only the R page may eval — webR's runtime needs it, nothing else does", 
       `${nombre} de la regla de R debe ser el mismo que el de la general`);
   });
 
-  reglas().filter((r) => r.source !== RUTA_R).forEach((r) => {
+  // La otra excepción, la de slides, se fija en su propio test (arriba).
+  reglas().filter((r) => r.source !== RUTA_R && r.source !== RUTA_SLIDES).forEach((r) => {
     assert.doesNotMatch(valorDe(r, "Content-Security-Policy") || "", /(^|\s)'unsafe-eval'/,
-      `${r.source} no debe abrir eval(): sólo la página de R lo necesita`);
+      `${r.source} no debe abrir eval(): sólo la página de R y los decks de slides lo necesitan`);
   });
 });
 
@@ -342,10 +389,11 @@ test("no page introduces inline scripts or on* handlers", () => {
     **El guard que sostiene el `script-src` estricto.**
 
     Hoy es cierto: cero handlers inline y cero `<script>` sin `src` en todo el
-    repo (el del deck de AFGI se mudó a `afgi/deck.js` el 2026-09-05, y con él
-    se fue la única página exenta). Ese hecho es lo que permite la política
-    estricta — si alguien agrega un `onclick=` mañana, la página se rompe en
-    producción y el arreglo tentador es relajar el CSP.
+    repo (los decks de Slides también van con `<script src>`: sus specs de
+    Plotly y su controlador viven en `graficas.js`/`deck.js`, aparte del
+    HTML). Ese hecho es lo que permite la política estricta — si alguien
+    agrega un `onclick=` mañana, la página se rompe en producción y el
+    arreglo tentador es relajar el CSP.
 
     Este test hace que se rompa acá primero, que es mucho más barato.
   */
