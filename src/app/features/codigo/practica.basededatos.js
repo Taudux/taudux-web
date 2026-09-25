@@ -361,7 +361,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     const explicacion = document.createElement("p");
     explicacion.className = "practica__base-nota";
     explicacion.textContent =
-      "Importa un CSV, arrástralo aquí, o pega directamente lo que tengas copiado de Excel.";
+      "Importa archivos CSV o de Excel (puedes elegir varios), arrástralos aquí, o pega directamente lo que tengas copiado.";
     bloque.appendChild(explicacion);
 
     // Etiqueta distinta de la del creador manual: dos campos con el mismo nombre
@@ -377,87 +377,130 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
     const previa = document.createElement("div");
 
-    /* --- Importar un archivo ---------------------------------------- */
+    /* --- Importar archivos ------------------------------------------- */
 
-    async function cargarArchivo(archivo) {
-      if (!archivo) return;
+    const ES_EXCEL = /\.(xlsx|xls)$/i;
 
-      /*
-        .xlsx no se lee acá: es un ZIP de XML y parsearlo exigiría una librería de
-        cientos de kilobytes. Copiar y pegar desde Excel ya funciona —el pegado
-        llega separado por tabuladores y el análisis lo detecta— así que el rodeo
-        no vale su precio.
-      */
-      if (/\.(xlsx|xls)$/i.test(archivo.name)) {
-        anunciar(
-          "Los archivos de Excel no se leen directo. Guarda como CSV, o copia las celdas y pégalas aquí abajo.",
-          "aviso",
-        );
-        return;
-      }
-
-      try {
-        const bytes = new Uint8Array(await archivo.arrayBuffer());
-        pegado.value = decodificarTextoImportado(bytes);
-        nombre.value = nombreTablaDesdeArchivo(archivo.name);
-        refrescarPrevia();
-        anunciar(`"${archivo.name}" cargado. Revisa la vista previa y crea la tabla.`, "exito");
-      } catch (error) {
-        anunciar("No se pudo leer el archivo.", "error");
-      }
+    /*
+      Excel es un ZIP de XML y leerlo exige una librería de cerca de 1 MB. Por eso
+      se pide recién cuando llega el primer Excel: quien importa CSV, o no importa
+      nada, no la descarga nunca. Se aloja en el sitio y no se pide al CDN porque
+      la versión de npm (0.18.5) quedó congelada con un fallo conocido al leer
+      archivos manipulados; la corregida sólo la publica su autor.
+    */
+    let cargaLectorExcel = null;
+    function lectorExcel() {
+      cargaLectorExcel ??= new Promise((resolver, rechazar) => {
+        const script = document.createElement("script");
+        script.src = "/assets/vendor/xlsx-0.20.3.full.min.js";
+        script.onload = () => resolver(window.XLSX);
+        script.onerror = () => {
+          // Sin memorizar el fallo: un corte de red no debe dejar Excel roto para siempre.
+          cargaLectorExcel = null;
+          rechazar(new Error("No se pudo cargar el lector de Excel."));
+        };
+        document.head.appendChild(script);
+      });
+      return cargaLectorExcel;
     }
 
     /*
-      Varios archivos a la vez son varias tablas: volcarlos todos en el área de
-      pegado no tiene sentido, así que cada uno se crea directo con el nombre de
-      su archivo, sin vista previa. Uno que falla no frena a los demás; al final
-      se dice cuáles entraron y cuáles no. Un solo archivo sigue el camino de
-      siempre, con vista previa antes de crear.
+      Todo archivo se reduce a "piezas" de texto separado por comas, una por tabla:
+      un CSV es una pieza y un libro de Excel, una por hoja con datos. Desde ahí el
+      camino es el mismo para los dos (tipos, nombres, vista previa).
+    */
+    async function leerPiezas(archivo) {
+      const bytes = new Uint8Array(await archivo.arrayBuffer());
+
+      if (!ES_EXCEL.test(archivo.name)) {
+        return [{
+          origen: archivo.name,
+          tabla: nombreTablaDesdeArchivo(archivo.name),
+          texto: decodificarTextoImportado(bytes),
+        }];
+      }
+
+      const XLSX = await lectorExcel();
+      // Las fechas de Excel son números por dentro; así salen como 2026-01-31 y
+      // entran como fecha, no como 46053.
+      const libro = XLSX.read(bytes, { cellDates: true, dateNF: "yyyy-mm-dd" });
+      const hojas = libro.SheetNames.map((nombreHoja) => ({
+        nombreHoja,
+        // rawNumbers: 15000 y no "15,000.00", que entraría como texto.
+        texto: XLSX.utils.sheet_to_csv(libro.Sheets[nombreHoja], {
+          blankrows: false,
+          rawNumbers: true,
+        }).trim(),
+      })).filter((hoja) => hoja.texto !== "");
+
+      if (hojas.length === 0) throw new Error("El libro no tiene hojas con datos.");
+
+      return hojas.map((hoja) => ({
+        origen: hojas.length === 1 ? archivo.name : `${archivo.name} › ${hoja.nombreHoja}`,
+        tabla: nombreTablaDesdeHoja(archivo.name, hoja.nombreHoja, hojas.length),
+        texto: hoja.texto,
+      }));
+    }
+
+    /*
+      Una sola pieza sigue el camino de siempre: va al área de pegado y se revisa
+      la vista previa antes de crear. Varias piezas (varios archivos, o un libro de
+      varias hojas) son varias tablas, así que se crean directo, cada una con su
+      nombre. Una que falla no frena a las demás; al final se dice cuáles entraron
+      y cuáles no.
     */
     async function cargarArchivos(lista) {
       const archivos = Array.from(lista ?? []);
-      if (archivos.length <= 1) {
-        await cargarArchivo(archivos[0]);
-        return;
-      }
+      if (archivos.length === 0) return;
 
       const creadas = [];
       const fallidas = [];
       let primeraCreada = null;
       // Los motivos vienen como oraciones; entre paréntesis sobra su punto final.
-      const fallo = (archivo, motivo) => fallidas.push(`${archivo.name} (${motivo.replace(/\.$/, "")})`);
+      const fallo = (origen, motivo) => fallidas.push(`${origen} (${motivo.replace(/\.$/, "")})`);
 
+      if (archivos.some((archivo) => ES_EXCEL.test(archivo.name))) {
+        anunciar("Leyendo el Excel…", "info");
+      }
+
+      const piezas = [];
       for (const archivo of archivos) {
-        const tabla = nombreTablaDesdeArchivo(archivo.name);
-        if (/\.(xlsx|xls)$/i.test(archivo.name)) {
-          fallo(archivo, "Excel no se lee directo, guárdalo como CSV");
+        try {
+          piezas.push(...(await leerPiezas(archivo)));
+        } catch (error) {
+          fallo(archivo.name, error?.message || "No se pudo leer");
+        }
+      }
+
+      if (piezas.length === 1 && fallidas.length === 0) {
+        const [pieza] = piezas;
+        pegado.value = pieza.texto;
+        nombre.value = pieza.tabla;
+        refrescarPrevia();
+        anunciar(`"${pieza.origen}" cargado. Revisa la vista previa y crea la tabla.`, "exito");
+        return;
+      }
+
+      for (const pieza of piezas) {
+        const analizada = analizarTablaPegada(pieza.texto);
+        if (analizada.error) {
+          fallo(pieza.origen, analizada.error);
           continue;
         }
 
-        try {
-          const texto = decodificarTextoImportado(new Uint8Array(await archivo.arrayBuffer()));
-          const analizada = analizarTablaPegada(texto);
-          if (analizada.error) {
-            fallo(archivo, analizada.error);
-            continue;
-          }
-
-          const resultado = await ejecutarSql(
-            construirSentenciasTabla({
-              nombre: tabla,
-              columnas: analizada.columnas,
-              filas: analizada.filas,
-            }),
-          );
-          if (resultado?.ok) {
-            const filas = analizada.filas.length;
-            creadas.push(`${tabla} (${filas} ${filas === 1 ? "fila" : "filas"})`);
-            primeraCreada ??= tabla;
-          } else {
-            fallo(archivo, resultado?.error || "no se pudo crear");
-          }
-        } catch (error) {
-          fallo(archivo, "no se pudo leer");
+        const resultado = await ejecutarSql(
+          construirSentenciasTabla({
+            nombre: pieza.tabla,
+            columnas: analizada.columnas,
+            filas: analizada.filas,
+          }),
+        );
+        if (resultado?.ok) {
+          const filas = analizada.filas.length;
+          creadas.push(`${pieza.tabla} (${filas} ${filas === 1 ? "fila" : "filas"})`);
+          primeraCreada ??= pieza.tabla;
+        } else {
+          fallo(pieza.origen, resultado?.error || "no se pudo crear");
         }
       }
 
@@ -482,7 +525,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
     const selectorArchivo = document.createElement("input");
     selectorArchivo.type = "file";
-    selectorArchivo.accept = ".csv,.tsv,.txt,text/csv,text/plain";
+    selectorArchivo.accept = ".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/plain";
     selectorArchivo.multiple = true;
     selectorArchivo.hidden = true;
     selectorArchivo.addEventListener("change", () => {
@@ -529,7 +572,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     acciones.className = "practica__base-acciones";
 
     acciones.append(
-      boton("Importar CSV", "button button--outline", () => selectorArchivo.click()),
+      boton("Importar CSV o Excel", "button button--outline", () => selectorArchivo.click()),
       boton("Crear tabla con estos datos", "button button--glow", async () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {

@@ -553,6 +553,17 @@ function nombreTablaDesdeArchivo(nombreArchivo) {
   return normalizarNombreIdentificador(sinExtension, "datos");
 }
 
+/*
+  Un libro de Excel con una sola hoja se nombra como el archivo, igual que un CSV.
+  Con varias, cada hoja lleva el archivo adelante: dos libros con su "Hoja1" no
+  deben pisarse la tabla.
+*/
+function nombreTablaDesdeHoja(nombreArchivo, nombreHoja, totalHojas) {
+  const archivo = nombreTablaDesdeArchivo(nombreArchivo);
+  if (totalHojas <= 1) return archivo;
+  return normalizarNombreIdentificador(`${archivo}_${nombreHoja}`, archivo);
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     FILAS_POR_INSERT,
@@ -576,5 +587,6 @@ if (typeof module === "object" && module.exports) {
     tipoSqlValido,
     decodificarTextoImportado,
     nombreTablaDesdeArchivo,
+    nombreTablaDesdeHoja,
   });
 }

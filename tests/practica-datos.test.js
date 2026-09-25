@@ -25,6 +25,7 @@ const {
   tipoSqlValido,
   decodificarTextoImportado,
   nombreTablaDesdeArchivo,
+  nombreTablaDesdeHoja,
 } = require(path.join(ROOT, "src/app/features/codigo/practica.datos.js"));
 
 /*
@@ -412,4 +413,14 @@ test("el nombre del archivo da el nombre de la tabla", () => {
   // Un nombre que no deja nada usable cae al mismo respaldo que el campo.
   assert.equal(nombreTablaDesdeArchivo(".csv"), "datos");
   assert.equal(nombreTablaDesdeArchivo("select.csv"), "select_col");
+});
+
+test("cada hoja de un libro de Excel da su propia tabla", () => {
+  // Una sola hoja: manda el archivo, como un CSV.
+  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "Hoja1", 1), "ventas");
+  // Varias: el archivo va adelante para que dos "Hoja1" no choquen.
+  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "Hoja1", 2), "ventas_hoja1");
+  assert.equal(nombreTablaDesdeHoja("Tienda 2024.xlsx", "Categorías", 3), "tienda_2024_categorias");
+  // Una hoja sin nombre usable no deja la tabla sin nombre.
+  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "***", 2), "ventas");
 });
