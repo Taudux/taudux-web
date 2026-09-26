@@ -554,14 +554,15 @@ function nombreTablaDesdeArchivo(nombreArchivo) {
 }
 
 /*
-  Un libro de Excel con una sola hoja se nombra como el archivo, igual que un CSV.
-  Con varias, cada hoja lleva el archivo adelante: dos libros con su "Hoja1" no
-  deben pisarse la tabla.
+  Un libro de varias hojas trae sus tablas ya nombradas: la hoja "productos" es
+  la tabla productos. Con una sola hoja manda el archivo, como en un CSV, porque
+  esa hoja suele llamarse "Hoja1". Si dos libros traen la misma hoja, el choque
+  lo marca la lista de importación; el nombre no intenta evitarlo.
 */
 function nombreTablaDesdeHoja(nombreArchivo, nombreHoja, totalHojas) {
   const archivo = nombreTablaDesdeArchivo(nombreArchivo);
   if (totalHojas <= 1) return archivo;
-  return normalizarNombreIdentificador(`${archivo}_${nombreHoja}`, archivo);
+  return normalizarNombreIdentificador(nombreHoja, archivo);
 }
 
 /*

@@ -422,10 +422,11 @@ test("el nombre del archivo da el nombre de la tabla", () => {
 test("cada hoja de un libro de Excel da su propia tabla", () => {
   // Una sola hoja: manda el archivo, como un CSV.
   assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "Hoja1", 1), "ventas");
-  // Varias: el archivo va adelante para que dos "Hoja1" no choquen.
-  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "Hoja1", 2), "ventas_hoja1");
-  assert.equal(nombreTablaDesdeHoja("Tienda 2024.xlsx", "Categorías", 3), "tienda_2024_categorias");
-  // Una hoja sin nombre usable no deja la tabla sin nombre.
+  // Varias: cada hoja ya es el nombre de su tabla, sin el archivo delante.
+  assert.equal(nombreTablaDesdeHoja("La_Tienda.xlsx", "detalle_pedidos", 5), "detalle_pedidos");
+  assert.equal(nombreTablaDesdeHoja("Tienda 2024.xlsx", "Categorías", 3), "categorias");
+  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "Hoja1", 2), "hoja1");
+  // Una hoja sin nombre usable cae al nombre del archivo.
   assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "***", 2), "ventas");
 });
 
