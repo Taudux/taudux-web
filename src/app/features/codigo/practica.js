@@ -9,6 +9,7 @@
 */
 
 const CLAVE_CODIGO_PRACTICA = "taudux:practica:codigo";
+const CLAVE_VISTA_SQL = "taudux:practica:vista-sql";
 const TEMA_EDITOR_PRACTICA = "ace/theme/tomorrow_night";
 
 const runtimesPorLenguaje = new Map();
@@ -49,6 +50,24 @@ function olvidarCodigo(idLenguaje) {
     localStorage.removeItem(`${CLAVE_CODIGO_PRACTICA}:${idLenguaje}`);
   } catch {
     // Igual que arriba.
+  }
+}
+
+// Qué vista de la página de SQL quedó abierta, para volver a ella al recargar.
+function leerVistaGuardada() {
+  try {
+    const vista = localStorage.getItem(CLAVE_VISTA_SQL);
+    return vista === "sql" || vista === "base" ? vista : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarVista(vista) {
+  try {
+    localStorage.setItem(CLAVE_VISTA_SQL, vista);
+  } catch {
+    // Sin persistencia se abre en SQL la próxima vez; nada más.
   }
 }
 
@@ -574,6 +593,7 @@ function cambiarVista(vista) {
   const enSql = vista !== "base";
   panelSql.hidden = !enSql;
   panelBase.hidden = enSql;
+  guardarVista(enSql ? "sql" : "base");
 
   for (const boton of document.querySelectorAll("[data-vista]")) {
     const activa = boton.dataset.vista === (enSql ? "sql" : "base");
@@ -697,6 +717,14 @@ function iniciarPlayground() {
   }
 
   aplicarLenguaje(resolverLenguajeDeLaPagina());
+
+  /*
+    Se abre en la vista donde el alumno se quedó. Va después de aplicarLenguaje
+    porque la de SQL necesita el editor ya creado. Además marca la pestaña desde
+    el arranque: el HTML sólo trae aria-selected, y sin esto ninguna se veía
+    resaltada hasta el primer clic.
+  */
+  if (panelDatos) cambiarVista(leerVistaGuardada() ?? "sql");
   configurarNomenclatura();
 
   ejecutar.addEventListener("click", ejecutarCodigo);

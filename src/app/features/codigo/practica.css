@@ -808,9 +808,20 @@
     outline-offset: -2px;
   }
 
+  /*
+    La activa lleva el degradado de la marca: con el cian al 16 % de antes era
+    casi del color del fondo y no se sabía en qué vista se estaba. El extremo
+    claro no llega al cian puro a propósito: con texto blanco encima, el cian no
+    se lee (este tono da ~4.8:1; el cian, menos de 2:1).
+  */
   .practica__vista--activa {
-    background-color: color-mix(in srgb, var(--color-accent) 16%, transparent);
-    color: var(--color-text);
+    background: linear-gradient(
+      90deg,
+      var(--color-accent-dark),
+      color-mix(in srgb, var(--color-accent-dark) 70%, var(--color-accent))
+    );
+    color: #fff;
+    font-weight: 600;
   }
 
   /* Vista de base de datos ------------------------------------------ */
