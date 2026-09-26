@@ -543,6 +543,147 @@ function decodificarTextoImportado(bytes) {
   }
 }
 
+/*
+  El nombre del archivo es el mejor candidato a nombre de la tabla: "clientes.csv"
+  entra como clientes. Sólo se quita la última extensión, así "ventas.2024.csv"
+  conserva el año.
+*/
+function nombreTablaDesdeArchivo(nombreArchivo) {
+  const sinExtension = String(nombreArchivo ?? "").replace(/\.[^.]+$/, "");
+  return normalizarNombreIdentificador(sinExtension, "datos");
+}
+
+/*
+  Un libro de varias hojas trae sus tablas ya nombradas: la hoja "productos" es
+  la tabla productos. Con una sola hoja manda el archivo, como en un CSV, porque
+  esa hoja suele llamarse "Hoja1". Si dos libros traen la misma hoja, el choque
+  lo marca la lista de importación; el nombre no intenta evitarlo.
+*/
+function nombreTablaDesdeHoja(nombreArchivo, nombreHoja, totalHojas) {
+  const archivo = nombreTablaDesdeArchivo(nombreArchivo);
+  if (totalHojas <= 1) return archivo;
+  return normalizarNombreIdentificador(nombreHoja, archivo);
+}
+
+/*
+  Una importación de varias tablas no se ejecuta a ciegas: antes se marca qué
+  nombres chocan. "existe" es una tabla que ya está en la base; "repetida", un
+  nombre que ya apareció antes en el mismo lote (la primera gana). Lo propuesto
+  por defecto es lo que menos sorprende: reemplazar lo que ya estaba, porque
+  reimportar suele ser corregir, y no duplicar dentro del lote.
+*/
+function marcarRepetidas(items, existentes) {
+  const enBase = new Set(existentes);
+
+  /*
+    Antes que el nombre, el contenido: el mismo CSV y la misma hoja de Excel
+    llegan con nombres distintos ("categorias", "la_tienda_1_categorias") y sin
+    esto entraban las dos. De cada grupo de iguales se queda la de nombre más
+    corto, que suele ser la limpia (sin el prefijo de la copia); con empate, la
+    primera.
+  */
+  const elegidaPorHuella = new Map();
+  items.forEach((item, indice) => {
+    const actual = elegidaPorHuella.get(item.huella);
+    if (actual === undefined || item.nombre.length < items[actual].nombre.length) {
+      elegidaPorHuella.set(item.huella, indice);
+    }
+  });
+
+  const vistos = new Set();
+  return items.map((item, indice) => {
+    const elegida = elegidaPorHuella.get(item.huella);
+    if (elegida !== indice) {
+      return { conflicto: "igual", igualA: items[elegida].nombre, accion: "no-importar" };
+    }
+    if (vistos.has(item.nombre)) return { conflicto: "repetida", accion: "no-importar" };
+    vistos.add(item.nombre);
+    if (enBase.has(item.nombre)) return { conflicto: "existe", accion: "reemplazar" };
+    return { conflicto: null, accion: "importar" };
+  });
+}
+
+/*
+  Lo que hace iguales a dos tablas: mismas columnas, mismos tipos, mismas filas.
+
+  Los números se comparan por su valor y no por cómo están escritos: Excel guarda
+  24999 aunque la celda muestre "24,999.00", y el CSV exportado de esa misma hoja
+  trae "24999.00". Escritos distinto, el análisis infiere integer de un lado y
+  numeric del otro, y las dos tablas —que son la misma— no coincidían. Por eso
+  integer y numeric cuentan como un solo tipo acá.
+*/
+function huellaTabla(analizada) {
+  const esNumero = analizada.columnas.map((columna) => columna.tipo === "integer" || columna.tipo === "numeric");
+  return JSON.stringify([
+    analizada.columnas.map((columna, indice) => [columna.nombre, esNumero[indice] ? "numero" : columna.tipo]),
+    analizada.filas.map((fila) =>
+      fila.map((valor, indice) => {
+        const texto = String(valor ?? "").trim();
+        if (!esNumero[indice] || texto === "") return texto;
+        return String(Number(texto.replace(",", ".")));
+      }),
+    ),
+  ]);
+}
+
+// Primer nombre libre con sufijo: categorias → categorias_2, categorias_3…
+function nombreLibre(nombre, ocupados) {
+  const base = normalizarNombreIdentificador(nombre, "datos");
+  const usados = new Set(ocupados);
+  if (!usados.has(base)) return base;
+  let numero = 2;
+  while (usados.has(`${base}_${numero}`)) numero += 1;
+  return `${base}_${numero}`;
+}
+
+/*
+  Última revisión antes de ejecutar, con los nombres finales ya elegidos: un
+  renombre a mano puede volver a chocar con otra tabla del lote o con la base.
+  Sólo "reemplazar" puede pisar una tabla existente, y sólo porque se eligió.
+*/
+function validarPlanImportacion(items, existentes) {
+  const enBase = new Set(existentes);
+  const errores = [];
+  const usados = new Map();
+
+  for (const item of items) {
+    if (item.accion === "no-importar") continue;
+    const nombre = normalizarNombreIdentificador(item.nombre, "datos");
+
+    if (usados.has(nombre)) {
+      errores.push(`Dos tablas se llamarían "${nombre}" (${usados.get(nombre)} y ${item.origen}).`);
+      continue;
+    }
+    usados.set(nombre, item.origen);
+
+    if (item.accion !== "reemplazar" && enBase.has(nombre)) {
+      errores.push(`"${nombre}" ya existe en la base: elige Reemplazar o cámbiale el nombre.`);
+    }
+  }
+
+  return errores;
+}
+
+/*
+  La página que se pide siempre se acota a las que existen: al borrar la última
+  fila de la última página, o cuando la tabla se achica desde SQL, la vista cae a
+  la página anterior en vez de quedarse mirando una página vacía. Las páginas
+  cuentan desde 0; "desde" y "hasta" son para leer, desde 1.
+*/
+function calcularPagina(totalFilas, pagina, tamano) {
+  const total = Math.max(0, Number(totalFilas) || 0);
+  const totalPaginas = Math.max(1, Math.ceil(total / tamano));
+  const acotada = Math.min(Math.max(0, Math.trunc(Number(pagina) || 0)), totalPaginas - 1);
+  const offset = acotada * tamano;
+  return {
+    pagina: acotada,
+    totalPaginas,
+    offset,
+    desde: total === 0 ? 0 : offset + 1,
+    hasta: Math.min(offset + tamano, total),
+  };
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     FILAS_POR_INSERT,
@@ -565,5 +706,12 @@ if (typeof module === "object" && module.exports) {
     sentenciaInsertarFila,
     tipoSqlValido,
     decodificarTextoImportado,
+    nombreTablaDesdeArchivo,
+    nombreTablaDesdeHoja,
+    marcarRepetidas,
+    huellaTabla,
+    nombreLibre,
+    validarPlanImportacion,
+    calcularPagina,
   });
 }

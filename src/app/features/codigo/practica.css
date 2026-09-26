@@ -808,9 +808,20 @@
     outline-offset: -2px;
   }
 
+  /*
+    La activa lleva el degradado de la marca: con el cian al 16 % de antes era
+    casi del color del fondo y no se sabía en qué vista se estaba. El extremo
+    claro no llega al cian puro a propósito: con texto blanco encima, el cian no
+    se lee (este tono da ~4.8:1; el cian, menos de 2:1).
+  */
   .practica__vista--activa {
-    background-color: color-mix(in srgb, var(--color-accent) 16%, transparent);
-    color: var(--color-text);
+    background: linear-gradient(
+      90deg,
+      var(--color-accent-dark),
+      color-mix(in srgb, var(--color-accent-dark) 70%, var(--color-accent))
+    );
+    color: #fff;
+    font-weight: 600;
   }
 
   /* Vista de base de datos ------------------------------------------ */
@@ -950,6 +961,114 @@
     flex-wrap: wrap;
     gap: 0.6rem;
     margin-top: 0.85rem;
+  }
+
+  /* Paginación de las filas ------------------------------------------- */
+
+  .practica__paginacion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem 1rem;
+    margin-block: 0.75rem 1rem;
+  }
+
+  .practica__paginacion .practica__tabla-pie {
+    margin: 0;
+  }
+
+  .practica__paginacion-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /*
+    Los .button del sitio no tienen estado deshabilitado propio; sin esto, el
+    Siguiente de la última página se veía igual de activo que los demás.
+  */
+  .practica__paginacion-botones .button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* Lote por importar ------------------------------------------------- */
+
+  .practica__pendientes {
+    margin-top: 1.25rem;
+    max-inline-size: 46rem;
+  }
+
+  /*
+    Cada tabla del lote es una tarjeta y no una fila de <table>: el nombre, el
+    resumen de columnas y los controles tienen largos muy distintos, y en móvil
+    tienen que poder apilarse sin empujar la página hacia los costados.
+  */
+  .practica__pendiente {
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .practica__pendiente--conflicto {
+    border-color: color-mix(in srgb, var(--color-warning) 55%, var(--color-border));
+  }
+
+  .practica__pendiente-cabeza {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+  }
+
+  .practica__pendiente-cabeza code {
+    font-family: var(--font-mono);
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .practica__pendiente-cabeza .practica__entrada {
+    max-inline-size: 16rem;
+  }
+
+  .practica__pendiente-origen {
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+  }
+
+  .practica__pendiente .practica__tabla-pie {
+    margin-block: 0.35rem 0.6rem;
+    overflow-wrap: anywhere;
+  }
+
+  .practica__pendiente-controles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .practica__pendiente-controles .practica__entrada--selector {
+    inline-size: auto;
+    min-inline-size: 11rem;
+  }
+
+  .practica__pendiente-marca {
+    color: var(--color-warning);
+    font-size: 0.85rem;
+  }
+
+  p.practica__pendiente-marca {
+    margin-block: -0.25rem 0.75rem;
+  }
+
+  .practica__pendiente-quitar {
+    padding: 0.35rem 0.7rem;
+    line-height: 1;
   }
 
 

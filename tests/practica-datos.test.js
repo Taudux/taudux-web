@@ -24,6 +24,13 @@ const {
   sentenciaInsertarFila,
   tipoSqlValido,
   decodificarTextoImportado,
+  nombreTablaDesdeArchivo,
+  nombreTablaDesdeHoja,
+  marcarRepetidas,
+  huellaTabla,
+  nombreLibre,
+  validarPlanImportacion,
+  calcularPagina,
 } = require(path.join(ROOT, "src/app/features/codigo/practica.datos.js"));
 
 /*
@@ -399,4 +406,164 @@ test("lo decodificado se puede analizar y volcar a SQL", () => {
   assert.deepEqual(columnas.map((columna) => columna.nombre), ["producto", "monto"]);
   assert.equal(filas.length, 2);
   assert.match(construirSentenciasTabla({ nombre: "t", columnas, filas }), /\('Silla', 100\)/);
+});
+
+test("el nombre del archivo da el nombre de la tabla", () => {
+  assert.equal(nombreTablaDesdeArchivo("clientes.csv"), "clientes");
+  assert.equal(nombreTablaDesdeArchivo("detalle_pedidos.csv"), "detalle_pedidos");
+  assert.equal(nombreTablaDesdeArchivo("Categorías 2024.CSV"), "categorias_2024");
+  // Sólo se quita la última extensión.
+  assert.equal(nombreTablaDesdeArchivo("ventas.2024.csv"), "ventas_2024");
+  assert.equal(nombreTablaDesdeArchivo("pedidos"), "pedidos");
+  // Un nombre que no deja nada usable cae al mismo respaldo que el campo.
+  assert.equal(nombreTablaDesdeArchivo(".csv"), "datos");
+  assert.equal(nombreTablaDesdeArchivo("select.csv"), "select_col");
+});
+
+test("cada hoja de un libro de Excel da su propia tabla", () => {
+  // Una sola hoja: manda el archivo, como un CSV.
+  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "Hoja1", 1), "ventas");
+  // Varias: cada hoja ya es el nombre de su tabla, sin el archivo delante.
+  assert.equal(nombreTablaDesdeHoja("La_Tienda.xlsx", "detalle_pedidos", 5), "detalle_pedidos");
+  assert.equal(nombreTablaDesdeHoja("Tienda 2024.xlsx", "Categorías", 3), "categorias");
+  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "Hoja1", 2), "hoja1");
+  // Una hoja sin nombre usable cae al nombre del archivo.
+  assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "***", 2), "ventas");
+});
+
+test("un lote marca lo que ya existe y lo que se repite", () => {
+  // El caso real: los CSV de la tienda, con "productos" ya en la base, y un
+  // libro que trae otra vez "categorias".
+  // Huellas distintas: acá sólo se prueban los nombres.
+  const marcas = marcarRepetidas(
+    ["categorias", "clientes", "productos", "categorias", "la_tienda_clientes"].map((nombre, indice) => ({
+      nombre,
+      huella: `h${indice}`,
+    })),
+    ["productos", "otra"],
+  );
+  assert.deepEqual(marcas, [
+    { conflicto: null, accion: "importar" },
+    { conflicto: null, accion: "importar" },
+    { conflicto: "existe", accion: "reemplazar" },
+    { conflicto: "repetida", accion: "no-importar" },
+    { conflicto: null, accion: "importar" },
+  ]);
+});
+
+test("los mismos datos con otro nombre también se marcan, y se queda el nombre más corto", () => {
+  const tabla = (columnas, filas) =>
+    huellaTabla({ columnas: columnas.map((nombre) => ({ nombre, tipo: "integer" })), filas });
+  const categorias = tabla(["id"], [["1"], ["2"]]);
+  const clientes = tabla(["id", "edad"], [["1", "30"]]);
+
+  // El caso de la captura: primero el libro copiado, después el CSV.
+  const marcas = marcarRepetidas(
+    [
+      { nombre: "la_tienda_1_categorias", huella: categorias },
+      { nombre: "la_tienda_1_clientes", huella: clientes },
+      { nombre: "categorias", huella: categorias },
+      { nombre: "clientes", huella: clientes },
+      { nombre: "la_tienda_categorias", huella: categorias },
+    ],
+    [],
+  );
+  assert.deepEqual(
+    marcas.map((marca) => [marca.conflicto, marca.igualA ?? null, marca.accion]),
+    [
+      ["igual", "categorias", "no-importar"],
+      ["igual", "clientes", "no-importar"],
+      [null, null, "importar"],
+      [null, null, "importar"],
+      ["igual", "categorias", "no-importar"],
+    ],
+  );
+
+  // Con el mismo largo se queda la primera.
+  const empate = marcarRepetidas(
+    [{ nombre: "ventas_a", huella: categorias }, { nombre: "ventas_b", huella: categorias }],
+    [],
+  );
+  assert.equal(empate[0].conflicto, null);
+  assert.equal(empate[1].igualA, "ventas_a");
+});
+
+test("un número escrito distinto sigue siendo el mismo dato", () => {
+  // El caso real de la tienda: Excel guarda 24999 y su CSV exporta "24999.00",
+  // así que uno se infiere integer y el otro numeric.
+  const huella = (tipo, filas) => huellaTabla({ columnas: [{ nombre: "precio", tipo }], filas });
+  assert.equal(huella("integer", [["24999"], ["399"]]), huella("numeric", [["24999.00"], ["399.00"]]));
+  assert.equal(huella("numeric", [["1,5"]]), huella("numeric", [["1.50"]]));
+  // En una columna de texto, "007" y "7" no son lo mismo.
+  assert.notEqual(huella("text", [["007"]]), huella("text", [["7"]]));
+});
+
+test("casi iguales no cuentan como repetidas", () => {
+  const huella = (tipo, filas) => huellaTabla({ columnas: [{ nombre: "id", tipo }], filas });
+  const base = huella("integer", [["1"], ["2"]]);
+  assert.notEqual(base, huella("integer", [["1"], ["3"]])); // una celda distinta
+  assert.notEqual(base, huella("integer", [["1"]])); // una fila menos
+  assert.notEqual(base, huella("text", [["1"], ["2"]])); // otro tipo
+  assert.notEqual(base, huella("numeric", [["1"], ["2.5"]])); // otro valor
+  assert.notEqual(
+    base,
+    huellaTabla({ columnas: [{ nombre: "codigo", tipo: "integer" }], filas: [["1"], ["2"]] }),
+  ); // otra columna
+});
+
+test("el nombre libre salta los sufijos ya usados", () => {
+  assert.equal(nombreLibre("clientes", []), "clientes");
+  assert.equal(nombreLibre("clientes", ["clientes"]), "clientes_2");
+  assert.equal(nombreLibre("clientes", ["clientes", "clientes_2", "clientes_3"]), "clientes_4");
+  assert.equal(nombreLibre("Mis Clientes", ["mis_clientes"]), "mis_clientes_2");
+});
+
+test("el plan final no deja que dos tablas terminen con el mismo nombre", () => {
+  const existentes = ["productos"];
+  // Todo en orden: reemplazar lo que existe es una elección válida.
+  assert.deepEqual(
+    validarPlanImportacion(
+      [
+        { origen: "productos.csv", nombre: "productos", accion: "reemplazar" },
+        { origen: "clientes.csv", nombre: "clientes", accion: "importar" },
+        { origen: "la_tienda.xlsx", nombre: "clientes", accion: "no-importar" },
+      ],
+      existentes,
+    ),
+    [],
+  );
+  // Dos renombres iguales chocan entre sí.
+  const choque = validarPlanImportacion(
+    [
+      { origen: "a.csv", nombre: "ventas", accion: "renombrar" },
+      { origen: "b.csv", nombre: "Ventas", accion: "renombrar" },
+    ],
+    existentes,
+  );
+  assert.equal(choque.length, 1);
+  assert.match(choque[0], /"ventas"/);
+  // Renombrar hacia una tabla de la base tampoco pasa: sólo Reemplazar la pisa.
+  assert.match(
+    validarPlanImportacion([{ origen: "x.csv", nombre: "productos", accion: "renombrar" }], existentes)[0],
+    /ya existe en la base/,
+  );
+});
+
+test("las filas se reparten en páginas de 12 y la página se acota", () => {
+  // detalle_pedidos de la tienda: 31 filas → 12, 12 y 7.
+  assert.deepEqual(calcularPagina(31, 0, 12), { pagina: 0, totalPaginas: 3, offset: 0, desde: 1, hasta: 12 });
+  assert.deepEqual(calcularPagina(31, 1, 12), { pagina: 1, totalPaginas: 3, offset: 12, desde: 13, hasta: 24 });
+  assert.deepEqual(calcularPagina(31, 2, 12), { pagina: 2, totalPaginas: 3, offset: 24, desde: 25, hasta: 31 });
+  // Justo 12 cabe en una; 13 ya pide dos.
+  assert.equal(calcularPagina(12, 0, 12).totalPaginas, 1);
+  assert.equal(calcularPagina(13, 0, 12).totalPaginas, 2);
+  // Tabla vacía: una sola página, sin rango.
+  assert.deepEqual(calcularPagina(0, 0, 12), { pagina: 0, totalPaginas: 1, offset: 0, desde: 0, hasta: 0 });
+  // Al borrar la última fila de la página 3, la vista cae a la 2.
+  assert.equal(calcularPagina(24, 2, 12).pagina, 1);
+  // Fuera de rango por debajo, o basura: primera página.
+  assert.equal(calcularPagina(31, -3, 12).pagina, 0);
+  assert.equal(calcularPagina(31, undefined, 12).pagina, 0);
+  // "Ir a la última" puede pedirse con un número grande.
+  assert.equal(calcularPagina(31, Infinity, 12).pagina, 2);
 });

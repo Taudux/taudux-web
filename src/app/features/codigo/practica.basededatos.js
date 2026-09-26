@@ -16,7 +16,7 @@
   comentario de sentenciaActualizarCelda.
 */
 
-const FILAS_EDITABLES_MAXIMAS = 200;
+const FILAS_POR_PAGINA = 12;
 
 const SQL_LISTAR_TABLAS_BASE = `
 select table_name
@@ -49,11 +49,44 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
   let tablaActiva = null;
   let columnasActivas = [];
+  /*
+    La página va atada a su tabla: al abrir otra, la tabla nueva empieza en la
+    primera sin que cada lugar que cambia tablaActiva tenga que acordarse.
+  */
+  let paginaFilas = { tabla: null, pagina: 0 };
+  // Repintado del panel: número del último pedido, tabla que quedó en pantalla
+  // y a qué botón de paginación devolverle el foco.
+  let repintado = 0;
+  let tablaPintada = null;
+  let enfocarTras = null;
+  // Nombres de las tablas de la base, para avisar antes de pisar una.
+  let nombresTablas = [];
+  /*
+    Lote abierto y todavía sin importar. Vive acá y no dentro del panel de carga
+    porque ese panel se redibuja entero cada vez que se refresca la lista de
+    tablas: guardado adentro, el lote se perdería al cambiar de tabla.
+  */
+  let pendientes = [];
 
   function anunciar(texto, tono = "info") {
     estado.textContent = texto;
     estado.className = `practica__base-estado practica__base-estado--${tono}`;
     estado.hidden = !texto;
+  }
+
+  /*
+    Aviso de "no hay nada que leer" al importar o ver el SQL: va en toast y no
+    en la franja, que se queda fija y para un aviso pasajero estorba. Se limpia
+    la franja para que no convivan dos mensajes que dicen cosas distintas. La
+    guarda es por si toast.js no llegara a cargar: el aviso no se pierde.
+  */
+  function avisarEnToast(texto) {
+    if (typeof mostrarToast !== "function") {
+      anunciar(texto, "aviso");
+      return;
+    }
+    anunciar("");
+    mostrarToast(texto, "warning");
   }
 
   function boton(texto, clase, alHacerClick, titulo) {
@@ -122,6 +155,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
   async function refrescarTablas() {
     const tabla = await consultar(SQL_LISTAR_TABLAS_BASE);
     const nombres = tabla ? tabla.filas.map(([nombre]) => nombre) : [];
+    nombresTablas = nombres;
 
     listaTablas.replaceChildren();
 
@@ -255,8 +289,20 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
   async function pintarFilas(contenedor) {
     const bloque = seccion("Filas");
 
+    const conteo = await consultar(`select count(*) from "${tablaActiva}";`);
+    const totalFilas = Number(conteo?.filas?.[0]?.[0] ?? 0);
+    const pedida = paginaFilas.tabla === tablaActiva ? paginaFilas.pagina : 0;
+    const pagina = calcularPagina(totalFilas, pedida, FILAS_POR_PAGINA);
+    paginaFilas = { tabla: tablaActiva, pagina: pagina.pagina };
+
+    /*
+      Orden fijo por la primera columna (la 2 del select: la 1 es el ctid). Sin
+      él, Postgres devuelve al final la fila recién editada —un UPDATE la
+      reescribe— y con páginas saltaría a otra página en cuanto se toca.
+    */
     const datos = await consultar(
-      `select ctid, * from "${tablaActiva}" limit ${FILAS_EDITABLES_MAXIMAS};`,
+      `select ctid, * from "${tablaActiva}" order by 2 nulls last, ctid ` +
+        `limit ${FILAS_POR_PAGINA} offset ${pagina.offset};`,
     );
 
     if (!datos || columnasActivas.length === 0) {
@@ -332,11 +378,33 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     marco.appendChild(tabla);
     bloque.appendChild(marco);
 
-    if (datos.truncada || datos.totalFilas >= FILAS_EDITABLES_MAXIMAS) {
-      const aviso = document.createElement("p");
-      aviso.className = "practica__tabla-pie";
-      aviso.textContent = `Se editan las primeras ${FILAS_EDITABLES_MAXIMAS} filas. El resto sigue ahí y se consulta desde SQL.`;
-      bloque.appendChild(aviso);
+    if (pagina.totalPaginas > 1) {
+      const paginacion = document.createElement("div");
+      paginacion.className = "practica__paginacion";
+
+      const rango = document.createElement("p");
+      rango.className = "practica__tabla-pie";
+      const filasVisibles =
+        pagina.desde === pagina.hasta ? `Fila ${pagina.desde}` : `Filas ${pagina.desde}–${pagina.hasta}`;
+      rango.textContent =
+        `${filasVisibles} de ${totalFilas} · página ${pagina.pagina + 1} de ${pagina.totalPaginas}`;
+
+      // Cambiar de página no toca la lista de tablas: basta con repintar el detalle.
+      const irA = (destino, sentido) => async () => {
+        paginaFilas = { tabla: tablaActiva, pagina: destino };
+        enfocarTras = sentido;
+        await pintarDetalle();
+      };
+      const anterior = boton("‹ Anterior", "button button--outline", irA(pagina.pagina - 1, "anterior"));
+      anterior.disabled = pagina.pagina === 0;
+      const siguiente = boton("Siguiente ›", "button button--outline", irA(pagina.pagina + 1, "siguiente"));
+      siguiente.disabled = pagina.pagina === pagina.totalPaginas - 1;
+
+      const botones = document.createElement("div");
+      botones.className = "practica__paginacion-botones";
+      botones.append(anterior, siguiente);
+      paginacion.append(rango, botones);
+      bloque.appendChild(paginacion);
     }
 
     bloque.appendChild(
@@ -346,7 +414,11 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
           columnasActivas,
           columnasActivas.map(() => ""),
         );
-        if (await correr(sql, "Fila agregada.")) await refrescarTablas();
+        if (await correr(sql, "Fila agregada.")) {
+          // La fila vacía queda al final del orden: se va a la última página a verla.
+          paginaFilas = { tabla: tablaActiva, pagina: Infinity };
+          await refrescarTablas();
+        }
       }),
     );
 
@@ -361,7 +433,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     const explicacion = document.createElement("p");
     explicacion.className = "practica__base-nota";
     explicacion.textContent =
-      "Importa un CSV, arrástralo aquí, o pega directamente lo que tengas copiado de Excel.";
+      "Abre archivos CSV o de Excel (puedes elegir varios), arrástralos aquí, o pega directamente lo que tengas copiado.";
     bloque.appendChild(explicacion);
 
     // Etiqueta distinta de la del creador manual: dos campos con el mismo nombre
@@ -377,43 +449,353 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
     const previa = document.createElement("div");
 
-    /* --- Importar un archivo ---------------------------------------- */
+    /* --- Importar archivos ------------------------------------------- */
 
-    async function cargarArchivo(archivo) {
-      if (!archivo) return;
+    const ES_EXCEL = /\.(xlsx|xls)$/i;
 
-      /*
-        .xlsx no se lee acá: es un ZIP de XML y parsearlo exigiría una librería de
-        cientos de kilobytes. Copiar y pegar desde Excel ya funciona —el pegado
-        llega separado por tabuladores y el análisis lo detecta— así que el rodeo
-        no vale su precio.
-      */
-      if (/\.(xlsx|xls)$/i.test(archivo.name)) {
-        anunciar(
-          "Los archivos de Excel no se leen directo. Guarda como CSV, o copia las celdas y pégalas aquí abajo.",
-          "aviso",
-        );
+    /*
+      Excel es un ZIP de XML y leerlo exige una librería de cerca de 1 MB. Por eso
+      se pide recién cuando llega el primer Excel: quien importa CSV, o no importa
+      nada, no la descarga nunca. Se aloja en el sitio y no se pide al CDN porque
+      la versión de npm (0.18.5) quedó congelada con un fallo conocido al leer
+      archivos manipulados; la corregida sólo la publica su autor.
+    */
+    let cargaLectorExcel = null;
+    function lectorExcel() {
+      cargaLectorExcel ??= new Promise((resolver, rechazar) => {
+        const script = document.createElement("script");
+        script.src = "/assets/vendor/xlsx-0.20.3.full.min.js";
+        script.onload = () => resolver(window.XLSX);
+        script.onerror = () => {
+          // Sin memorizar el fallo: un corte de red no debe dejar Excel roto para siempre.
+          cargaLectorExcel = null;
+          rechazar(new Error("No se pudo cargar el lector de Excel."));
+        };
+        document.head.appendChild(script);
+      });
+      return cargaLectorExcel;
+    }
+
+    /*
+      Todo archivo se reduce a "piezas" de texto separado por comas, una por tabla:
+      un CSV es una pieza y un libro de Excel, una por hoja con datos. Desde ahí el
+      camino es el mismo para los dos (tipos, nombres, vista previa).
+    */
+    async function leerPiezas(archivo) {
+      const bytes = new Uint8Array(await archivo.arrayBuffer());
+
+      if (!ES_EXCEL.test(archivo.name)) {
+        return [{
+          origen: archivo.name,
+          tabla: nombreTablaDesdeArchivo(archivo.name),
+          texto: decodificarTextoImportado(bytes),
+        }];
+      }
+
+      const XLSX = await lectorExcel();
+      // Las fechas de Excel son números por dentro; así salen como 2026-01-31 y
+      // entran como fecha, no como 46053.
+      const libro = XLSX.read(bytes, { cellDates: true, dateNF: "yyyy-mm-dd" });
+      const hojas = libro.SheetNames.map((nombreHoja) => ({
+        nombreHoja,
+        // rawNumbers: 15000 y no "15,000.00", que entraría como texto.
+        texto: XLSX.utils.sheet_to_csv(libro.Sheets[nombreHoja], {
+          blankrows: false,
+          rawNumbers: true,
+        }).trim(),
+      })).filter((hoja) => hoja.texto !== "");
+
+      if (hojas.length === 0) throw new Error("El libro no tiene hojas con datos.");
+
+      return hojas.map((hoja) => ({
+        origen: hojas.length === 1 ? archivo.name : `${archivo.name} › ${hoja.nombreHoja}`,
+        tabla: nombreTablaDesdeHoja(archivo.name, hoja.nombreHoja, hojas.length),
+        texto: hoja.texto,
+      }));
+    }
+
+    /*
+      Una sola pieza sigue el camino de siempre: va al área de pegado y se revisa
+      la vista previa antes de importar. Varias piezas (varios archivos, o un libro
+      de varias hojas) son varias tablas: se arma la lista "Por importar", con los
+      nombres que chocan marcados, y nada se crea hasta confirmar.
+    */
+    async function cargarArchivos(lista) {
+      const archivos = Array.from(lista ?? []);
+      if (archivos.length === 0) return;
+
+      const fallidas = [];
+      // Los motivos vienen como oraciones; entre paréntesis sobra su punto final.
+      const fallo = (origen, motivo) => fallidas.push(`${origen} (${motivo.replace(/\.$/, "")})`);
+
+      if (archivos.some((archivo) => ES_EXCEL.test(archivo.name))) {
+        anunciar("Leyendo el Excel…", "info");
+      }
+
+      const piezas = [];
+      for (const archivo of archivos) {
+        try {
+          piezas.push(...(await leerPiezas(archivo)));
+        } catch (error) {
+          fallo(archivo.name, error?.message || "No se pudo leer");
+        }
+      }
+
+      if (piezas.length === 1 && fallidas.length === 0) {
+        const [pieza] = piezas;
+        pegado.value = pieza.texto;
+        nombre.value = pieza.tabla;
+        refrescarPrevia();
+        actualizarAvisoNombre();
+        anunciar(`"${pieza.origen}" cargado. Revisa la vista previa e importa la tabla.`, "exito");
         return;
       }
 
-      try {
-        const bytes = new Uint8Array(await archivo.arrayBuffer());
-        pegado.value = decodificarTextoImportado(bytes);
-        // El nombre del archivo es el mejor candidato a nombre de la tabla.
-        nombre.value = archivo.name.replace(/\.[^.]+$/, "");
-        refrescarPrevia();
-        anunciar(`"${archivo.name}" cargado. Revisa la vista previa y crea la tabla.`, "exito");
-      } catch (error) {
-        anunciar("No se pudo leer el archivo.", "error");
+      const validas = [];
+      for (const pieza of piezas) {
+        const analizada = analizarTablaPegada(pieza.texto);
+        if (analizada.error) fallo(pieza.origen, analizada.error);
+        else validas.push({ ...pieza, analizada });
       }
+
+      const marcas = marcarRepetidas(
+        validas.map((pieza) => ({ nombre: pieza.tabla, huella: huellaTabla(pieza.analizada) })),
+        nombresTablas,
+      );
+      pendientes = validas.map((pieza, indice) => ({ ...pieza, ...marcas[indice], nombre: pieza.tabla }));
+      pintarPendientes();
+
+      const partes = [];
+      if (pendientes.length > 0) {
+        const conflictos = pendientes.filter((item) => item.conflicto).length;
+        partes.push(
+          `${pendientes.length} ${pendientes.length === 1 ? "tabla lista" : "tablas listas"} para importar` +
+            (conflictos > 0 ? `, ${conflictos} con nombre o datos repetidos` : "") +
+            ". Revísalas abajo y aprieta Importar tablas.",
+        );
+      }
+      if (fallidas.length > 0) partes.push(`No se pudieron leer: ${fallidas.join("; ")}.`);
+      anunciar(
+        partes.join(" "),
+        fallidas.length === 0 ? "info" : pendientes.length > 0 ? "aviso" : "error",
+      );
+      if (pendientes.length > 0) listaPendientes.scrollIntoView({ block: "nearest" });
     }
+
+    /* --- Lote por importar ------------------------------------------- */
+
+    const listaPendientes = document.createElement("div");
+
+    const MOTIVO_CONFLICTO = {
+      existe: () => "Ya existe en la base",
+      repetida: () => "Se repite en lo que abriste",
+      igual: (item) => `Mismos datos que ${item.igualA}`,
+    };
+
+    // Nombres ya tomados por la base o por otra tabla del lote, sin contar ésta.
+    function nombresOcupados(excepto) {
+      return [
+        ...nombresTablas,
+        ...pendientes
+          .filter((item) => item !== excepto && item.accion !== "no-importar")
+          .map((item) => normalizarNombreIdentificador(item.nombre, "datos")),
+      ];
+    }
+
+    function selectorDeAccion(item) {
+      const selector = document.createElement("select");
+      selector.className = "practica__entrada practica__entrada--selector";
+      selector.setAttribute("aria-label", `Qué hacer con ${item.origen}`);
+
+      // "Importar" sobre una tabla que ya existe la pisa: se dice con su nombre.
+      const principal = nombresTablas.includes(item.tabla)
+        ? ["reemplazar", "Reemplazar"]
+        : ["importar", "Importar"];
+      for (const [valor, texto] of [principal, ["renombrar", "Cambiar nombre"], ["no-importar", "No importar"]]) {
+        const opcion = document.createElement("option");
+        opcion.value = valor;
+        opcion.textContent = texto;
+        opcion.selected = valor === item.accion;
+        selector.appendChild(opcion);
+      }
+
+      selector.addEventListener("change", () => {
+        item.accion = selector.value;
+        item.nombre =
+          item.accion === "renombrar" ? nombreLibre(item.tabla, nombresOcupados(item)) : item.tabla;
+        pintarPendientes();
+      });
+      return selector;
+    }
+
+    function pintarPendientes() {
+      listaPendientes.replaceChildren();
+      if (pendientes.length === 0) return;
+
+      const bloque = document.createElement("div");
+      bloque.className = "practica__pendientes";
+
+      const titulo = document.createElement("h4");
+      titulo.className = "practica__base-subtitulo";
+      titulo.textContent = `Por importar (${pendientes.length})`;
+      bloque.appendChild(titulo);
+
+      for (const item of pendientes) {
+        const fila = document.createElement("div");
+        fila.className = `practica__pendiente${item.conflicto ? " practica__pendiente--conflicto" : ""}`;
+
+        const cabeza = document.createElement("div");
+        cabeza.className = "practica__pendiente-cabeza";
+        if (item.accion === "renombrar") {
+          const campo = campoTexto(item.nombre, `Nuevo nombre para ${item.origen}`);
+          campo.addEventListener("input", () => {
+            item.nombre = campo.value;
+          });
+          cabeza.appendChild(campo);
+        } else {
+          const nombreTabla = document.createElement("code");
+          nombreTabla.textContent = item.tabla;
+          cabeza.appendChild(nombreTabla);
+        }
+        const origen = document.createElement("span");
+        origen.className = "practica__pendiente-origen";
+        origen.textContent = item.origen;
+        cabeza.appendChild(origen);
+
+        const filas = item.analizada.filas.length;
+        const resumen = document.createElement("p");
+        resumen.className = "practica__tabla-pie";
+        resumen.textContent = `${filas} ${filas === 1 ? "fila" : "filas"} · ${item.analizada.columnas
+          .map((columna) => `${columna.nombre} (${columna.tipo})`)
+          .join(", ")}`;
+
+        const controles = document.createElement("div");
+        controles.className = "practica__pendiente-controles";
+        if (item.conflicto) {
+          const marca = document.createElement("span");
+          marca.className = "practica__pendiente-marca";
+          marca.textContent = `⚠ ${MOTIVO_CONFLICTO[item.conflicto](item)}`;
+          controles.appendChild(marca);
+        }
+        const quitar = boton(
+          "✕",
+          "button button--outline practica__pendiente-quitar",
+          () => {
+            pendientes = pendientes.filter((otro) => otro !== item);
+            pintarPendientes();
+          },
+          `Quitar ${item.origen} de la lista`,
+        );
+        quitar.setAttribute("aria-label", `Quitar ${item.origen} de la lista`);
+        controles.append(selectorDeAccion(item), quitar);
+
+        fila.append(cabeza, resumen, controles);
+        bloque.appendChild(fila);
+      }
+
+      const acciones = document.createElement("div");
+      acciones.className = "practica__base-acciones";
+      acciones.append(
+        boton("Importar tablas", "button button--glow", importarPendientes),
+        boton("Cancelar", "button button--outline", () => {
+          pendientes = [];
+          pintarPendientes();
+          anunciar("", "info");
+        }),
+      );
+      bloque.appendChild(acciones);
+      listaPendientes.appendChild(bloque);
+    }
+
+    async function importarPendientes() {
+      const plan = pendientes.map((item) => ({
+        ...item,
+        nombre: item.accion === "renombrar" ? item.nombre : item.tabla,
+      }));
+
+      const errores = validarPlanImportacion(plan, nombresTablas);
+      if (errores.length > 0) {
+        anunciar(errores.join(" "), "aviso");
+        return;
+      }
+
+      const aImportar = plan.filter((item) => item.accion !== "no-importar");
+      if (aImportar.length === 0) {
+        anunciar("No hay tablas marcadas para importar.", "aviso");
+        return;
+      }
+
+      const importadas = [];
+      const fallidas = [];
+      let primeraImportada = null;
+
+      for (const item of aImportar) {
+        const tabla = normalizarNombreIdentificador(item.nombre, "datos");
+        const resultado = await ejecutarSql(
+          construirSentenciasTabla({
+            nombre: tabla,
+            columnas: item.analizada.columnas,
+            filas: item.analizada.filas,
+          }),
+        );
+        if (resultado?.ok) {
+          const filas = item.analizada.filas.length;
+          const reemplazo = item.accion === "reemplazar" ? ", reemplazada" : "";
+          importadas.push(`${tabla} (${filas} ${filas === 1 ? "fila" : "filas"}${reemplazo})`);
+          primeraImportada ??= tabla;
+        } else {
+          const motivo = (resultado?.error || "no se pudo crear").replace(/\.$/, "");
+          fallidas.push(`${item.origen} (${motivo})`);
+        }
+      }
+
+      pendientes = [];
+      pintarPendientes();
+      if (primeraImportada) {
+        tablaActiva = primeraImportada;
+        await refrescarTablas();
+      }
+
+      const partes = [];
+      if (importadas.length > 0) {
+        const cuantas =
+          importadas.length === 1 ? "1 tabla importada" : `${importadas.length} tablas importadas`;
+        partes.push(`${cuantas}: ${importadas.join(", ")}.`);
+      }
+      const omitidas = plan.length - aImportar.length;
+      if (omitidas > 0) partes.push(`${omitidas} sin importar, como elegiste.`);
+      if (fallidas.length > 0) partes.push(`No se pudieron crear: ${fallidas.join("; ")}.`);
+      anunciar(
+        partes.join(" "),
+        fallidas.length === 0 ? "exito" : importadas.length === 0 ? "error" : "aviso",
+      );
+    }
+
+    /* --- Una sola tabla: avisar antes de pisar ------------------------ */
+
+    const avisoNombre = document.createElement("p");
+    avisoNombre.className = "practica__pendiente-marca";
+    avisoNombre.hidden = true;
+    let botonImportar = null;
+
+    function actualizarAvisoNombre() {
+      const existe = nombresTablas.includes(normalizarNombreIdentificador(nombre.value, "datos"));
+      avisoNombre.hidden = !existe;
+      avisoNombre.textContent = existe
+        ? "⚠ Ya existe una tabla con este nombre: al importar se reemplaza. Cámbiale el nombre para conservarla."
+        : "";
+      if (botonImportar) botonImportar.textContent = existe ? "Reemplazar tabla" : "Importar tabla";
+    }
+
+    nombre.addEventListener("input", actualizarAvisoNombre);
 
     const selectorArchivo = document.createElement("input");
     selectorArchivo.type = "file";
-    selectorArchivo.accept = ".csv,.tsv,.txt,text/csv,text/plain";
+    selectorArchivo.accept = ".csv,.tsv,.txt,.xlsx,.xls,text/csv,text/plain";
+    selectorArchivo.multiple = true;
     selectorArchivo.hidden = true;
     selectorArchivo.addEventListener("change", () => {
-      cargarArchivo(selectorArchivo.files[0]);
+      cargarArchivos(selectorArchivo.files);
       // Permite volver a elegir el mismo archivo después de corregirlo.
       selectorArchivo.value = "";
     });
@@ -434,7 +816,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     }
     pegado.addEventListener("drop", (suceso) => {
       suceso.preventDefault();
-      cargarArchivo(suceso.dataTransfer?.files?.[0]);
+      cargarArchivos(suceso.dataTransfer?.files);
     });
 
     function refrescarPrevia() {
@@ -456,29 +838,33 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     acciones.className = "practica__base-acciones";
 
     acciones.append(
-      boton("Importar CSV", "button button--outline", () => selectorArchivo.click()),
-      boton("Crear tabla con estos datos", "button button--glow", async () => {
+      boton("Abrir CSV o Excel", "button button--outline", () => selectorArchivo.click()),
+      (botonImportar = boton("Importar tabla", "button button--glow", async () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {
-          anunciar(analizada.error, "aviso");
+          avisarEnToast(analizada.error);
           return;
         }
+        const tabla = normalizarNombreIdentificador(nombre.value, "datos");
+        const reemplaza = nombresTablas.includes(tabla);
         const sql = construirSentenciasTabla({
           nombre: nombre.value,
           columnas: analizada.columnas,
           filas: analizada.filas,
         });
-        if (await correr(sql, `Tabla creada con ${analizada.filas.length} filas.`)) {
-          tablaActiva = normalizarNombreIdentificador(nombre.value, "datos");
+        const filas = analizada.filas.length;
+        const hecho = `Tabla ${reemplaza ? "reemplazada" : "importada"} con ${filas} ${filas === 1 ? "fila" : "filas"}.`;
+        if (await correr(sql, hecho)) {
+          tablaActiva = tabla;
           pegado.value = "";
           refrescarPrevia();
           await refrescarTablas();
         }
-      }),
+      })),
       boton("Ver el SQL", "button button--outline", () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {
-          anunciar(analizada.error, "aviso");
+          avisarEnToast(analizada.error);
           return;
         }
         escribirEnEditor(
@@ -498,15 +884,65 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     etiquetaNombre.textContent = "Nombre de la tabla";
     campoNombre.append(etiquetaNombre, nombre);
 
-    bloque.append(campoNombre, pegado, previa, acciones, selectorArchivo);
+    actualizarAvisoNombre();
+    pintarPendientes();
+    bloque.append(campoNombre, avisoNombre, pegado, previa, acciones, listaPendientes, selectorArchivo);
     contenedor.appendChild(bloque);
   }
 
   /* --- Armado del detalle -------------------------------------------- */
 
+  /*
+    El panel se arma entero fuera de la pantalla y se cambia por el viejo de un
+    solo golpe. Vaciarlo primero y llenarlo después de consultar la base lo
+    dejaba en blanco unos milisegundos: la página se achicaba, el navegador subía
+    el scroll para que cupiera, y al paginar o editar una celda la vista saltaba.
+  */
   async function pintarDetalle() {
-    detalle.replaceChildren();
+    const turno = ++repintado;
+    const nuevo = document.createDocumentFragment();
+    await armarDetalle(nuevo);
+    // Dos clics rápidos lanzan dos repintados: sólo el último llega a la pantalla.
+    if (turno !== repintado) return;
 
+    conservarAltoDeTabla(nuevo);
+    /*
+      Seguro contra el anclaje de scroll del navegador: al reemplazar el nodo que
+      tomó de ancla puede reacomodar la vista. Se vio una vez (148 px al pasar a
+      la última página) y no se pudo reproducir; si vuelve a pasar, se deshace.
+    */
+    const scrollAntes = window.scrollY;
+    detalle.replaceChildren(nuevo);
+    if (window.scrollY !== scrollAntes) window.scrollTo({ top: scrollAntes, behavior: "instant" });
+    tablaPintada = tablaActiva;
+
+    if (enfocarTras) {
+      const [primero, alterno] =
+        enfocarTras === "siguiente" ? ["Siguiente ›", "‹ Anterior"] : ["‹ Anterior", "Siguiente ›"];
+      const botones = [...detalle.querySelectorAll(".practica__paginacion-botones .button")];
+      const destino =
+        botones.find((b) => b.textContent === primero && !b.disabled) ||
+        botones.find((b) => b.textContent === alterno && !b.disabled);
+      destino?.focus({ preventScroll: true });
+      enfocarTras = null;
+    }
+  }
+
+  /*
+    La última página trae menos filas (7 de 12): sin esto la tabla se encogía y
+    Anterior/Siguiente se subían, lejos de donde estaba el cursor. Mientras se
+    pagina la misma tabla, la nueva hereda el alto de la anterior; al abrir otra
+    tabla se mide de cero.
+  */
+  function conservarAltoDeTabla(nuevo) {
+    const anterior = detalle.querySelector(".practica__tabla-scroll");
+    const siguiente = nuevo.querySelector(".practica__tabla-scroll");
+    const paginada = nuevo.querySelector(".practica__paginacion");
+    if (!anterior || !siguiente || !paginada || tablaPintada !== tablaActiva) return;
+    siguiente.style.minBlockSize = `${anterior.getBoundingClientRect().height}px`;
+  }
+
+  async function armarDetalle(detalle) {
     if (!tablaActiva) {
       pintarCreacion(detalle);
       pintarCarga(detalle);
