@@ -74,6 +74,21 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     estado.hidden = !texto;
   }
 
+  /*
+    Aviso de "no hay nada que leer" al importar o ver el SQL: va en toast y no
+    en la franja, que se queda fija y para un aviso pasajero estorba. Se limpia
+    la franja para que no convivan dos mensajes que dicen cosas distintas. La
+    guarda es por si toast.js no llegara a cargar: el aviso no se pierde.
+  */
+  function avisarEnToast(texto) {
+    if (typeof mostrarToast !== "function") {
+      anunciar(texto, "aviso");
+      return;
+    }
+    anunciar("");
+    mostrarToast(texto, "warning");
+  }
+
   function boton(texto, clase, alHacerClick, titulo) {
     const elemento = document.createElement("button");
     elemento.type = "button";
@@ -827,7 +842,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
       (botonImportar = boton("Importar tabla", "button button--glow", async () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {
-          anunciar(analizada.error, "aviso");
+          avisarEnToast(analizada.error);
           return;
         }
         const tabla = normalizarNombreIdentificador(nombre.value, "datos");
@@ -849,7 +864,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
       boton("Ver el SQL", "button button--outline", () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {
-          anunciar(analizada.error, "aviso");
+          avisarEnToast(analizada.error);
           return;
         }
         escribirEnEditor(
