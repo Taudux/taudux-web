@@ -487,12 +487,23 @@ test("los mismos datos con otro nombre también se marcan, y se queda el nombre 
   assert.equal(empate[1].igualA, "ventas_a");
 });
 
+test("un número escrito distinto sigue siendo el mismo dato", () => {
+  // El caso real de la tienda: Excel guarda 24999 y su CSV exporta "24999.00",
+  // así que uno se infiere integer y el otro numeric.
+  const huella = (tipo, filas) => huellaTabla({ columnas: [{ nombre: "precio", tipo }], filas });
+  assert.equal(huella("integer", [["24999"], ["399"]]), huella("numeric", [["24999.00"], ["399.00"]]));
+  assert.equal(huella("numeric", [["1,5"]]), huella("numeric", [["1.50"]]));
+  // En una columna de texto, "007" y "7" no son lo mismo.
+  assert.notEqual(huella("text", [["007"]]), huella("text", [["7"]]));
+});
+
 test("casi iguales no cuentan como repetidas", () => {
   const huella = (tipo, filas) => huellaTabla({ columnas: [{ nombre: "id", tipo }], filas });
   const base = huella("integer", [["1"], ["2"]]);
   assert.notEqual(base, huella("integer", [["1"], ["3"]])); // una celda distinta
   assert.notEqual(base, huella("integer", [["1"]])); // una fila menos
   assert.notEqual(base, huella("text", [["1"], ["2"]])); // otro tipo
+  assert.notEqual(base, huella("numeric", [["1"], ["2.5"]])); // otro valor
   assert.notEqual(
     base,
     huellaTabla({ columnas: [{ nombre: "codigo", tipo: "integer" }], filas: [["1"], ["2"]] }),

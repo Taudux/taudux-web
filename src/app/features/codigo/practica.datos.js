@@ -603,11 +603,26 @@ function marcarRepetidas(items, existentes) {
   });
 }
 
-// Lo que hace iguales a dos tablas: mismas columnas, mismos tipos, mismas filas.
+/*
+  Lo que hace iguales a dos tablas: mismas columnas, mismos tipos, mismas filas.
+
+  Los números se comparan por su valor y no por cómo están escritos: Excel guarda
+  24999 aunque la celda muestre "24,999.00", y el CSV exportado de esa misma hoja
+  trae "24999.00". Escritos distinto, el análisis infiere integer de un lado y
+  numeric del otro, y las dos tablas —que son la misma— no coincidían. Por eso
+  integer y numeric cuentan como un solo tipo acá.
+*/
 function huellaTabla(analizada) {
+  const esNumero = analizada.columnas.map((columna) => columna.tipo === "integer" || columna.tipo === "numeric");
   return JSON.stringify([
-    analizada.columnas.map((columna) => [columna.nombre, columna.tipo]),
-    analizada.filas,
+    analizada.columnas.map((columna, indice) => [columna.nombre, esNumero[indice] ? "numero" : columna.tipo]),
+    analizada.filas.map((fila) =>
+      fila.map((valor, indice) => {
+        const texto = String(valor ?? "").trim();
+        if (!esNumero[indice] || texto === "") return texto;
+        return String(Number(texto.replace(",", ".")));
+      }),
+    ),
   ]);
 }
 
