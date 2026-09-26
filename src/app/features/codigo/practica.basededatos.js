@@ -495,7 +495,10 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
         else validas.push({ ...pieza, analizada });
       }
 
-      const marcas = marcarRepetidas(validas.map((pieza) => pieza.tabla), nombresTablas);
+      const marcas = marcarRepetidas(
+        validas.map((pieza) => ({ nombre: pieza.tabla, huella: huellaTabla(pieza.analizada) })),
+        nombresTablas,
+      );
       pendientes = validas.map((pieza, indice) => ({ ...pieza, ...marcas[indice], nombre: pieza.tabla }));
       pintarPendientes();
 
@@ -504,7 +507,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
         const conflictos = pendientes.filter((item) => item.conflicto).length;
         partes.push(
           `${pendientes.length} ${pendientes.length === 1 ? "tabla lista" : "tablas listas"} para importar` +
-            (conflictos > 0 ? `, ${conflictos} con un nombre que ya existe o se repite` : "") +
+            (conflictos > 0 ? `, ${conflictos} con nombre o datos repetidos` : "") +
             ". Revísalas abajo y aprieta Importar tablas.",
         );
       }
@@ -521,8 +524,9 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     const listaPendientes = document.createElement("div");
 
     const MOTIVO_CONFLICTO = {
-      existe: "Ya existe en la base",
-      repetida: "Se repite en lo que abriste",
+      existe: () => "Ya existe en la base",
+      repetida: () => "Se repite en lo que abriste",
+      igual: (item) => `Mismos datos que ${item.igualA}`,
     };
 
     // Nombres ya tomados por la base o por otra tabla del lote, sin contar ésta.
@@ -607,7 +611,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
         if (item.conflicto) {
           const marca = document.createElement("span");
           marca.className = "practica__pendiente-marca";
-          marca.textContent = `⚠ ${MOTIVO_CONFLICTO[item.conflicto]}`;
+          marca.textContent = `⚠ ${MOTIVO_CONFLICTO[item.conflicto](item)}`;
           controles.appendChild(marca);
         }
         const quitar = boton(

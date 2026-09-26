@@ -27,6 +27,7 @@ const {
   nombreTablaDesdeArchivo,
   nombreTablaDesdeHoja,
   marcarRepetidas,
+  huellaTabla,
   nombreLibre,
   validarPlanImportacion,
 } = require(path.join(ROOT, "src/app/features/codigo/practica.datos.js"));
@@ -431,8 +432,12 @@ test("cada hoja de un libro de Excel da su propia tabla", () => {
 test("un lote marca lo que ya existe y lo que se repite", () => {
   // El caso real: los CSV de la tienda, con "productos" ya en la base, y un
   // libro que trae otra vez "categorias".
+  // Huellas distintas: acá sólo se prueban los nombres.
   const marcas = marcarRepetidas(
-    ["categorias", "clientes", "productos", "categorias", "la_tienda_clientes"],
+    ["categorias", "clientes", "productos", "categorias", "la_tienda_clientes"].map((nombre, indice) => ({
+      nombre,
+      huella: `h${indice}`,
+    })),
     ["productos", "otra"],
   );
   assert.deepEqual(marcas, [
@@ -442,6 +447,55 @@ test("un lote marca lo que ya existe y lo que se repite", () => {
     { conflicto: "repetida", accion: "no-importar" },
     { conflicto: null, accion: "importar" },
   ]);
+});
+
+test("los mismos datos con otro nombre también se marcan, y se queda el nombre más corto", () => {
+  const tabla = (columnas, filas) =>
+    huellaTabla({ columnas: columnas.map((nombre) => ({ nombre, tipo: "integer" })), filas });
+  const categorias = tabla(["id"], [["1"], ["2"]]);
+  const clientes = tabla(["id", "edad"], [["1", "30"]]);
+
+  // El caso de la captura: primero el libro copiado, después el CSV.
+  const marcas = marcarRepetidas(
+    [
+      { nombre: "la_tienda_1_categorias", huella: categorias },
+      { nombre: "la_tienda_1_clientes", huella: clientes },
+      { nombre: "categorias", huella: categorias },
+      { nombre: "clientes", huella: clientes },
+      { nombre: "la_tienda_categorias", huella: categorias },
+    ],
+    [],
+  );
+  assert.deepEqual(
+    marcas.map((marca) => [marca.conflicto, marca.igualA ?? null, marca.accion]),
+    [
+      ["igual", "categorias", "no-importar"],
+      ["igual", "clientes", "no-importar"],
+      [null, null, "importar"],
+      [null, null, "importar"],
+      ["igual", "categorias", "no-importar"],
+    ],
+  );
+
+  // Con el mismo largo se queda la primera.
+  const empate = marcarRepetidas(
+    [{ nombre: "ventas_a", huella: categorias }, { nombre: "ventas_b", huella: categorias }],
+    [],
+  );
+  assert.equal(empate[0].conflicto, null);
+  assert.equal(empate[1].igualA, "ventas_a");
+});
+
+test("casi iguales no cuentan como repetidas", () => {
+  const huella = (tipo, filas) => huellaTabla({ columnas: [{ nombre: "id", tipo }], filas });
+  const base = huella("integer", [["1"], ["2"]]);
+  assert.notEqual(base, huella("integer", [["1"], ["3"]])); // una celda distinta
+  assert.notEqual(base, huella("integer", [["1"]])); // una fila menos
+  assert.notEqual(base, huella("text", [["1"], ["2"]])); // otro tipo
+  assert.notEqual(
+    base,
+    huellaTabla({ columnas: [{ nombre: "codigo", tipo: "integer" }], filas: [["1"], ["2"]] }),
+  ); // otra columna
 });
 
 test("el nombre libre salta los sufijos ya usados", () => {

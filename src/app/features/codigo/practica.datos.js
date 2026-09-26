@@ -571,15 +571,43 @@ function nombreTablaDesdeHoja(nombreArchivo, nombreHoja, totalHojas) {
   por defecto es lo que menos sorprende: reemplazar lo que ya estaba, porque
   reimportar suele ser corregir, y no duplicar dentro del lote.
 */
-function marcarRepetidas(nombres, existentes) {
+function marcarRepetidas(items, existentes) {
   const enBase = new Set(existentes);
+
+  /*
+    Antes que el nombre, el contenido: el mismo CSV y la misma hoja de Excel
+    llegan con nombres distintos ("categorias", "la_tienda_1_categorias") y sin
+    esto entraban las dos. De cada grupo de iguales se queda la de nombre más
+    corto, que suele ser la limpia (sin el prefijo de la copia); con empate, la
+    primera.
+  */
+  const elegidaPorHuella = new Map();
+  items.forEach((item, indice) => {
+    const actual = elegidaPorHuella.get(item.huella);
+    if (actual === undefined || item.nombre.length < items[actual].nombre.length) {
+      elegidaPorHuella.set(item.huella, indice);
+    }
+  });
+
   const vistos = new Set();
-  return nombres.map((nombre) => {
-    if (vistos.has(nombre)) return { conflicto: "repetida", accion: "no-importar" };
-    vistos.add(nombre);
-    if (enBase.has(nombre)) return { conflicto: "existe", accion: "reemplazar" };
+  return items.map((item, indice) => {
+    const elegida = elegidaPorHuella.get(item.huella);
+    if (elegida !== indice) {
+      return { conflicto: "igual", igualA: items[elegida].nombre, accion: "no-importar" };
+    }
+    if (vistos.has(item.nombre)) return { conflicto: "repetida", accion: "no-importar" };
+    vistos.add(item.nombre);
+    if (enBase.has(item.nombre)) return { conflicto: "existe", accion: "reemplazar" };
     return { conflicto: null, accion: "importar" };
   });
+}
+
+// Lo que hace iguales a dos tablas: mismas columnas, mismos tipos, mismas filas.
+function huellaTabla(analizada) {
+  return JSON.stringify([
+    analizada.columnas.map((columna) => [columna.nombre, columna.tipo]),
+    analizada.filas,
+  ]);
 }
 
 // Primer nombre libre con sufijo: categorias → categorias_2, categorias_3…
@@ -645,6 +673,7 @@ if (typeof module === "object" && module.exports) {
     nombreTablaDesdeArchivo,
     nombreTablaDesdeHoja,
     marcarRepetidas,
+    huellaTabla,
     nombreLibre,
     validarPlanImportacion,
   });
