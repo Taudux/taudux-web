@@ -26,6 +26,9 @@ const {
   decodificarTextoImportado,
   nombreTablaDesdeArchivo,
   nombreTablaDesdeHoja,
+  marcarRepetidas,
+  nombreLibre,
+  validarPlanImportacion,
 } = require(path.join(ROOT, "src/app/features/codigo/practica.datos.js"));
 
 /*
@@ -423,4 +426,58 @@ test("cada hoja de un libro de Excel da su propia tabla", () => {
   assert.equal(nombreTablaDesdeHoja("Tienda 2024.xlsx", "Categorías", 3), "tienda_2024_categorias");
   // Una hoja sin nombre usable no deja la tabla sin nombre.
   assert.equal(nombreTablaDesdeHoja("ventas.xlsx", "***", 2), "ventas");
+});
+
+test("un lote marca lo que ya existe y lo que se repite", () => {
+  // El caso real: los CSV de la tienda, con "productos" ya en la base, y un
+  // libro que trae otra vez "categorias".
+  const marcas = marcarRepetidas(
+    ["categorias", "clientes", "productos", "categorias", "la_tienda_clientes"],
+    ["productos", "otra"],
+  );
+  assert.deepEqual(marcas, [
+    { conflicto: null, accion: "importar" },
+    { conflicto: null, accion: "importar" },
+    { conflicto: "existe", accion: "reemplazar" },
+    { conflicto: "repetida", accion: "no-importar" },
+    { conflicto: null, accion: "importar" },
+  ]);
+});
+
+test("el nombre libre salta los sufijos ya usados", () => {
+  assert.equal(nombreLibre("clientes", []), "clientes");
+  assert.equal(nombreLibre("clientes", ["clientes"]), "clientes_2");
+  assert.equal(nombreLibre("clientes", ["clientes", "clientes_2", "clientes_3"]), "clientes_4");
+  assert.equal(nombreLibre("Mis Clientes", ["mis_clientes"]), "mis_clientes_2");
+});
+
+test("el plan final no deja que dos tablas terminen con el mismo nombre", () => {
+  const existentes = ["productos"];
+  // Todo en orden: reemplazar lo que existe es una elección válida.
+  assert.deepEqual(
+    validarPlanImportacion(
+      [
+        { origen: "productos.csv", nombre: "productos", accion: "reemplazar" },
+        { origen: "clientes.csv", nombre: "clientes", accion: "importar" },
+        { origen: "la_tienda.xlsx", nombre: "clientes", accion: "no-importar" },
+      ],
+      existentes,
+    ),
+    [],
+  );
+  // Dos renombres iguales chocan entre sí.
+  const choque = validarPlanImportacion(
+    [
+      { origen: "a.csv", nombre: "ventas", accion: "renombrar" },
+      { origen: "b.csv", nombre: "Ventas", accion: "renombrar" },
+    ],
+    existentes,
+  );
+  assert.equal(choque.length, 1);
+  assert.match(choque[0], /"ventas"/);
+  // Renombrar hacia una tabla de la base tampoco pasa: sólo Reemplazar la pisa.
+  assert.match(
+    validarPlanImportacion([{ origen: "x.csv", nombre: "productos", accion: "renombrar" }], existentes)[0],
+    /ya existe en la base/,
+  );
 });

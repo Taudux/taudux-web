@@ -49,6 +49,14 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
   let tablaActiva = null;
   let columnasActivas = [];
+  // Nombres de las tablas de la base, para avisar antes de pisar una.
+  let nombresTablas = [];
+  /*
+    Lote abierto y todavía sin importar. Vive acá y no dentro del panel de carga
+    porque ese panel se redibuja entero cada vez que se refresca la lista de
+    tablas: guardado adentro, el lote se perdería al cambiar de tabla.
+  */
+  let pendientes = [];
 
   function anunciar(texto, tono = "info") {
     estado.textContent = texto;
@@ -122,6 +130,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
   async function refrescarTablas() {
     const tabla = await consultar(SQL_LISTAR_TABLAS_BASE);
     const nombres = tabla ? tabla.filas.map(([nombre]) => nombre) : [];
+    nombresTablas = nombres;
 
     listaTablas.replaceChildren();
 
@@ -444,18 +453,15 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
     /*
       Una sola pieza sigue el camino de siempre: va al área de pegado y se revisa
-      la vista previa antes de crear. Varias piezas (varios archivos, o un libro de
-      varias hojas) son varias tablas, así que se crean directo, cada una con su
-      nombre. Una que falla no frena a las demás; al final se dice cuáles entraron
-      y cuáles no.
+      la vista previa antes de importar. Varias piezas (varios archivos, o un libro
+      de varias hojas) son varias tablas: se arma la lista "Por importar", con los
+      nombres que chocan marcados, y nada se crea hasta confirmar.
     */
     async function cargarArchivos(lista) {
       const archivos = Array.from(lista ?? []);
       if (archivos.length === 0) return;
 
-      const creadas = [];
       const fallidas = [];
-      let primeraCreada = null;
       // Los motivos vienen como oraciones; entre paréntesis sobra su punto final.
       const fallo = (origen, motivo) => fallidas.push(`${origen} (${motivo.replace(/\.$/, "")})`);
 
@@ -477,51 +483,244 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
         pegado.value = pieza.texto;
         nombre.value = pieza.tabla;
         refrescarPrevia();
+        actualizarAvisoNombre();
         anunciar(`"${pieza.origen}" cargado. Revisa la vista previa e importa la tabla.`, "exito");
         return;
       }
 
+      const validas = [];
       for (const pieza of piezas) {
         const analizada = analizarTablaPegada(pieza.texto);
-        if (analizada.error) {
-          fallo(pieza.origen, analizada.error);
-          continue;
-        }
+        if (analizada.error) fallo(pieza.origen, analizada.error);
+        else validas.push({ ...pieza, analizada });
+      }
 
+      const marcas = marcarRepetidas(validas.map((pieza) => pieza.tabla), nombresTablas);
+      pendientes = validas.map((pieza, indice) => ({ ...pieza, ...marcas[indice], nombre: pieza.tabla }));
+      pintarPendientes();
+
+      const partes = [];
+      if (pendientes.length > 0) {
+        const conflictos = pendientes.filter((item) => item.conflicto).length;
+        partes.push(
+          `${pendientes.length} ${pendientes.length === 1 ? "tabla lista" : "tablas listas"} para importar` +
+            (conflictos > 0 ? `, ${conflictos} con un nombre que ya existe o se repite` : "") +
+            ". Revísalas abajo y aprieta Importar tablas.",
+        );
+      }
+      if (fallidas.length > 0) partes.push(`No se pudieron leer: ${fallidas.join("; ")}.`);
+      anunciar(
+        partes.join(" "),
+        fallidas.length === 0 ? "info" : pendientes.length > 0 ? "aviso" : "error",
+      );
+      if (pendientes.length > 0) listaPendientes.scrollIntoView({ block: "nearest" });
+    }
+
+    /* --- Lote por importar ------------------------------------------- */
+
+    const listaPendientes = document.createElement("div");
+
+    const MOTIVO_CONFLICTO = {
+      existe: "Ya existe en la base",
+      repetida: "Se repite en lo que abriste",
+    };
+
+    // Nombres ya tomados por la base o por otra tabla del lote, sin contar ésta.
+    function nombresOcupados(excepto) {
+      return [
+        ...nombresTablas,
+        ...pendientes
+          .filter((item) => item !== excepto && item.accion !== "no-importar")
+          .map((item) => normalizarNombreIdentificador(item.nombre, "datos")),
+      ];
+    }
+
+    function selectorDeAccion(item) {
+      const selector = document.createElement("select");
+      selector.className = "practica__entrada practica__entrada--selector";
+      selector.setAttribute("aria-label", `Qué hacer con ${item.origen}`);
+
+      // "Importar" sobre una tabla que ya existe la pisa: se dice con su nombre.
+      const principal = nombresTablas.includes(item.tabla)
+        ? ["reemplazar", "Reemplazar"]
+        : ["importar", "Importar"];
+      for (const [valor, texto] of [principal, ["renombrar", "Cambiar nombre"], ["no-importar", "No importar"]]) {
+        const opcion = document.createElement("option");
+        opcion.value = valor;
+        opcion.textContent = texto;
+        opcion.selected = valor === item.accion;
+        selector.appendChild(opcion);
+      }
+
+      selector.addEventListener("change", () => {
+        item.accion = selector.value;
+        item.nombre =
+          item.accion === "renombrar" ? nombreLibre(item.tabla, nombresOcupados(item)) : item.tabla;
+        pintarPendientes();
+      });
+      return selector;
+    }
+
+    function pintarPendientes() {
+      listaPendientes.replaceChildren();
+      if (pendientes.length === 0) return;
+
+      const bloque = document.createElement("div");
+      bloque.className = "practica__pendientes";
+
+      const titulo = document.createElement("h4");
+      titulo.className = "practica__base-subtitulo";
+      titulo.textContent = `Por importar (${pendientes.length})`;
+      bloque.appendChild(titulo);
+
+      for (const item of pendientes) {
+        const fila = document.createElement("div");
+        fila.className = `practica__pendiente${item.conflicto ? " practica__pendiente--conflicto" : ""}`;
+
+        const cabeza = document.createElement("div");
+        cabeza.className = "practica__pendiente-cabeza";
+        if (item.accion === "renombrar") {
+          const campo = campoTexto(item.nombre, `Nuevo nombre para ${item.origen}`);
+          campo.addEventListener("input", () => {
+            item.nombre = campo.value;
+          });
+          cabeza.appendChild(campo);
+        } else {
+          const nombreTabla = document.createElement("code");
+          nombreTabla.textContent = item.tabla;
+          cabeza.appendChild(nombreTabla);
+        }
+        const origen = document.createElement("span");
+        origen.className = "practica__pendiente-origen";
+        origen.textContent = item.origen;
+        cabeza.appendChild(origen);
+
+        const filas = item.analizada.filas.length;
+        const resumen = document.createElement("p");
+        resumen.className = "practica__tabla-pie";
+        resumen.textContent = `${filas} ${filas === 1 ? "fila" : "filas"} · ${item.analizada.columnas
+          .map((columna) => `${columna.nombre} (${columna.tipo})`)
+          .join(", ")}`;
+
+        const controles = document.createElement("div");
+        controles.className = "practica__pendiente-controles";
+        if (item.conflicto) {
+          const marca = document.createElement("span");
+          marca.className = "practica__pendiente-marca";
+          marca.textContent = `⚠ ${MOTIVO_CONFLICTO[item.conflicto]}`;
+          controles.appendChild(marca);
+        }
+        const quitar = boton(
+          "✕",
+          "button button--outline practica__pendiente-quitar",
+          () => {
+            pendientes = pendientes.filter((otro) => otro !== item);
+            pintarPendientes();
+          },
+          `Quitar ${item.origen} de la lista`,
+        );
+        quitar.setAttribute("aria-label", `Quitar ${item.origen} de la lista`);
+        controles.append(selectorDeAccion(item), quitar);
+
+        fila.append(cabeza, resumen, controles);
+        bloque.appendChild(fila);
+      }
+
+      const acciones = document.createElement("div");
+      acciones.className = "practica__base-acciones";
+      acciones.append(
+        boton("Importar tablas", "button button--glow", importarPendientes),
+        boton("Cancelar", "button button--outline", () => {
+          pendientes = [];
+          pintarPendientes();
+          anunciar("", "info");
+        }),
+      );
+      bloque.appendChild(acciones);
+      listaPendientes.appendChild(bloque);
+    }
+
+    async function importarPendientes() {
+      const plan = pendientes.map((item) => ({
+        ...item,
+        nombre: item.accion === "renombrar" ? item.nombre : item.tabla,
+      }));
+
+      const errores = validarPlanImportacion(plan, nombresTablas);
+      if (errores.length > 0) {
+        anunciar(errores.join(" "), "aviso");
+        return;
+      }
+
+      const aImportar = plan.filter((item) => item.accion !== "no-importar");
+      if (aImportar.length === 0) {
+        anunciar("No hay tablas marcadas para importar.", "aviso");
+        return;
+      }
+
+      const importadas = [];
+      const fallidas = [];
+      let primeraImportada = null;
+
+      for (const item of aImportar) {
+        const tabla = normalizarNombreIdentificador(item.nombre, "datos");
         const resultado = await ejecutarSql(
           construirSentenciasTabla({
-            nombre: pieza.tabla,
-            columnas: analizada.columnas,
-            filas: analizada.filas,
+            nombre: tabla,
+            columnas: item.analizada.columnas,
+            filas: item.analizada.filas,
           }),
         );
         if (resultado?.ok) {
-          const filas = analizada.filas.length;
-          creadas.push(`${pieza.tabla} (${filas} ${filas === 1 ? "fila" : "filas"})`);
-          primeraCreada ??= pieza.tabla;
+          const filas = item.analizada.filas.length;
+          const reemplazo = item.accion === "reemplazar" ? ", reemplazada" : "";
+          importadas.push(`${tabla} (${filas} ${filas === 1 ? "fila" : "filas"}${reemplazo})`);
+          primeraImportada ??= tabla;
         } else {
-          fallo(pieza.origen, resultado?.error || "no se pudo crear");
+          const motivo = (resultado?.error || "no se pudo crear").replace(/\.$/, "");
+          fallidas.push(`${item.origen} (${motivo})`);
         }
       }
 
-      if (primeraCreada) {
-        tablaActiva = primeraCreada;
+      pendientes = [];
+      pintarPendientes();
+      if (primeraImportada) {
+        tablaActiva = primeraImportada;
         await refrescarTablas();
       }
 
       const partes = [];
-      if (creadas.length > 0) {
-        const cuantas = creadas.length === 1 ? "1 tabla creada" : `${creadas.length} tablas creadas`;
-        partes.push(`${cuantas}: ${creadas.join(", ")}.`);
+      if (importadas.length > 0) {
+        const cuantas =
+          importadas.length === 1 ? "1 tabla importada" : `${importadas.length} tablas importadas`;
+        partes.push(`${cuantas}: ${importadas.join(", ")}.`);
       }
-      if (fallidas.length > 0) {
-        partes.push(`No se pudieron crear: ${fallidas.join("; ")}.`);
-      }
+      const omitidas = plan.length - aImportar.length;
+      if (omitidas > 0) partes.push(`${omitidas} sin importar, como elegiste.`);
+      if (fallidas.length > 0) partes.push(`No se pudieron crear: ${fallidas.join("; ")}.`);
       anunciar(
         partes.join(" "),
-        fallidas.length === 0 ? "exito" : creadas.length === 0 ? "error" : "aviso",
+        fallidas.length === 0 ? "exito" : importadas.length === 0 ? "error" : "aviso",
       );
     }
+
+    /* --- Una sola tabla: avisar antes de pisar ------------------------ */
+
+    const avisoNombre = document.createElement("p");
+    avisoNombre.className = "practica__pendiente-marca";
+    avisoNombre.hidden = true;
+    let botonImportar = null;
+
+    function actualizarAvisoNombre() {
+      const existe = nombresTablas.includes(normalizarNombreIdentificador(nombre.value, "datos"));
+      avisoNombre.hidden = !existe;
+      avisoNombre.textContent = existe
+        ? "⚠ Ya existe una tabla con este nombre: al importar se reemplaza. Cámbiale el nombre para conservarla."
+        : "";
+      if (botonImportar) botonImportar.textContent = existe ? "Reemplazar tabla" : "Importar tabla";
+    }
+
+    nombre.addEventListener("input", actualizarAvisoNombre);
 
     const selectorArchivo = document.createElement("input");
     selectorArchivo.type = "file";
@@ -573,24 +772,28 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
     acciones.append(
       boton("Abrir CSV o Excel", "button button--outline", () => selectorArchivo.click()),
-      boton("Importar tabla", "button button--glow", async () => {
+      (botonImportar = boton("Importar tabla", "button button--glow", async () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {
           anunciar(analizada.error, "aviso");
           return;
         }
+        const tabla = normalizarNombreIdentificador(nombre.value, "datos");
+        const reemplaza = nombresTablas.includes(tabla);
         const sql = construirSentenciasTabla({
           nombre: nombre.value,
           columnas: analizada.columnas,
           filas: analizada.filas,
         });
-        if (await correr(sql, `Tabla creada con ${analizada.filas.length} filas.`)) {
-          tablaActiva = normalizarNombreIdentificador(nombre.value, "datos");
+        const filas = analizada.filas.length;
+        const hecho = `Tabla ${reemplaza ? "reemplazada" : "importada"} con ${filas} ${filas === 1 ? "fila" : "filas"}.`;
+        if (await correr(sql, hecho)) {
+          tablaActiva = tabla;
           pegado.value = "";
           refrescarPrevia();
           await refrescarTablas();
         }
-      }),
+      })),
       boton("Ver el SQL", "button button--outline", () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {
@@ -614,7 +817,9 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     etiquetaNombre.textContent = "Nombre de la tabla";
     campoNombre.append(etiquetaNombre, nombre);
 
-    bloque.append(campoNombre, pegado, previa, acciones, selectorArchivo);
+    actualizarAvisoNombre();
+    pintarPendientes();
+    bloque.append(campoNombre, avisoNombre, pegado, previa, acciones, listaPendientes, selectorArchivo);
     contenedor.appendChild(bloque);
   }
 

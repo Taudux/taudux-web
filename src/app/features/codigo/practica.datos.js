@@ -564,6 +564,62 @@ function nombreTablaDesdeHoja(nombreArchivo, nombreHoja, totalHojas) {
   return normalizarNombreIdentificador(`${archivo}_${nombreHoja}`, archivo);
 }
 
+/*
+  Una importación de varias tablas no se ejecuta a ciegas: antes se marca qué
+  nombres chocan. "existe" es una tabla que ya está en la base; "repetida", un
+  nombre que ya apareció antes en el mismo lote (la primera gana). Lo propuesto
+  por defecto es lo que menos sorprende: reemplazar lo que ya estaba, porque
+  reimportar suele ser corregir, y no duplicar dentro del lote.
+*/
+function marcarRepetidas(nombres, existentes) {
+  const enBase = new Set(existentes);
+  const vistos = new Set();
+  return nombres.map((nombre) => {
+    if (vistos.has(nombre)) return { conflicto: "repetida", accion: "no-importar" };
+    vistos.add(nombre);
+    if (enBase.has(nombre)) return { conflicto: "existe", accion: "reemplazar" };
+    return { conflicto: null, accion: "importar" };
+  });
+}
+
+// Primer nombre libre con sufijo: categorias → categorias_2, categorias_3…
+function nombreLibre(nombre, ocupados) {
+  const base = normalizarNombreIdentificador(nombre, "datos");
+  const usados = new Set(ocupados);
+  if (!usados.has(base)) return base;
+  let numero = 2;
+  while (usados.has(`${base}_${numero}`)) numero += 1;
+  return `${base}_${numero}`;
+}
+
+/*
+  Última revisión antes de ejecutar, con los nombres finales ya elegidos: un
+  renombre a mano puede volver a chocar con otra tabla del lote o con la base.
+  Sólo "reemplazar" puede pisar una tabla existente, y sólo porque se eligió.
+*/
+function validarPlanImportacion(items, existentes) {
+  const enBase = new Set(existentes);
+  const errores = [];
+  const usados = new Map();
+
+  for (const item of items) {
+    if (item.accion === "no-importar") continue;
+    const nombre = normalizarNombreIdentificador(item.nombre, "datos");
+
+    if (usados.has(nombre)) {
+      errores.push(`Dos tablas se llamarían "${nombre}" (${usados.get(nombre)} y ${item.origen}).`);
+      continue;
+    }
+    usados.set(nombre, item.origen);
+
+    if (item.accion !== "reemplazar" && enBase.has(nombre)) {
+      errores.push(`"${nombre}" ya existe en la base: elige Reemplazar o cámbiale el nombre.`);
+    }
+  }
+
+  return errores;
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     FILAS_POR_INSERT,
@@ -588,5 +644,8 @@ if (typeof module === "object" && module.exports) {
     decodificarTextoImportado,
     nombreTablaDesdeArchivo,
     nombreTablaDesdeHoja,
+    marcarRepetidas,
+    nombreLibre,
+    validarPlanImportacion,
   });
 }
