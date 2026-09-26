@@ -54,6 +54,11 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     primera sin que cada lugar que cambia tablaActiva tenga que acordarse.
   */
   let paginaFilas = { tabla: null, pagina: 0 };
+  // Repintado del panel: número del último pedido, tabla que quedó en pantalla
+  // y a qué botón de paginación devolverle el foco.
+  let repintado = 0;
+  let tablaPintada = null;
+  let enfocarTras = null;
   // Nombres de las tablas de la base, para avisar antes de pisar una.
   let nombresTablas = [];
   /*
@@ -370,13 +375,14 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
         `${filasVisibles} de ${totalFilas} · página ${pagina.pagina + 1} de ${pagina.totalPaginas}`;
 
       // Cambiar de página no toca la lista de tablas: basta con repintar el detalle.
-      const irA = (destino) => async () => {
+      const irA = (destino, sentido) => async () => {
         paginaFilas = { tabla: tablaActiva, pagina: destino };
+        enfocarTras = sentido;
         await pintarDetalle();
       };
-      const anterior = boton("‹ Anterior", "button button--outline", irA(pagina.pagina - 1));
+      const anterior = boton("‹ Anterior", "button button--outline", irA(pagina.pagina - 1, "anterior"));
       anterior.disabled = pagina.pagina === 0;
-      const siguiente = boton("Siguiente ›", "button button--outline", irA(pagina.pagina + 1));
+      const siguiente = boton("Siguiente ›", "button button--outline", irA(pagina.pagina + 1, "siguiente"));
       siguiente.disabled = pagina.pagina === pagina.totalPaginas - 1;
 
       const botones = document.createElement("div");
@@ -871,9 +877,57 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
   /* --- Armado del detalle -------------------------------------------- */
 
+  /*
+    El panel se arma entero fuera de la pantalla y se cambia por el viejo de un
+    solo golpe. Vaciarlo primero y llenarlo después de consultar la base lo
+    dejaba en blanco unos milisegundos: la página se achicaba, el navegador subía
+    el scroll para que cupiera, y al paginar o editar una celda la vista saltaba.
+  */
   async function pintarDetalle() {
-    detalle.replaceChildren();
+    const turno = ++repintado;
+    const nuevo = document.createDocumentFragment();
+    await armarDetalle(nuevo);
+    // Dos clics rápidos lanzan dos repintados: sólo el último llega a la pantalla.
+    if (turno !== repintado) return;
 
+    conservarAltoDeTabla(nuevo);
+    /*
+      Seguro contra el anclaje de scroll del navegador: al reemplazar el nodo que
+      tomó de ancla puede reacomodar la vista. Se vio una vez (148 px al pasar a
+      la última página) y no se pudo reproducir; si vuelve a pasar, se deshace.
+    */
+    const scrollAntes = window.scrollY;
+    detalle.replaceChildren(nuevo);
+    if (window.scrollY !== scrollAntes) window.scrollTo({ top: scrollAntes, behavior: "instant" });
+    tablaPintada = tablaActiva;
+
+    if (enfocarTras) {
+      const [primero, alterno] =
+        enfocarTras === "siguiente" ? ["Siguiente ›", "‹ Anterior"] : ["‹ Anterior", "Siguiente ›"];
+      const botones = [...detalle.querySelectorAll(".practica__paginacion-botones .button")];
+      const destino =
+        botones.find((b) => b.textContent === primero && !b.disabled) ||
+        botones.find((b) => b.textContent === alterno && !b.disabled);
+      destino?.focus({ preventScroll: true });
+      enfocarTras = null;
+    }
+  }
+
+  /*
+    La última página trae menos filas (7 de 12): sin esto la tabla se encogía y
+    Anterior/Siguiente se subían, lejos de donde estaba el cursor. Mientras se
+    pagina la misma tabla, la nueva hereda el alto de la anterior; al abrir otra
+    tabla se mide de cero.
+  */
+  function conservarAltoDeTabla(nuevo) {
+    const anterior = detalle.querySelector(".practica__tabla-scroll");
+    const siguiente = nuevo.querySelector(".practica__tabla-scroll");
+    const paginada = nuevo.querySelector(".practica__paginacion");
+    if (!anterior || !siguiente || !paginada || tablaPintada !== tablaActiva) return;
+    siguiente.style.minBlockSize = `${anterior.getBoundingClientRect().height}px`;
+  }
+
+  async function armarDetalle(detalle) {
     if (!tablaActiva) {
       pintarCreacion(detalle);
       pintarCarga(detalle);
