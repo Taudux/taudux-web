@@ -361,7 +361,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     const explicacion = document.createElement("p");
     explicacion.className = "practica__base-nota";
     explicacion.textContent =
-      "Importa archivos CSV o de Excel (puedes elegir varios), arrástralos aquí, o pega directamente lo que tengas copiado.";
+      "Abre archivos CSV o de Excel (puedes elegir varios), arrástralos aquí, o pega directamente lo que tengas copiado.";
     bloque.appendChild(explicacion);
 
     // Etiqueta distinta de la del creador manual: dos campos con el mismo nombre
@@ -477,7 +477,7 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
         pegado.value = pieza.texto;
         nombre.value = pieza.tabla;
         refrescarPrevia();
-        anunciar(`"${pieza.origen}" cargado. Revisa la vista previa y crea la tabla.`, "exito");
+        anunciar(`"${pieza.origen}" cargado. Revisa la vista previa e importa la tabla.`, "exito");
         return;
       }
 
@@ -572,8 +572,8 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     acciones.className = "practica__base-acciones";
 
     acciones.append(
-      boton("Importar CSV o Excel", "button button--outline", () => selectorArchivo.click()),
-      boton("Crear tabla con estos datos", "button button--glow", async () => {
+      boton("Abrir CSV o Excel", "button button--outline", () => selectorArchivo.click()),
+      boton("Importar tabla", "button button--glow", async () => {
         const analizada = analizarTablaPegada(pegado.value);
         if (analizada.error) {
           anunciar(analizada.error, "aviso");
