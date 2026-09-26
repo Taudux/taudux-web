@@ -30,6 +30,7 @@ const {
   huellaTabla,
   nombreLibre,
   validarPlanImportacion,
+  calcularPagina,
 } = require(path.join(ROOT, "src/app/features/codigo/practica.datos.js"));
 
 /*
@@ -546,4 +547,23 @@ test("el plan final no deja que dos tablas terminen con el mismo nombre", () => 
     validarPlanImportacion([{ origen: "x.csv", nombre: "productos", accion: "renombrar" }], existentes)[0],
     /ya existe en la base/,
   );
+});
+
+test("las filas se reparten en páginas de 12 y la página se acota", () => {
+  // detalle_pedidos de la tienda: 31 filas → 12, 12 y 7.
+  assert.deepEqual(calcularPagina(31, 0, 12), { pagina: 0, totalPaginas: 3, offset: 0, desde: 1, hasta: 12 });
+  assert.deepEqual(calcularPagina(31, 1, 12), { pagina: 1, totalPaginas: 3, offset: 12, desde: 13, hasta: 24 });
+  assert.deepEqual(calcularPagina(31, 2, 12), { pagina: 2, totalPaginas: 3, offset: 24, desde: 25, hasta: 31 });
+  // Justo 12 cabe en una; 13 ya pide dos.
+  assert.equal(calcularPagina(12, 0, 12).totalPaginas, 1);
+  assert.equal(calcularPagina(13, 0, 12).totalPaginas, 2);
+  // Tabla vacía: una sola página, sin rango.
+  assert.deepEqual(calcularPagina(0, 0, 12), { pagina: 0, totalPaginas: 1, offset: 0, desde: 0, hasta: 0 });
+  // Al borrar la última fila de la página 3, la vista cae a la 2.
+  assert.equal(calcularPagina(24, 2, 12).pagina, 1);
+  // Fuera de rango por debajo, o basura: primera página.
+  assert.equal(calcularPagina(31, -3, 12).pagina, 0);
+  assert.equal(calcularPagina(31, undefined, 12).pagina, 0);
+  // "Ir a la última" puede pedirse con un número grande.
+  assert.equal(calcularPagina(31, Infinity, 12).pagina, 2);
 });

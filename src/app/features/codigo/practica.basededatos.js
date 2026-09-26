@@ -16,7 +16,7 @@
   comentario de sentenciaActualizarCelda.
 */
 
-const FILAS_EDITABLES_MAXIMAS = 200;
+const FILAS_POR_PAGINA = 12;
 
 const SQL_LISTAR_TABLAS_BASE = `
 select table_name
@@ -49,6 +49,11 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
 
   let tablaActiva = null;
   let columnasActivas = [];
+  /*
+    La página va atada a su tabla: al abrir otra, la tabla nueva empieza en la
+    primera sin que cada lugar que cambia tablaActiva tenga que acordarse.
+  */
+  let paginaFilas = { tabla: null, pagina: 0 };
   // Nombres de las tablas de la base, para avisar antes de pisar una.
   let nombresTablas = [];
   /*
@@ -264,8 +269,20 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
   async function pintarFilas(contenedor) {
     const bloque = seccion("Filas");
 
+    const conteo = await consultar(`select count(*) from "${tablaActiva}";`);
+    const totalFilas = Number(conteo?.filas?.[0]?.[0] ?? 0);
+    const pedida = paginaFilas.tabla === tablaActiva ? paginaFilas.pagina : 0;
+    const pagina = calcularPagina(totalFilas, pedida, FILAS_POR_PAGINA);
+    paginaFilas = { tabla: tablaActiva, pagina: pagina.pagina };
+
+    /*
+      Orden fijo por la primera columna (la 2 del select: la 1 es el ctid). Sin
+      él, Postgres devuelve al final la fila recién editada —un UPDATE la
+      reescribe— y con páginas saltaría a otra página en cuanto se toca.
+    */
     const datos = await consultar(
-      `select ctid, * from "${tablaActiva}" limit ${FILAS_EDITABLES_MAXIMAS};`,
+      `select ctid, * from "${tablaActiva}" order by 2 nulls last, ctid ` +
+        `limit ${FILAS_POR_PAGINA} offset ${pagina.offset};`,
     );
 
     if (!datos || columnasActivas.length === 0) {
@@ -341,11 +358,32 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
     marco.appendChild(tabla);
     bloque.appendChild(marco);
 
-    if (datos.truncada || datos.totalFilas >= FILAS_EDITABLES_MAXIMAS) {
-      const aviso = document.createElement("p");
-      aviso.className = "practica__tabla-pie";
-      aviso.textContent = `Se editan las primeras ${FILAS_EDITABLES_MAXIMAS} filas. El resto sigue ahí y se consulta desde SQL.`;
-      bloque.appendChild(aviso);
+    if (pagina.totalPaginas > 1) {
+      const paginacion = document.createElement("div");
+      paginacion.className = "practica__paginacion";
+
+      const rango = document.createElement("p");
+      rango.className = "practica__tabla-pie";
+      const filasVisibles =
+        pagina.desde === pagina.hasta ? `Fila ${pagina.desde}` : `Filas ${pagina.desde}–${pagina.hasta}`;
+      rango.textContent =
+        `${filasVisibles} de ${totalFilas} · página ${pagina.pagina + 1} de ${pagina.totalPaginas}`;
+
+      // Cambiar de página no toca la lista de tablas: basta con repintar el detalle.
+      const irA = (destino) => async () => {
+        paginaFilas = { tabla: tablaActiva, pagina: destino };
+        await pintarDetalle();
+      };
+      const anterior = boton("‹ Anterior", "button button--outline", irA(pagina.pagina - 1));
+      anterior.disabled = pagina.pagina === 0;
+      const siguiente = boton("Siguiente ›", "button button--outline", irA(pagina.pagina + 1));
+      siguiente.disabled = pagina.pagina === pagina.totalPaginas - 1;
+
+      const botones = document.createElement("div");
+      botones.className = "practica__paginacion-botones";
+      botones.append(anterior, siguiente);
+      paginacion.append(rango, botones);
+      bloque.appendChild(paginacion);
     }
 
     bloque.appendChild(
@@ -355,7 +393,11 @@ function montarVistaBaseDeDatos({ ejecutarSql, escribirEnEditor }) {
           columnasActivas,
           columnasActivas.map(() => ""),
         );
-        if (await correr(sql, "Fila agregada.")) await refrescarTablas();
+        if (await correr(sql, "Fila agregada.")) {
+          // La fila vacía queda al final del orden: se va a la última página a verla.
+          paginaFilas = { tabla: tablaActiva, pagina: Infinity };
+          await refrescarTablas();
+        }
       }),
     );
 

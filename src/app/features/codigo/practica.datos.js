@@ -664,6 +664,26 @@ function validarPlanImportacion(items, existentes) {
   return errores;
 }
 
+/*
+  La página que se pide siempre se acota a las que existen: al borrar la última
+  fila de la última página, o cuando la tabla se achica desde SQL, la vista cae a
+  la página anterior en vez de quedarse mirando una página vacía. Las páginas
+  cuentan desde 0; "desde" y "hasta" son para leer, desde 1.
+*/
+function calcularPagina(totalFilas, pagina, tamano) {
+  const total = Math.max(0, Number(totalFilas) || 0);
+  const totalPaginas = Math.max(1, Math.ceil(total / tamano));
+  const acotada = Math.min(Math.max(0, Math.trunc(Number(pagina) || 0)), totalPaginas - 1);
+  const offset = acotada * tamano;
+  return {
+    pagina: acotada,
+    totalPaginas,
+    offset,
+    desde: total === 0 ? 0 : offset + 1,
+    hasta: Math.min(offset + tamano, total),
+  };
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     FILAS_POR_INSERT,
@@ -692,5 +712,6 @@ if (typeof module === "object" && module.exports) {
     huellaTabla,
     nombreLibre,
     validarPlanImportacion,
+    calcularPagina,
   });
 }

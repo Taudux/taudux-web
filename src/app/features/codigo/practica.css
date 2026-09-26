@@ -952,6 +952,37 @@
     margin-top: 0.85rem;
   }
 
+  /* Paginación de las filas ------------------------------------------- */
+
+  .practica__paginacion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem 1rem;
+    margin-block: 0.75rem 1rem;
+  }
+
+  .practica__paginacion .practica__tabla-pie {
+    margin: 0;
+  }
+
+  .practica__paginacion-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /*
+    Los .button del sitio no tienen estado deshabilitado propio; sin esto, el
+    Siguiente de la última página se veía igual de activo que los demás.
+  */
+  .practica__paginacion-botones .button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
   /* Lote por importar ------------------------------------------------- */
 
   .practica__pendientes {
