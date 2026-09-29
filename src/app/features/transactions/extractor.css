@@ -1208,3 +1208,95 @@
     .carga { padding: 1.5rem; }
   }
 }
+
+/* ------------------------------------------------- puertas de entrada --- */
+@layer features {
+  /*
+    Cuadros que se abren AL ENTRAR y tapan la herramienta hasta resolverse.
+    z-index 1500: por encima de la barra (1000), los menús (1200), los toasts
+    (1300) y el visor (1400). Nada de la página debe poder usarse mientras uno
+    está abierto; `inert` en el resto del body lo garantiza también para el
+    teclado y los lectores de pantalla.
+  */
+  body.puerta-abierta { overflow: hidden; }
+
+  .puerta {
+    position: fixed; inset: 0; z-index: 1500;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+    background: color-mix(in srgb, var(--color-background-deep) 80%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  .puerta__caja {
+    width: min(100%, 44rem); max-height: calc(100vh - 2rem);
+    display: flex; flex-direction: column; gap: 0.85rem;
+    padding: 1.5rem 1.6rem 1.4rem;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+    border-radius: var(--radius-panel);
+    background: var(--color-background-deep);
+    box-shadow: 0 0 40px color-mix(in srgb, var(--color-accent) 22%, transparent);
+    overflow-y: auto;
+  }
+  /* El aviso de "no guardamos nada" va en ámbar: es advertencia, no contrato. */
+  .puerta__caja--aviso {
+    width: min(100%, 36rem);
+    border-color: color-mix(in srgb, var(--color-warning) 55%, transparent);
+    box-shadow: 0 0 40px color-mix(in srgb, var(--color-warning) 18%, transparent);
+  }
+  /*
+    Sello de confianza, lo PRIMERO del cuadro de Términos. El cuadro es
+    formal a propósito, y esa formalidad hace pensar a quien desconfía que sus
+    datos se usarán para otra cosa: abandona antes de llegar al aviso que
+    dice que no se guardan. El sello adelanta ese mensaje en una línea y
+    remite al siguiente paso, donde está el detalle. Verde: es una garantía,
+    no un requisito.
+  */
+  .puerta__sello {
+    display: flex; gap: 0.55rem; align-items: flex-start;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent);
+    border-radius: var(--radius-field);
+    background: color-mix(in srgb, var(--color-success) 10%, transparent);
+    color: var(--color-text); font-size: 0.88rem; line-height: 1.45;
+  }
+  .puerta__sello strong { color: var(--color-success); }
+  .puerta__sello-icono { flex: none; }
+  .puerta__kicker {
+    font-family: var(--font-marca); font-size: 0.7rem;
+    letter-spacing: 0.22em; text-transform: uppercase; color: var(--color-accent);
+  }
+  .puerta__caja--aviso .puerta__kicker { color: var(--color-warning); }
+  .puerta__titulo { font-size: 1.35rem; line-height: 1.2; text-wrap: balance; }
+  .puerta__texto { color: var(--color-text); line-height: 1.55; }
+  .puerta__texto--nota { color: var(--color-text-muted); font-size: 0.88rem; }
+
+  .puerta__extracto {
+    max-height: 34vh; overflow-y: auto; padding: 0.9rem 1rem;
+    border: var(--border-subtle); border-radius: var(--radius-field);
+    background: rgba(255,255,255,0.03); font-size: 0.9rem; line-height: 1.5;
+  }
+  .puerta__extracto:focus { outline: 1px solid var(--color-accent); }
+  .puerta__extracto-nota { color: var(--color-text-muted); font-size: 0.8rem; margin-bottom: 0.6rem; }
+  .puerta__extracto dt { font-weight: 600; margin-top: 0.7rem; color: var(--color-text); }
+  .puerta__extracto dd { margin-left: 0; color: var(--color-text-muted); }
+
+  .puerta__enlaces { font-size: 0.88rem; color: var(--color-text-muted); }
+  .puerta__enlaces a { color: var(--color-accent); }
+  /* Aviso de privacidad simplificado: obligatorio, pero secundario a la vista. */
+  .puerta__simplificado { font-size: 0.8rem; line-height: 1.45; color: var(--color-text-subtle); }
+  .puerta__declaracion {
+    font-size: 0.92rem; line-height: 1.5; padding: 0.8rem 1rem;
+    border-left: 3px solid var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  }
+  .puerta__campo { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; }
+  .puerta__campo code { font-family: var(--font-ui); color: var(--color-accent); }
+  .puerta__error { color: var(--color-error); font-size: 0.88rem; }
+  .puerta__acciones { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.25rem; }
+
+  @media (max-width: 40rem) {
+    .puerta { padding: 0.75rem; align-items: flex-end; }
+    .puerta__caja { padding: 1.2rem 1rem 1rem; max-height: calc(100vh - 1.5rem); }
+    .puerta__extracto { max-height: 30vh; }
+  }
+}

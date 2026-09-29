@@ -466,6 +466,138 @@
   </main>
 
   <!--
+    Puertas de entrada. Dos cuadros que se abren AL ENTRAR, en este orden:
+
+    1. Los Términos y Condiciones. Se aceptan ESCRIBIENDO la frase completa,
+       no con una casilla: la herramienta procesa información financiera y la
+       ley exige consentimiento expreso. Es bloqueante. Incluye el aviso de
+       privacidad simplificado (responsable, finalidad, dónde leer el
+       integral) que la ley pide en el momento de recabar los datos.
+    2. El aviso de que nada se guarda. "Entendido" lo cierra por esta visita;
+       "No mostrar de nuevo" lo apaga en este navegador.
+
+    Son deliberadamente insistentes. Viven fuera de <main> porque, mientras
+    uno está abierto, todo lo demás del body se marca `inert`.
+  -->
+  <div class="puerta" id="puertaTerminos" hidden role="dialog" aria-modal="true"
+       aria-labelledby="puertaTerminosTitulo">
+    <div class="puerta__caja">
+      <p class="puerta__sello">
+        <span class="puerta__sello-icono" aria-hidden="true">🔒</span>
+        <span><strong>Tu estado de cuenta no se guarda:</strong> se lee, se te muestra y se descarta. Te lo detallamos en el siguiente paso.</span>
+      </p>
+      <p class="puerta__kicker">Antes de empezar</p>
+      <h2 class="puerta__titulo" id="puertaTerminosTitulo">Términos y condiciones del extractor</h2>
+      <p class="puerta__texto">
+        Esta herramienta procesa <strong>estados de cuenta bancarios</strong>, es decir,
+        información financiera tuya. Antes de subir el primero, lee esto.
+      </p>
+
+      <div class="puerta__extracto" tabindex="0" aria-label="Extracto de los Términos y Condiciones">
+        <p class="puerta__extracto-nota">
+          Extracto de los Términos y Condiciones de TAUDUX, versión
+          <span data-terminos-version>1.0</span>. La numeración es la del documento
+          completo; lo que aquí se resume no sustituye al texto íntegro.
+        </p>
+        <dl>
+          <dt>VII. Qué es esta herramienta</dt>
+          <dd>Un servicio tecnológico, informativo y analítico. No es un servicio bancario,
+              ni intermediación financiera, ni asesoría de inversión regulada.</dd>
+
+          <dt>VIII. La información financiera que subes</dt>
+          <dd>Debes tener derecho legítimo sobre cada documento que cargas. No subas
+              información obtenida ilícitamente, ni información de terceros sin su
+              autorización, ni contraseñas, NIP, tokens o claves de acceso.</dd>
+
+          <dt>X y XLVII. Información de otras personas</dt>
+          <dd>Si cargas un estado de cuenta que no es tuyo, tú respondes por contar con
+              la autorización o el fundamento jurídico para hacerlo.</dd>
+
+          <dt>XIII y XV. Datos financieros y consentimiento expreso</dt>
+          <dd>La ley exige consentimiento expreso para tratar datos financieros o
+              patrimoniales, y aceptar los Términos no lo sustituye. Por eso esta
+              puerta te pide las dos cosas de forma explícita.</dd>
+
+          <dt>XIX y XXXV. Resultados automatizados</dt>
+          <dd>La extracción es automática y sus resultados pueden contener errores,
+              omisiones o clasificaciones incorrectas. TAUDUX no garantiza que un
+              resultado sea exacto, completo o suficiente para tomar una decisión
+              económica: verifícalo antes de usarlo para algo relevante.</dd>
+
+          <dt>XXXVI. No es asesoría financiera</dt>
+          <dd>Los resultados no constituyen asesoría financiera ni recomendación de
+              inversión. Tus decisiones económicas son tuyas.</dd>
+
+          <dt>XXIII. Ciclo de vida de tus documentos</dt>
+          <dd>TAUDUX no conserva indefinidamente un documento financiero por el solo
+              hecho de haberse cargado. Los periodos de conservación se limitan a lo
+              necesario para la finalidad informada.</dd>
+
+          <dt>XLV y XLVI. Responsabilidad</dt>
+          <dd>TAUDUX no responde por daños derivados de documentos ilegibles o
+              defectuosos, ni de decisiones tomadas sólo con base en un resultado sin
+              verificarlo. Tú respondes por la legitimidad de lo que subes.</dd>
+        </dl>
+      </div>
+
+      <p class="puerta__enlaces">
+        <a href="/app/features/legal/terminos.html" target="_blank" rel="noopener">Leer los Términos completos</a>
+        ·
+        <a href="/app/features/legal/privacidad.html" target="_blank" rel="noopener">Aviso de Privacidad</a>
+      </p>
+
+      <p class="puerta__simplificado">
+        Responsable: René Samael Flores Ortega (TAUDUX), Santiago de Querétaro, Querétaro.
+        Finalidad: extraer, verificar y mostrarte la información de tu estado de cuenta;
+        el archivo no se conserva. Aviso de Privacidad Integral en el enlace de arriba.
+      </p>
+
+      <p class="puerta__declaracion">
+        Al escribir la frase y continuar declaras que <strong>leíste y aceptas</strong>
+        los Términos y Condiciones de TAUDUX, que <strong>tienes derecho</strong> a usar
+        los documentos que subas, y otorgas tu <strong>consentimiento expreso</strong>
+        para que TAUDUX procese la información financiera que contienen, conforme al
+        Aviso de Privacidad.
+      </p>
+
+      <label class="puerta__campo">
+        <span>Para continuar, escribe: <code>acepto términos y condiciones</code></span>
+        <input type="text" class="field" id="fraseTerminos" autocomplete="off"
+               autocapitalize="off" spellcheck="false"
+               placeholder="acepto términos y condiciones">
+      </label>
+      <p class="puerta__error" id="errorTerminos" role="alert" hidden></p>
+      <div class="puerta__acciones">
+        <button type="button" class="button--glow" id="btnAceptarTerminos" disabled>Continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="puerta" id="puertaAviso" hidden role="dialog" aria-modal="true"
+       aria-labelledby="puertaAvisoTitulo">
+    <div class="puerta__caja puerta__caja--aviso">
+      <p class="puerta__kicker">Importante</p>
+      <h2 class="puerta__titulo" id="puertaAvisoTitulo">Tus datos no se guardan</h2>
+      <p class="puerta__texto">
+        El extractor <strong>no almacena</strong> la información del PDF que subes. Es un
+        proceso algorítmico que extrae los datos al vuelo y presenta los resultados en
+        esta pestaña. <strong>Los valores y datos desaparecerán en cuanto actualices o
+        cierres la página.</strong> TAUDUX no guarda ningún dato contenido en tu PDF:
+        ni en disco ni en base de datos.
+      </p>
+      <p class="puerta__texto puerta__texto--nota">
+        La única excepción es si tú decides donar un archivo que no pudimos leer para
+        que soportemos tu banco: eso te lo pedimos aparte, con tu permiso explícito, y
+        se borra a los 5 días.
+      </p>
+      <div class="puerta__acciones">
+        <button type="button" class="button--glow" id="btnAvisoEntendido">Entendido</button>
+        <button type="button" class="button--outline" id="btnAvisoNoMostrar">No mostrar de nuevo</button>
+      </div>
+    </div>
+  </div>
+
+  <!--
     Atajo al panel de administración, centrado sobre la barra. Vive acá y no
     en el menú de cuenta (donde estuvo del 2026-08-20 al 2026-09-24) porque
     administra el extractor, no el sitio. Es un hermano de la barra y no un
