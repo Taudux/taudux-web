@@ -520,6 +520,11 @@ test("every page container carries its u-contenedor* class in the markup", () =>
     // sitio como Código. Sin contenedor medía 1457px a 1536 y nacía en x=32,
     // 128px afuera del eje del logo. El relleno lateral lo pone `.notas`.
     { file: "src/app/features/notas/index.html", needle: 'class="notas__disposicion u-contenedor"' },
+    // El generador de QR y su moderación comparten contenedor: --medio, como el
+    // portal, porque son pantallas de gestión y no de lectura.
+    { file: "src/app/features/qr/index.html", needle: 'class="qr__container u-contenedor u-contenedor--medio"' },
+    { file: "src/app/features/qr/admin.html", needle: 'class="qr__container u-contenedor u-contenedor--medio"' },
+    { file: "src/app/features/qr/reportar.html", needle: 'class="qr__container u-contenedor u-contenedor--contenido"' },
     { file: "src/app/features/transactions/index.html", needle: 'class="extractor__contenido u-contenedor"' },
   ];
 
@@ -747,6 +752,8 @@ test("every page that mounts the navbar derives its top offset from the shared t
     // El portal usa la altura pelada a propósito: su .portal__header ya pone
     // el aire por dentro (ver el comentario en portal.css).
     { file: "src/app/features/portal/portal.css", needle: "padding-block-start: var(--navbar-height);" },
+    { file: "src/app/features/qr/qr.css", needle: "padding: var(--espacio-bajo-navbar) 2rem 4rem;" },
+    { file: "src/app/features/qr/qr.css", needle: "padding: var(--espacio-bajo-navbar) 1rem 3rem;" },
   ];
 
   for (const { file, needle } of esperados) {

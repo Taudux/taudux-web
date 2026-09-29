@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Fuera de buscadores como el resto de Tools (tests/navbar-jerarquia). Se
+       llega desde las páginas de go.taudux.com y desde los términos. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Reportar un QR | Taudux</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/field/field.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/features/qr/qr.css">
+  <script defer src="/app/core/analytics/ga4.js"></script>
+</head>
+
+<body>
+  <nav class="navbar" aria-label="Navegación principal">
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <a href="#" id="accessBtn" class="navbar__link button button--access">Acceder</a>
+    </div>
+  </nav>
+
+  <main class="qr">
+    <div class="qr__container u-contenedor u-contenedor--contenido">
+      <header class="qr__header">
+        <h1 class="qr__title">Reportar un QR</h1>
+        <p class="qr__intro">
+          ¿Un QR de Taudux te llevó a un sitio engañoso o peligroso? Cuéntanos. No
+          necesitas cuenta. Revisamos cada reporte y, si el QR incumple nuestros
+          términos, lo desactivamos para todos.
+        </p>
+      </header>
+
+      <section class="qr-reporte panel" aria-labelledby="qrReporteTitulo">
+        <h2 class="u-visually-hidden" id="qrReporteTitulo">Formulario de reporte</h2>
+
+        <form class="qr__formulario" id="qrReporteFormulario" novalidate>
+          <p class="qr__aviso qr__aviso--error" id="qrReporteError" role="alert" hidden></p>
+
+          <label class="qr__etiqueta" for="qrReporteCodigo">Link del QR</label>
+          <input class="field" type="text" id="qrReporteCodigo" name="codigo" autocomplete="off" spellcheck="false"
+            placeholder="go.taudux.com/… o el código de 6 caracteres" required>
+          <p class="qr__nota">Es la dirección que aparece al escanearlo: empieza con go.taudux.com/.</p>
+
+          <label class="qr__etiqueta" for="qrReporteMotivo">¿Qué pasó?</label>
+          <!-- Los valores son los del CHECK de 0046 (lo fija tests/qr-nucleo.test.js). -->
+          <select class="field" id="qrReporteMotivo" name="motivo" required>
+            <option value="">Elige una opción</option>
+            <option value="phishing">Me pidió contraseñas o datos personales (phishing)</option>
+            <option value="malware">Intentó instalar algo o descargar un archivo</option>
+            <option value="fraude">Es un fraude o una estafa</option>
+            <option value="suplantacion">Se hace pasar por otra persona o empresa</option>
+            <option value="contenido_ilegal">Contenido ilegal u ofensivo</option>
+            <option value="otro">Otra cosa</option>
+          </select>
+
+          <label class="qr__etiqueta" for="qrReporteDetalle">Detalles <span class="qr__opcional">(opcional)</span></label>
+          <textarea class="field field--textarea" id="qrReporteDetalle" name="detalle" maxlength="1000"
+            placeholder="¿Dónde encontraste el QR? ¿Qué te pidió el sitio?"></textarea>
+
+          <label class="qr__etiqueta" for="qrReporteContacto">Tu correo <span class="qr__opcional">(opcional)</span></label>
+          <input class="field" type="email" id="qrReporteContacto" name="contacto" maxlength="200" autocomplete="email"
+            placeholder="Sólo si quieres respuesta">
+
+          <!-- Trampa para bots: invisible para las personas. Si llega llena, el
+               reporte se descarta en silencio. -->
+          <div class="qr-reporte__trampa" aria-hidden="true">
+            <label for="qrReporteSitio">Sitio web</label>
+            <input type="text" id="qrReporteSitio" name="sitio" tabindex="-1" autocomplete="off">
+          </div>
+
+          <button type="submit" class="button button--glow qr-reporte__enviar" id="qrReporteEnviar"
+            data-loading-text="Enviando…">Enviar reporte</button>
+          <p class="qr__legal">
+            Guardamos lo que escribas aquí para revisar el QR. El detalle está en el
+            <a href="/app/features/legal/privacidad.html">Aviso de Privacidad</a>.
+          </p>
+        </form>
+
+        <div class="qr-reporte__gracias" id="qrReporteGracias" role="status" tabindex="-1" hidden>
+          <h2 class="qr__subtitulo">Gracias por avisarnos</h2>
+          <p class="qr__texto">
+            Recibimos tu reporte y lo revisaremos. Si el QR incumple nuestros
+            términos, lo desactivaremos y dejará de llevar a ese sitio.
+          </p>
+          <a class="button button--outline" href="/app/features/qr/">Ir al Generador de QR</a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="/app/features/qr/qr.nucleo.js"></script>
+  <script src="/app/features/qr/reportar.js"></script>
+</body>
+
+</html>

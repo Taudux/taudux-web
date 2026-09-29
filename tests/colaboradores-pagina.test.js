@@ -22,6 +22,8 @@ const HOME_JS = read("src/app/features/home/home.js");
 // slides.fondo.js. Se compara acá y no en un archivo propio de esa página
 // porque es el mismo literal que ya vigila este test, no uno nuevo.
 const SLIDES_FONDO = read("src/app/features/slides/slides.fondo.js");
+// Y una cuarta, en el Generador de QR (qr.fondo.js), por la misma razón.
+const QR_FONDO = read("src/app/features/qr/qr.fondo.js");
 
 const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
@@ -406,7 +408,7 @@ test("motion is switched off for people who asked for less of it", () => {
 });
 
 /*
-  colaboradores.fondo.js (y ahora slides.fondo.js) copian a propósito las
+  colaboradores.fondo.js (y ahora slides.fondo.js y qr.fondo.js) copian a propósito las
   opciones de cargarParticulasFondo() para no tocar home.js. Una copia sin
   vigilancia se desfasa en silencio: acá se comparan los tres literales y el
   primero que cambie solo rompe la suite.
@@ -434,6 +436,7 @@ test("the starfield options are the same literal the home uses", () => {
   // Slides es la tercera copia: si alguna de las tres se desajusta, la suite
   // debe fallar acá y no dejar que el cielo se vea distinto en una página.
   assert.equal(opcionesDelFondo(SLIDES_FONDO, "slides.fondo.js"), delHogar);
+  assert.equal(opcionesDelFondo(QR_FONDO, "qr.fondo.js"), delHogar);
 });
 
 test("the starfield loader is a no-op without the library", () => {

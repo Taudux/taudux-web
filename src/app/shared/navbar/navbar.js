@@ -54,6 +54,13 @@ const ENLACES_NAVEGACION_BASE = [
         habilitado: true,
       },
       {
+        // Para todos y sin `soloSesion`: sin sesión, la página explica por qué
+        // pide una cuenta y ofrece acceder; no rebota al login.
+        texto: "Generador de QR",
+        href: "/app/features/qr/",
+        habilitado: true,
+      },
+      {
         // Deshabilitado y sólo para admin: `habilitado: false` lo pinta en gris,
         // `soloAdmin` decide quién llega a verlo siquiera.
         texto: "Detector de imágenes IA",

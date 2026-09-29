@@ -1,0 +1,9 @@
+{
+  "name": "taudux-qr-redireccion",
+  "private": true,
+  "type": "module",
+  "description": "go.taudux.com: lleva cada QR de Taudux a su destino.",
+  "dependencies": {
+    "@supabase/supabase-js": "2.110.8"
+  }
+}
