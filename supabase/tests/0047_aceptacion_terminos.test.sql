@@ -6,12 +6,12 @@
 
 -- Destructivo a propósito: sólo corre en la base aislada de abajo.
 --
---   createdb taudux_aceptacion_terminos_0046_test
---   psql -d taudux_aceptacion_terminos_0046_test -f supabase/tests/0046_aceptacion_terminos.test.sql
+--   createdb taudux_aceptacion_terminos_0047_test
+--   psql -d taudux_aceptacion_terminos_0047_test -f supabase/tests/0047_aceptacion_terminos.test.sql
 do $guard$
 begin
-  if current_database() <> 'taudux_aceptacion_terminos_0046_test' then
-    raise exception 'Refusing to run outside taudux_aceptacion_terminos_0046_test';
+  if current_database() <> 'taudux_aceptacion_terminos_0047_test' then
+    raise exception 'Refusing to run outside taudux_aceptacion_terminos_0047_test';
   end if;
 end
 $guard$;
@@ -45,9 +45,9 @@ returns boolean language sql stable as $$
 $$;
 grant execute on function public.es_admin() to anon, authenticated, service_role;
 
-\ir ../migrations/0046_aceptacion_terminos.sql
+\ir ../migrations/0047_aceptacion_terminos.sql
 -- Idempotente: aplicarla dos veces no debe fallar ni duplicar nada.
-\ir ../migrations/0046_aceptacion_terminos.sql
+\ir ../migrations/0047_aceptacion_terminos.sql
 
 create function pg_temp.assert_true(condition boolean, message text)
 returns void language plpgsql as $assert$
@@ -231,4 +231,4 @@ select pg_temp.assert_true(
 select pg_temp.assert_raises($$delete from public.aceptacion_terminos$$,
   'P0001', 'terminada la purga, la puerta se vuelve a cerrar');
 
-\echo 'OK 0046_aceptacion_terminos'
+\echo 'OK 0047_aceptacion_terminos'
