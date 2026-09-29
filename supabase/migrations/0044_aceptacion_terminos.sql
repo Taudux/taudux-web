@@ -63,7 +63,7 @@ begin
   if to_regprocedure('public.es_admin()') is null then
     raise exception using
       errcode = 'P0001',
-      message = '0046 preflight failed: public.es_admin() is required (0004)';
+      message = '0044 preflight failed: public.es_admin() is required (0004)';
   end if;
 end
 $preflight$;
