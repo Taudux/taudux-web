@@ -71,6 +71,21 @@ test("the terms door carries the express consent and the simplified privacy noti
   assert.match(puerta, /Aviso de Privacidad Integral/);
 });
 
+test("the terms door opens with the 'not stored' seal, before anything formal", () => {
+  // El cuadro es formal a propósito, y quien desconfía abandona ahí, antes de
+  // llegar al aviso que dice que nada se guarda. El sello lo adelanta: tiene
+  // que ser lo PRIMERO de la caja, y remitir al paso donde está el detalle.
+  const html = read(PAGINA);
+  const caja = html.slice(html.indexOf('id="puertaTerminos"'));
+  const primero = caja.slice(caja.indexOf('<div class="puerta__caja">') + '<div class="puerta__caja">'.length)
+    .trimStart();
+  assert.ok(primero.startsWith('<p class="puerta__sello">'),
+            "el sello va antes que el título y el extracto");
+  const sello = primero.slice(0, primero.indexOf("</p>"));
+  assert.match(sello, /no se guarda/, "el sello dice que el estado de cuenta no se guarda");
+  assert.match(sello, /siguiente paso/, "y remite al aviso que lo detalla");
+});
+
 test("the door links to legal pages that exist", () => {
   const html = read(PAGINA);
   const puerta = html.slice(html.indexOf('id="puertaTerminos"'), html.indexOf('id="puertaAviso"'));

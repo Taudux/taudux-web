@@ -1215,6 +1215,24 @@
     border-color: color-mix(in srgb, var(--color-warning) 55%, transparent);
     box-shadow: 0 0 40px color-mix(in srgb, var(--color-warning) 18%, transparent);
   }
+  /*
+    Sello de confianza, lo PRIMERO del cuadro de Términos. El cuadro es
+    formal a propósito, y esa formalidad hace pensar a quien desconfía que sus
+    datos se usarán para otra cosa: abandona antes de llegar al aviso que
+    dice que no se guardan. El sello adelanta ese mensaje en una línea y
+    remite al siguiente paso, donde está el detalle. Verde: es una garantía,
+    no un requisito.
+  */
+  .puerta__sello {
+    display: flex; gap: 0.55rem; align-items: flex-start;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent);
+    border-radius: var(--radius-field);
+    background: color-mix(in srgb, var(--color-success) 10%, transparent);
+    color: var(--color-text); font-size: 0.88rem; line-height: 1.45;
+  }
+  .puerta__sello strong { color: var(--color-success); }
+  .puerta__sello-icono { flex: none; }
   .puerta__kicker {
     font-family: var(--font-marca); font-size: 0.7rem;
     letter-spacing: 0.22em; text-transform: uppercase; color: var(--color-accent);
