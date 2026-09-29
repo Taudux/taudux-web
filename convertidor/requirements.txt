@@ -1,0 +1,25 @@
+# Dependencias de md-to-pdf
+#
+# Instalación:
+#     pip install -r requirements.txt
+#     playwright install chromium
+#
+# La interfaz gráfica de escritorio usa tkinter, que viene incluido con Python
+# en Windows.
+
+# --- Markdown -> PDF ---
+markdown>=3.5
+playwright>=1.40
+
+# --- PDF -> Markdown ---
+pymupdf>=1.24
+pymupdf4llm>=0.0.17
+
+# --- Servicio HTTP (web/servicio.py) ---
+flask>=3.0
+
+# Sólo en producción (Cloud Run); en local basta con `python web/servicio.py`
+# gunicorn>=21.0
+
+# Sólo para generar el .exe independiente (opcional, ver build_exe.bat)
+# pyinstaller>=6.0

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Fuera de buscadores como el resto de Tools. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Convertidor PDF y Markdown | Taudux</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/field/field.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/features/markdown/markdown.css">
+  <!-- Mismo cielo del inicio y del extractor. Si el CDN falla, la página
+       funciona igual: es atmósfera, no funcionalidad. -->
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script defer src="/app/core/analytics/ga4.js"></script>
+</head>
+
+<body>
+  <div id="particulas-fondo" aria-hidden="true"></div>
+
+  <nav class="navbar" aria-label="Navegación principal">
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <a href="#" id="accessBtn" class="navbar__link button button--access">Acceder</a>
+    </div>
+  </nav>
+
+  <main class="md">
+    <div class="md__container u-contenedor u-contenedor--contenido">
+
+      <header class="md__header">
+        <h1 class="md__title">Convertidor PDF y Markdown</h1>
+        <p class="md__intro">
+          Convierte en las dos direcciones. Un <strong>Markdown</strong> se
+          vuelve un PDF con diagramas Mermaid, resaltado de sintaxis y número de
+          página. Un <strong>PDF</strong> se vuelve Markdown conservando el texto
+          y las tablas, y te decimos qué tan fiable quedó.
+        </p>
+        <!-- La promesa de privacidad va arriba, no enterrada en los términos:
+             es la duda que tiene cualquiera antes de soltar un documento. -->
+        <p class="md__promesa">
+          <span class="md__promesa-icono" aria-hidden="true">•</span>
+          No guardamos nada. Tu archivo se procesa y se descarta: ni el original
+          ni el resultado quedan en ningún servidor.
+        </p>
+      </header>
+
+      <noscript>
+        <p class="md__estado panel">Necesitas habilitar JavaScript para usar el convertidor.</p>
+      </noscript>
+
+      <!-- Si el servicio de conversión no responde, la herramienta se apaga y
+           lo dice. Nunca debe caer a la demostración fuera de local: devolver
+           un resultado de ejemplo a alguien que subió un documento de verdad
+           sería engañarlo. -->
+      <p class="md__aviso md__aviso--error" id="mdSinServicio" role="status" hidden>
+        El convertidor no está disponible en este momento. Estamos trabajando
+        para restablecerlo; inténtalo de nuevo en un rato.
+      </p>
+
+      <div class="md__contenido" id="mdContenido">
+
+        <!-- ── 1. Carga ─────────────────────────────────────────────────── -->
+        <section class="md__carga panel panel--spacious" aria-labelledby="mdTituloCarga">
+          <h2 class="md__subtitulo" id="mdTituloCarga">Sube tu archivo</h2>
+
+          <!-- Una sola zona para las dos direcciones: la herramienta deduce qué
+               hacer por la extensión. Pedirle a la persona que elija primero
+               "PDF a Markdown" o "Markdown a PDF" es trabajo que el programa
+               puede hacer solo. -->
+          <div class="md__soltar" id="mdSoltar" tabindex="0" role="button"
+            aria-describedby="mdLimites"
+            aria-label="Elegir archivo, o arrastrarlo hasta aquí">
+            <input class="md__input-archivo" type="file" id="mdArchivo"
+              accept=".pdf,.md,.markdown,.mdown,.mkd" hidden>
+
+            <div class="md__soltar-vacio" id="mdSoltarVacio">
+              <p class="md__soltar-titulo">Arrastra tu archivo aquí</p>
+              <p class="md__soltar-texto">o haz clic para elegirlo</p>
+              <p class="md__soltar-formatos">PDF · MD · MARKDOWN</p>
+            </div>
+
+            <div class="md__soltar-elegido" id="mdSoltarElegido" hidden>
+              <p class="md__archivo-nombre" id="mdNombre"></p>
+              <p class="md__archivo-datos" id="mdDatos"></p>
+              <p class="md__direccion" id="mdDireccion"></p>
+            </div>
+          </div>
+
+          <p class="md__nota" id="mdLimites">
+            Hasta <strong>20 MB</strong> y <strong>100 páginas</strong> por PDF,
+            y 2 MB por Markdown. Son límites conservadores mientras el servicio
+            es gratuito; con los planes de pago suben.
+          </p>
+
+          <p class="md__aviso md__aviso--error" id="mdErrorArchivo" role="alert" hidden></p>
+
+          <div class="md__acciones-carga">
+            <button type="button" class="button button--glow" id="mdProcesar" disabled>
+              Procesar
+            </button>
+            <button type="button" class="button button--outline" id="mdOtro" hidden>
+              Elegir otro
+            </button>
+          </div>
+        </section>
+
+        <!-- ── 2. Progreso ──────────────────────────────────────────────── -->
+        <section class="md__progreso panel panel--spacious" id="mdProgreso"
+          aria-labelledby="mdTituloProgreso" hidden>
+          <h2 class="md__subtitulo md__progreso-titulo" id="mdTituloProgreso">
+            Procesando
+          </h2>
+
+          <!-- El número grande es el que engancha: ver avanzar una cifra hace
+               la espera mucho más llevadera que un texto que sólo dice
+               "espera". Se oculta cuando no sabemos el porcentaje, porque una
+               cifra inventada es peor que ninguna. -->
+          <p class="md__progreso-cifra" id="mdProgresoCifra" aria-hidden="true">
+            <span id="mdProgresoNumero">0</span><span class="md__progreso-simbolo">%</span>
+          </p>
+
+          <!-- progressbar real: un lector de pantalla anuncia el avance sin que
+               haya que duplicarlo en un aria-live. -->
+          <div class="md__barra" role="progressbar" id="mdBarra"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+            aria-labelledby="mdTituloProgreso">
+            <div class="md__barra-relleno" id="mdBarraRelleno"></div>
+          </div>
+
+          <p class="md__progreso-texto" id="mdProgresoTexto">Preparando el documento…</p>
+        </section>
+
+        <!-- ── 3. Resultado ─────────────────────────────────────────────── -->
+        <section class="md__resultado" id="mdResultado" aria-labelledby="mdTituloResultado" hidden>
+          <div class="md__resultado-cabecera">
+            <h2 class="md__subtitulo" id="mdTituloResultado">Tu documento está listo</h2>
+            <span class="md__semaforo" id="mdSemaforo" data-nivel=""></span>
+          </div>
+
+          <!-- El aviso de "descárgalo ahora" es consecuencia directa de no
+               guardar nada: si se va de la página, el trabajo se pierde. -->
+          <p class="md__aviso md__aviso--recordatorio" id="mdRecordatorio" role="status">
+            Descárgalo antes de salir: como no guardamos nada, al cerrar esta
+            página el resultado se pierde.
+          </p>
+
+          <div class="md__acciones panel">
+            <button type="button" class="button button--glow" id="mdDescargar">Descargar</button>
+            <button type="button" class="button button--outline" id="mdCopiar" hidden>Copiar al portapapeles</button>
+            <button type="button" class="button button--outline" id="mdDescargarZip" hidden>Descargar .zip con imágenes</button>
+            <button type="button" class="button button--outline" id="mdInforme" hidden>Ver informe</button>
+          </div>
+
+          <div class="md__vista panel" id="mdVista" hidden>
+            <div class="md__vista-cabecera">
+              <h3 class="md__vista-titulo">Así quedó</h3>
+
+              <!-- El conmutador sólo aparece en PDF → Markdown: un PDF no tiene
+                   "código fuente" que enseñar, se ve tal cual. -->
+              <div class="md__pestanas" id="mdPestanas" role="tablist"
+                aria-label="Cómo ver el resultado" hidden>
+                <button type="button" class="md__pestana" id="mdPestanaVista"
+                  role="tab" aria-selected="true" aria-controls="mdRender">Vista</button>
+                <button type="button" class="md__pestana" id="mdPestanaCodigo"
+                  role="tab" aria-selected="false" aria-controls="mdVistaTexto">Markdown</button>
+              </div>
+
+              <button type="button" class="button button--outline md__vista-boton" id="mdPantallaCompleta">
+                Pantalla completa
+              </button>
+            </div>
+
+            <!-- El Markdown renderizado va en un iframe con sandbox y SIN
+                 allow-scripts: sale de un PDF ajeno y puede traer HTML.
+                 Aislado así, aunque lo traiga, no se ejecuta ni toca esta
+                 página. -->
+            <iframe class="md__render" id="mdRender" role="tabpanel"
+              aria-labelledby="mdPestanaVista" sandbox
+              title="Vista previa del documento convertido"></iframe>
+
+            <!-- El PDF va en un iframe APARTE y sin sandbox, porque el visor
+                 de PDF del navegador necesita ejecutar sus propios scripts:
+                 con el sandbox puesto el marco sale en blanco. Aquí es seguro
+                 porque este PDF lo generamos nosotros a partir del Markdown de
+                 la propia persona; no es contenido de terceros. -->
+            <iframe class="md__render" id="mdVisorPdf" hidden
+              title="Vista previa del PDF generado"></iframe>
+
+            <pre class="md__vista-texto" id="mdVistaTexto" role="tabpanel"
+              aria-labelledby="mdPestanaCodigo" tabindex="0" hidden></pre>
+          </div>
+
+          <!-- ── 4. Estado del documento ────────────────────────────────── -->
+          <div class="md__estado-doc panel" id="mdEstadoDoc">
+            <h3 class="md__estado-titulo">Estado del documento</h3>
+            <dl class="md__datos" id="mdDatosLista"></dl>
+            <ul class="md__avisos" id="mdAvisos" hidden></ul>
+          </div>
+        </section>
+
+        <!-- ── 5. Rechazo: PDF sin capa de texto ────────────────────────── -->
+        <!-- Pantalla propia y no un error genérico: es el caso más frecuente en
+             México (los bancos entregan PDFs rasterizados) y la persona no hizo
+             nada mal. Merece explicación y una salida. -->
+        <section class="md__rechazo panel panel--spacious" id="mdRechazo"
+          aria-labelledby="mdTituloRechazo" hidden tabindex="-1">
+          <h2 class="md__subtitulo md__subtitulo--error" id="mdTituloRechazo">
+            Este PDF no tiene texto que extraer
+          </h2>
+          <p class="md__texto" id="mdRechazoDetalle"></p>
+          <p class="md__texto">
+            No es culpa tuya ni del archivo: hay programas que generan el PDF
+            convirtiendo todo el contenido en imágenes. Se ve perfecto e imprime
+            bien, pero para cualquier software es una fotografía, no un
+            documento. Recuperarlo necesitaría reconocimiento óptico (OCR), que
+            este convertidor todavía no hace.
+          </p>
+          <div class="md__rechazo-consejo">
+            <p class="md__texto md__texto--destacado">Qué puedes intentar</p>
+            <ul class="md__lista">
+              <li>Si lo bajaste de una app de banco, vuelve a descargarlo desde
+                la banca en línea en computadora: ese canal suele entregarlo con
+                texto.</li>
+              <li>Si te lo enviaron, pide el archivo original en lugar del
+                escaneado o impreso a PDF.</li>
+            </ul>
+          </div>
+          <button type="button" class="button button--outline" id="mdRechazoVolver">
+            Probar con otro archivo
+          </button>
+        </section>
+
+        <!-- ── 6. Error general ─────────────────────────────────────────── -->
+        <section class="md__fallo panel" id="mdFallo" role="alert" hidden tabindex="-1">
+          <h2 class="md__subtitulo md__subtitulo--error">No se pudo convertir</h2>
+          <p class="md__texto" id="mdFalloDetalle"></p>
+          <button type="button" class="button button--outline" id="mdFalloVolver">Intentar de nuevo</button>
+        </section>
+
+        <!-- ── 7. Términos ──────────────────────────────────────────────── -->
+        <section class="md__terminos" aria-labelledby="mdTituloTerminos">
+          <h2 class="md__terminos-titulo" id="mdTituloTerminos">Condiciones de uso</h2>
+          <ul class="md__lista md__lista--terminos">
+            <li><strong>No guardamos tu archivo.</strong> Se procesa en memoria y
+              se descarta al terminar. No lo leemos, no lo almacenamos y no lo
+              usamos para entrenar nada.</li>
+            <li><strong>El resultado no se conserva.</strong> No hay historial ni
+              forma de recuperarlo después: si lo necesitas, descárgalo.</li>
+            <li><strong>Verifica lo importante.</strong> La conversión de PDF a
+              Markdown infiere la estructura del documento y puede equivocarse.
+              Las tablas marcadas como de baja confianza deben cotejarse con el
+              original antes de usar sus cifras.</li>
+            <li><strong>Servicio sin garantía.</strong> Gratuito y ofrecido tal
+              cual, con límites de tamaño que pueden cambiar. No lo uses como
+              único respaldo de un documento.</li>
+            <li>Al usarlo aceptas el <a href="/app/features/legal/">aviso de
+              privacidad</a> de Taudux.</li>
+          </ul>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- El convertidor no pide cuenta: no guarda nada y no hay nada que asociar
+       a una persona. Estos tres scripts están sólo porque la barra superior es
+       la misma de todo el sitio y su botón "Acceder" consulta la sesión; sin
+       ellos, navbar.js revienta con «obtenerSesion is not defined». -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <!-- Versión fija y con SRI, mismo criterio que la librería de QR: esta
+       decide cómo se ve el resultado que la persona va a revisar. Un cambio
+       silencioso en el CDN no debe poder tocarla. -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"
+    integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi"
+    crossorigin="anonymous"></script>
+  <script src="/app/features/markdown/markdown.fondo.js"></script>
+  <script src="/app/features/markdown/markdown.js"></script>
+</body>
+
+</html>

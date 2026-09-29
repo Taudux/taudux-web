@@ -1,0 +1,29 @@
+# Qué NO sube a Cloud Run al hacer `gcloud run deploy --source`.
+#
+# Existe explícito, sin heredar de .gitignore, por la misma razón que el del
+# extractor: una regla de despliegue que depende de un archivo pensado para
+# otra cosa es una trampa esperando.
+
+.git/
+.gitignore
+
+# La app de escritorio y sus accesorios no corren en el servidor.
+app.py
+build_exe.bat
+crear_acceso_directo.ps1
+Markdown a PDF.bat
+recursos/
+
+# Documentación, ejemplos e historial: nada de esto se ejecuta en producción.
+docs/
+ejemplos/
+historial/
+salidas/
+README.md
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
