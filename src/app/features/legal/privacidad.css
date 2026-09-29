@@ -83,3 +83,19 @@
   text-decoration: underline;
 }
 }
+
+/*
+  Incisos de los Términos y Condiciones: el documento numera con letras
+  ("a) licitud;") y esas letras SON la referencia jurídica —las cláusulas se
+  citan como "IV(f)"—, así que se imprimen tal cual y la viñeta se quita.
+*/
+@layer features {
+.legal__section .legal__incisos {
+  list-style: none;
+  margin-left: 0.5rem;
+}
+
+.legal__indice-lista a {
+  color: var(--color-text-muted);
+}
+}
