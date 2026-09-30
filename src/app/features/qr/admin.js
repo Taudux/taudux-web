@@ -43,7 +43,7 @@
   const hora = new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" });
 
   const el = (id) => document.getElementById(id);
-  const estado = { qrs: [], perfiles: new Map(), accesos: new Map(), reportes: [], filtro: "todos", busqueda: "" };
+  const estado = { qrs: [], perfiles: new Map(), accesos: new Map(), filtro: "todos", busqueda: "" };
 
   function estadoAdmin(qr, ahora) {
     return qr.eliminado_en ? "eliminado" : estadoQR(qr, ahora);
@@ -78,16 +78,6 @@
     estado.perfiles = new Map(perfiles.map((perfil) => [perfil.id, perfil]));
     estado.accesos = new Map(accesos.map((acceso) => [acceso.user_id, acceso]));
 
-    // Los reportes (0046). Si esa migración todavía no está, la moderación
-    // sigue funcionando: simplemente no hay reportes que mostrar.
-    const reportes = await supabaseClient
-      .from("qr_reportes")
-      .select("id,qr_id,motivo,detalle,contacto,creado_en")
-      .is("atendido_en", null)
-      .order("creado_en", { ascending: false })
-      .limit(200);
-    if (reportes.error) console.error("qr_reportes", reportes.error);
-    estado.reportes = reportes.error ? [] : reportes.data;
     el("qrAdminActualizado").textContent = `Actualizado a las ${hora.format(new Date())}`;
   }
 
@@ -141,11 +131,7 @@
       detalle.push(tiempoRestanteQR(qr.vence_en, ahora).texto);
     }
     detalle.push(`Creado ${fecha.format(new Date(qr.creado_en))}`);
-    const pendientes = estado.reportes.filter((reporte) => reporte.qr_id === qr.id).length;
-    const marca = pendientes
-      ? nodo("span", `${pendientes} ${pendientes === 1 ? "reporte" : "reportes"}`, "qr-admin__reportes-badge")
-      : null;
-    return celda(nodo("strong", ETIQUETAS_ESTADO[estadoActual]), ...detalle.map(secundario), marca);
+    return celda(nodo("strong", ETIQUETAS_ESTADO[estadoActual]), ...detalle.map(secundario));
   }
 
   function fila(qr, ahora) {
@@ -203,39 +189,11 @@
       .filter(coincide);
     el("qrAdminFilas").replaceChildren(...visibles.map((qr) => fila(qr, ahora)));
     el("qrAdminVacio").hidden = visibles.length > 0;
-    pintarReportes();
 
     const cuenta = (valor) => estado.qrs.filter((qr) => estadoAdmin(qr, ahora) === valor).length;
     const tope = estado.qrs.length === LIMITE_FILAS ? ` (los ${LIMITE_FILAS} más recientes)` : "";
     el("qrAdminResumen").textContent =
       `${estado.qrs.length} QR${tope} · ${cuenta("activo")} activos · ${cuenta("bloqueado")} bloqueados`;
-  }
-
-  // Los reportes sin atender, del más nuevo al más viejo. El contacto sólo
-  // aparece si quien reportó lo dejó, para poder responderle.
-  function pintarReportes() {
-    el("qrAdminReportes").hidden = estado.reportes.length === 0;
-    el("qrAdminReportesTitulo").textContent = `Reportes pendientes (${estado.reportes.length})`;
-    el("qrAdminReportesLista").replaceChildren(...estado.reportes.map((reporte) => {
-      const qr = estado.qrs.find((otro) => otro.id === reporte.qr_id);
-      const item = nodo("li", null, "qr-admin__reporte");
-      const cuerpo = nodo("div");
-      cuerpo.append(
-        nodo("strong", qr ? urlVisibleQR(qr.codigo) : `QR #${reporte.qr_id}`),
-        nodo("span", ` · ${QR_MOTIVOS_REPORTE[reporte.motivo] ?? reporte.motivo}`, "qr-admin__reporte-motivo"),
-        secundario(`Reportado ${fecha.format(new Date(reporte.creado_en))}${qr ? ` · lleva a ${qr.destino}` : ""}`),
-      );
-      if (reporte.detalle) cuerpo.append(nodo("p", `“${reporte.detalle}”`, "qr-admin__reporte-detalle"));
-      if (reporte.contacto) cuerpo.append(secundario(`Contacto: ${reporte.contacto}`));
-      const acciones = nodo("div", null, "qr-admin__acciones");
-      if (qr && estadoAdmin(qr, Date.now()) !== "bloqueado" && !qr.eliminado_en) {
-        acciones.append(boton("Bloquear QR", "bloquear-por-reporte", { id: qr.id, reporte: reporte.id }));
-      }
-      if (qr) acciones.append(boton("Ver en la tabla", "ver-reportado", { codigo: qr.codigo }));
-      acciones.append(boton("Marcar atendido", "atender-reporte", { reporte: reporte.id }));
-      item.append(cuerpo, acciones);
-      return item;
-    }));
   }
 
   // --- Motivo --------------------------------------------------------------
@@ -284,14 +242,13 @@
 
   // --- Acciones --------------------------------------------------------------
 
-  async function moderarQR(qr, bloquear, { reporte = null } = {}) {
+  async function moderarQR(qr, bloquear) {
     let motivo = null;
     if (bloquear) {
       motivo = await pedirMotivo({
         titulo: "Bloquear QR",
         descripcion: `${urlVisibleQR(qr.codigo)} dejará de redirigir de inmediato. Su dueño verá el motivo.`,
         confirmar: "Bloquear QR",
-        sugerido: reporte ? `Reportado: ${QR_MOTIVOS_REPORTE[reporte.motivo] ?? reporte.motivo}` : "",
       });
       if (!motivo) return;
     } else {
@@ -304,8 +261,6 @@
     }
     const { error } = await supabaseClient.rpc("qr_moderar", { p_id: qr.id, p_bloquear: bloquear, p_motivo: motivo });
     if (error) throw error;
-    // Bloquear desde un reporte lo da por atendido: ya se actuó sobre él.
-    if (reporte) await supabaseClient.rpc("qr_atender_reporte", { p_id: reporte.id });
     await cargar();
     pintar();
     mostrarToast(bloquear ? "QR bloqueado." : "QR desbloqueado.");
@@ -342,14 +297,6 @@
       : `Cuenta desbloqueada. QR restaurados: ${data}.`);
   }
 
-  async function atenderReporte(id) {
-    const { error } = await supabaseClient.rpc("qr_atender_reporte", { p_id: Number(id) });
-    if (error) throw error;
-    await cargar();
-    pintar();
-    mostrarToast("Reporte marcado como atendido.");
-  }
-
   async function alHacerClick(evento) {
     const objetivo = evento.target.closest("[data-accion]");
     if (!objetivo) return;
@@ -362,19 +309,6 @@
         mostrarToast("ID de la cuenta copiado.");
       }
       if (accion === "bloquear-qr" && qr) await moderarQR(qr, true);
-      if (accion === "bloquear-por-reporte" && qr) {
-        const reporte = estado.reportes.find((otro) => String(otro.id) === objetivo.dataset.reporte);
-        await moderarQR(qr, true, { reporte });
-      }
-      if (accion === "atender-reporte") await atenderReporte(objetivo.dataset.reporte);
-      if (accion === "ver-reportado") {
-        el("qrAdminBuscar").value = objetivo.dataset.codigo;
-        estado.busqueda = objetivo.dataset.codigo;
-        el("qrAdminFiltro").value = "todos";
-        estado.filtro = "todos";
-        pintar();
-        el("qrAdminFilas").scrollIntoView({ behavior: "smooth", block: "start" });
-      }
       if (accion === "desbloquear-qr" && qr) await moderarQR(qr, false);
       if (accion === "bloquear-cuenta") await moderarCuenta(usuario, true);
       if (accion === "desbloquear-cuenta") await moderarCuenta(usuario, false);
@@ -408,7 +342,6 @@
       }
     });
     el("qrAdminFilas").addEventListener("click", alHacerClick);
-    el("qrAdminReportesLista").addEventListener("click", alHacerClick);
   }
 
   // --- Arranque ------------------------------------------------------------

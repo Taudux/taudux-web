@@ -132,25 +132,13 @@ test("the Vercel project rewrites /<code> to the function and sends / to the gen
   assert.equal(config.redirects[0].permanent, false);
 });
 
-test("every go.taudux.com page offers 'Reportar este QR', with the code when it is valid", async () => {
+test("no go.taudux.com page links to a report form", async () => {
   for (const estado of ["vencido", "bloqueado", "inexistente"]) {
     const { GET } = await manejador({ estado });
     const html = await (await GET(escaneo("k3m9xa"))).text();
-    assert.match(html, /<a class="reportar" href="https:\/\/taudux\.com\/app\/features\/qr\/reportar\.html\?codigo=k3m9xa">Reportar este QR<\/a>/, estado);
+    assert.doesNotMatch(html, /reportar/i, estado);
   }
   const { GET } = await manejador({ estado: "activo", destino: "https://forms.gle/a" });
   const sinCodigo = await (await GET(escaneo("<script>"))).text();
-  assert.match(sinCodigo, /href="https:\/\/taudux\.com\/app\/features\/qr\/reportar\.html">Reportar/,
-    "un código con formato inválido no llega al HTML");
-  assert.doesNotMatch(sinCodigo, /<script>/);
-});
-
-test("the report link can point elsewhere (the local lab)", async () => {
-  const { crearManejador } = await MODULO;
-  const GET = crearManejador({
-    resolver: async () => ({ estado: "vencido" }),
-    urlReportar: "http://localhost:8282/app/features/qr/reportar.html",
-    logger: { error() {} },
-  });
-  assert.match(await (await GET(escaneo("k3m9xa"))).text(), /http:\/\/localhost:8282\/app\/features\/qr\/reportar\.html\?codigo=k3m9xa/);
+  assert.doesNotMatch(sinCodigo, /<script>/, "un código con formato inválido no llega al HTML");
 });

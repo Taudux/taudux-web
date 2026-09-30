@@ -11,7 +11,6 @@
 export const CODIGO_VALIDO = /^[2-9a-hjkmnp-z]{6}$/;
 
 export const URL_GENERADOR = "https://taudux.com/app/features/qr/";
-export const URL_REPORTAR = "https://taudux.com/app/features/qr/reportar.html";
 
 // Las páginas de aviso no cargan nada de afuera: ni fuentes ni imágenes. El
 // isotipo va dibujado en el propio HTML.
@@ -43,11 +42,10 @@ const ISOTIPO = `<svg class="isotipo" viewBox="0 0 100 100" aria-hidden="true">
 // Los textos son fijos. Lo único de la petición que llega al HTML es el
 // código, y sólo si ya pasó CODIGO_VALIDO (6 caracteres de [2-9a-hjkmnp-z]):
 // no hay nada que escapar.
-function pagina(estado, titulo, detalle, { conInvitacion = false, codigo = null, urlReportar = URL_REPORTAR } = {}) {
+function pagina(estado, titulo, detalle, { conInvitacion = false } = {}) {
   const invitacion = conInvitacion
     ? `<a class="boton" href="${URL_GENERADOR}">Crea tu propio QR en Taudux</a>`
     : `<a class="enlace" href="https://taudux.com">Ir a taudux.com</a>`;
-  const reportar = `<a class="reportar" href="${urlReportar}${codigo ? `?codigo=${codigo}` : ""}">Reportar este QR</a>`;
   const html = `<!doctype html>
 <html lang="es">
 <head>
@@ -66,7 +64,6 @@ function pagina(estado, titulo, detalle, { conInvitacion = false, codigo = null,
   .boton{display:inline-block;padding:.8rem 1.6rem;border:1px solid #00e1ff;border-radius:10px;color:#fff;
     text-decoration:none;box-shadow:0 0 16px rgba(0,225,255,.35)}
   .enlace{color:#00e1ff}
-  .reportar{margin-top:.6rem;color:#aab4c8;font-size:.9rem}
 </style>
 </head>
 <body>
@@ -75,7 +72,6 @@ ${ISOTIPO}
 <h1>${titulo}</h1>
 <p>${detalle}</p>
 ${invitacion}
-${reportar}
 </main>
 </body>
 </html>`;
@@ -83,30 +79,27 @@ ${reportar}
 }
 
 /*
-  Todas llevan "Reportar este QR": un QR que ya no funciona puede haber
-  llevado a algo malo antes, y quien lo escaneó es quien puede contarlo. Un QR
-  activo redirige al instante y no pasa por acá: para esos, el formulario se
-  enlaza desde los términos del generador.
+  Las páginas de aviso de un QR que no redirige. Un QR activo redirige al
+  instante y no pasa por acá.
 */
 export const PAGINAS = Object.freeze({
-  inexistente: (opciones) => pagina(404, "Este QR no existe", "Puede que lo hayan eliminado, o que el código esté mal escrito.", opciones),
+  inexistente: () => pagina(404, "Este QR no existe", "Puede que lo hayan eliminado, o que el código esté mal escrito."),
   // 410 Gone y no 404: el QR sí existió, y a los buscadores y lectores les
   // dice que no vuelvan a intentar.
-  vencido: (opciones) => pagina(410, "Este QR venció", "Los QR gratis de Taudux duran 7 días, y éste ya cumplió su plazo.", { ...opciones, conInvitacion: true }),
-  bloqueado: (opciones) => pagina(410, "Este QR fue desactivado", "Por seguridad, este QR ya no lleva a ningún sitio.", opciones),
-  error: (opciones) => pagina(503, "No pudimos abrir este QR", "Intenta escanearlo de nuevo en unos segundos.", opciones),
+  vencido: () => pagina(410, "Este QR venció", "Los QR gratis de Taudux duran 7 días, y éste ya cumplió su plazo.", { conInvitacion: true }),
+  bloqueado: () => pagina(410, "Este QR fue desactivado", "Por seguridad, este QR ya no lleva a ningún sitio."),
+  error: () => pagina(503, "No pudimos abrir este QR", "Intenta escanearlo de nuevo en unos segundos."),
 });
 
 /*
   `resolver({ codigo, pais, dispositivo })` → { estado, destino }. En la
   práctica es qr_resolver() de 0044; en los tests, una función falsa.
 */
-export function crearManejador({ resolver, logger = console, urlReportar = URL_REPORTAR }) {
+export function crearManejador({ resolver, logger = console }) {
   return async function GET(request) {
     const url = new URL(request.url);
     const codigo = String(url.searchParams.get("codigo") ?? "").trim().toLowerCase();
-    if (!CODIGO_VALIDO.test(codigo)) return PAGINAS.inexistente({ urlReportar });
-    const opciones = { codigo, urlReportar };
+    if (!CODIGO_VALIDO.test(codigo)) return PAGINAS.inexistente();
 
     let resultado;
     try {
@@ -117,7 +110,7 @@ export function crearManejador({ resolver, logger = console, urlReportar = URL_R
       });
     } catch (error) {
       logger.error(JSON.stringify({ event: "qr_resolver", codigo, error: String(error?.message ?? error) }));
-      return PAGINAS.error(opciones);
+      return PAGINAS.error();
     }
 
     if (resultado?.estado === "activo" && /^https:\/\//.test(resultado.destino ?? "")) {
@@ -128,9 +121,9 @@ export function crearManejador({ resolver, logger = console, urlReportar = URL_R
         headers: { Location: resultado.destino, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" },
       });
     }
-    if (resultado?.estado === "vencido") return PAGINAS.vencido(opciones);
-    if (resultado?.estado === "bloqueado") return PAGINAS.bloqueado(opciones);
-    return PAGINAS.inexistente(opciones);
+    if (resultado?.estado === "vencido") return PAGINAS.vencido();
+    if (resultado?.estado === "bloqueado") return PAGINAS.bloqueado();
+    return PAGINAS.inexistente();
   };
 }
 

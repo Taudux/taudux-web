@@ -243,7 +243,6 @@ test("neither Tools page is offered to search engines", () => {
     "src/app/features/transactions/index.html": "transactions",
     "src/app/features/qr/index.html": "features/qr/",
     "src/app/features/qr/admin.html": "features/qr/admin",
-    "src/app/features/qr/reportar.html": "features/qr/reportar",
   };
 
   // Estar fuera del sitemap no impide indexar: no listar algo no le pide a

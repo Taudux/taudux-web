@@ -524,7 +524,6 @@ test("every page container carries its u-contenedor* class in the markup", () =>
     // portal, porque son pantallas de gestión y no de lectura.
     { file: "src/app/features/qr/index.html", needle: 'class="qr__container u-contenedor u-contenedor--medio"' },
     { file: "src/app/features/qr/admin.html", needle: 'class="qr__container u-contenedor u-contenedor--medio"' },
-    { file: "src/app/features/qr/reportar.html", needle: 'class="qr__container u-contenedor u-contenedor--contenido"' },
     { file: "src/app/features/transactions/index.html", needle: 'class="extractor__contenido u-contenedor"' },
   ];
 

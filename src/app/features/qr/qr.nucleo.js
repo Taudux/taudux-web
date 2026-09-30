@@ -66,50 +66,6 @@ function urlVisibleQR(codigo) {
   return urlCortaQR(codigo).replace(/^https:\/\//, "");
 }
 
-// El formulario de reporte, con el código ya puesto si se conoce.
-const QR_RUTA_REPORTAR = "/app/features/qr/reportar.html";
-function urlReportarQR(codigo) {
-  return codigo ? `${QR_RUTA_REPORTAR}?codigo=${encodeURIComponent(codigo)}` : QR_RUTA_REPORTAR;
-}
-
-/*
-  El código de un QR a partir de lo que la persona pegue en el reporte:
-  "https://go.taudux.com/k3m9xa", "go.taudux.com/k3m9xa", "K3M9XA"… Devuelve
-  null si no hay un código válido (mismo formato que el CHECK de 0044).
-*/
-function codigoDeTextoQR(texto) {
-  const limpio = String(texto ?? "").trim().toLowerCase().replace(/[/?#\s]+$/, "");
-  const ultimo = limpio.split(/[/?#]/).filter(Boolean).pop() ?? "";
-  const candidato = /go\.taudux\.com\//.test(limpio)
-    ? limpio.split("go.taudux.com/")[1].split(/[/?#]/)[0]
-    : ultimo;
-  return /^[2-9a-hjkmnp-z]{6}$/.test(candidato) ? candidato : null;
-}
-
-// Los motivos de un reporte: las claves son las del CHECK de 0046 y las del
-// <select> de reportar.html (lo fija un test); el texto es para la moderación.
-const QR_MOTIVOS_REPORTE = Object.freeze({
-  phishing: "Phishing: pidió contraseñas o datos",
-  malware: "Quiso instalar o descargar algo",
-  fraude: "Fraude o estafa",
-  suplantacion: "Se hace pasar por alguien",
-  contenido_ilegal: "Contenido ilegal u ofensivo",
-  otro: "Otra cosa",
-});
-
-const MENSAJES_REPORTE_QR = Object.freeze({
-  sin_codigo: "Escribe el link del QR (go.taudux.com/…) o su código de 6 caracteres.",
-  sin_motivo: "Elige qué pasó.",
-  qr_no_existe: "No encontramos ese QR. Revisa el link: es lo que aparece después de go.taudux.com/.",
-  qr_motivo_invalido: "Elige qué pasó.",
-  qr_demasiados_reportes: "Ya recibimos muchos reportes de este QR y lo estamos revisando. Gracias.",
-});
-const MENSAJE_REPORTE_QR_GENERICO = "No pudimos enviar el reporte. Intenta de nuevo en unos minutos.";
-
-function mensajeReporteQR(codigo) {
-  return MENSAJES_REPORTE_QR[codigo] ?? MENSAJE_REPORTE_QR_GENERICO;
-}
-
 /*
   activo | vencido | bloqueado. El bloqueo manda sobre el vencimiento: un QR
   bloqueado por phishing tiene que decir eso, aunque además haya vencido.
@@ -399,11 +355,6 @@ if (typeof module === "object" && module.exports) {
     MENSAJE_ERROR_QR_GENERICO,
     urlCortaQR,
     urlVisibleQR,
-    urlReportarQR,
-    codigoDeTextoQR,
-    QR_MOTIVOS_REPORTE,
-    MENSAJES_REPORTE_QR,
-    mensajeReporteQR,
     estadoQR,
     tiempoRestanteQR,
     duracionEnDiasQR,

@@ -542,87 +542,6 @@
   font-size: 0.85rem;
 }
 
-/* --- Reportar un QR (reportar.html) ---------------------------------------- */
-
-.qr-reporte {
-  display: grid;
-  gap: 1rem;
-  padding: 2rem;
-}
-
-.qr-reporte__enviar {
-  justify-self: start;
-  margin-block-start: 0.5rem;
-}
-
-.qr-reporte__enviar:disabled {
-  cursor: progress;
-  opacity: 0.6;
-}
-
-/* La trampa para bots: fuera de la vista y del foco, pero en el formulario. */
-.qr-reporte__trampa {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.qr-reporte__gracias {
-  display: grid;
-  gap: 1rem;
-  justify-items: start;
-}
-
-/* Los reportes pendientes, arriba de la tabla de moderación. */
-.qr-admin__reportes {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1.5rem 2rem;
-  border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
-}
-
-.qr-admin__reportes-lista {
-  display: grid;
-  gap: 0.75rem;
-  list-style: none;
-}
-
-.qr-admin__reporte {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem 1rem;
-  align-items: start;
-  padding: 0.85rem 1rem;
-  border: var(--border-subtle);
-  border-radius: 12px;
-}
-
-.qr-admin__reporte-motivo {
-  color: var(--color-warning);
-  font-weight: 600;
-}
-
-.qr-admin__reporte-detalle {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.qr-admin__reportes-badge {
-  display: inline-block;
-  margin-block-start: 0.3rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-  color: var(--color-warning);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
 /* --- Pantalla completa ------------------------------------------------------ */
 
 .qr-pantalla {
@@ -930,8 +849,7 @@
   }
 
   .qr__generador,
-  .qr__terminos,
-  .qr-reporte {
+  .qr__terminos {
     padding: 1.5rem 1.25rem;
   }
 

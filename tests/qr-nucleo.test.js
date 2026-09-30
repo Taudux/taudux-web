@@ -213,45 +213,6 @@ test("the short link is what goes inside the QR", () => {
   assert.equal(nucleo.urlVisibleQR("k3m9xa"), "go.taudux.com/k3m9xa");
 });
 
-/* Reportes. */
-
-test("the report form reads the code from whatever the person pastes", () => {
-  const casos = {
-    "https://go.taudux.com/k3m9xa": "k3m9xa",
-    "go.taudux.com/K3M9XA": "k3m9xa",
-    "  go.taudux.com/k3m9xa/  ": "k3m9xa",
-    "http://go.taudux.com/k3m9xa?utm=x": "k3m9xa",
-    "k3m9xa": "k3m9xa",
-    "http://192.168.1.10:8282/go/k3m9xa": "k3m9xa",
-  };
-  for (const [texto, codigo] of Object.entries(casos)) assert.equal(nucleo.codigoDeTextoQR(texto), codigo, texto);
-  for (const invalido of ["", null, "go.taudux.com/", "k3m9x", "k3m0xa", "hola mundo", "go.taudux.com/k3m9xa1"]) {
-    assert.equal(nucleo.codigoDeTextoQR(invalido), null, String(invalido));
-  }
-  assert.equal(nucleo.urlReportarQR("k3m9xa"), "/app/features/qr/reportar.html?codigo=k3m9xa");
-  assert.equal(nucleo.urlReportarQR(null), "/app/features/qr/reportar.html");
-});
-
-test("report reasons are the same in the database, the form and the moderation panel", () => {
-  const migracion = read("supabase/migrations/0046_qr_reportes.sql");
-  const check = /check \(motivo in \(([^)]+)\)\)/.exec(migracion)[1];
-  const enBase = [...check.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
-  const formulario = read("src/app/features/qr/reportar.html");
-  const enFormulario = [...formulario.matchAll(/<option value="([a-z_]+)">/g)].map((m) => m[1]);
-  assert.deepEqual(enFormulario, enBase, "el <select> ofrece exactamente los motivos que acepta la base");
-  assert.deepEqual(Object.keys(nucleo.QR_MOTIVOS_REPORTE), enBase, "la moderación sabe nombrar cada motivo");
-  assert.ok(migracion.includes(`not in\n     (${check})`), "qr_reportar() valida la misma lista que el CHECK");
-});
-
-test("every report error the database raises has a message", () => {
-  const migracion = read("supabase/migrations/0046_qr_reportes.sql");
-  const funcion = migracion.slice(migracion.indexOf("function public.qr_reportar"), migracion.indexOf("function public.qr_atender_reporte"));
-  const codigos = [...funcion.matchAll(/message = '([a-z_]+)'/g)].map((m) => m[1]);
-  assert.deepEqual(codigos, ["qr_no_existe", "qr_motivo_invalido", "qr_demasiados_reportes"]);
-  for (const codigo of codigos) assert.ok(nucleo.MENSAJES_REPORTE_QR[codigo], codigo);
-  assert.match(nucleo.mensajeReporteQR("algo_raro"), /No pudimos enviar el reporte/);
-});
-
 test("the generator page draws the site's starfield behind everything, after its library", () => {
   const html = fs.readFileSync(path.join(ROOT, "src/app/features/qr/index.html"), "utf8");
   const css = fs.readFileSync(path.join(ROOT, "src/app/features/qr/qr.css"), "utf8");
