@@ -68,6 +68,24 @@ test("Academy and Tools carry hijos but no href/habilitado of their own: they ar
   });
 });
 
+test("'Generador de QR' under Tools is open to everyone and lands on a page that explains the account", () => {
+  const { ENLACES_NAVEGACION_BASE } = cargarNavbar();
+
+  const tools = ENLACES_NAVEGACION_BASE.find((enlace) => enlace.texto === "Tools");
+  const hijo = tools.hijos.find((hijo) => hijo.texto === "Generador de QR");
+
+  assert.ok(hijo, "falta el generador bajo Tools");
+  assert.equal(hijo.habilitado, true);
+  assert.equal(hijo.soloAdmin, undefined, "es para todos, no sólo administración");
+  assert.equal(hijo.soloSesion, undefined,
+    "sin sesión la página explica por qué pide cuenta; esconderla no le dice nada a nadie");
+  assert.equal(hijo.href, "/app/features/qr/");
+
+  // Que la página no rebote al login: la invitación a crear una cuenta es parte
+  // de la página, no un redirect.
+  assert.doesNotMatch(read("src/app/features/qr/qr.js"), /requerirSesion\(/);
+});
+
 test("'Transacciones financieras' under Tools is enabled for everyone and has its own route", () => {
   const { ENLACES_NAVEGACION_BASE } = cargarNavbar();
 
@@ -214,14 +232,17 @@ test("nothing offered to a signed-out visitor leads to a page that demands a ses
   });
 });
 
-/* Visibilidad ante buscadores. Ninguna de las dos páginas de Tools debe
-   ofrecerse: el detector es sólo para admin y transactions va a recibir estados
-   de cuenta bancarios. */
+/* Visibilidad ante buscadores. Ninguna página de Tools debe ofrecerse: el
+   detector es sólo para admin, transactions va a recibir estados de cuenta
+   bancarios, y el generador de QR muestra los links de cada persona (su
+   moderación, los de todas). */
 
 test("neither Tools page is offered to search engines", () => {
   const paginas = {
     "src/app/features/detector/detector.html": "detector",
     "src/app/features/transactions/index.html": "transactions",
+    "src/app/features/qr/index.html": "features/qr/",
+    "src/app/features/qr/admin.html": "features/qr/admin",
   };
 
   // Estar fuera del sitemap no impide indexar: no listar algo no le pide a

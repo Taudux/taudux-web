@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Fuera de buscadores como el resto de Tools: acá se ven los links de cada
+       persona. No basta con omitirla del sitemap — no listar una página no le
+       pide a nadie que la ignore; el noindex sí. Lo blinda
+       tests/navbar-jerarquia.test.js. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Generador de QR | Taudux</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/field/field.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/shared/confirm-dialog/confirm-dialog.css">
+  <link rel="stylesheet" href="/app/features/qr/qr.css">
+  <script defer src="/app/core/analytics/ga4.js"></script>
+</head>
+
+<body>
+  <!-- Estrellas de fondo, detrás de todo: el mismo cielo del inicio. -->
+  <div id="particles-fondo" aria-hidden="true"></div>
+
+  <nav class="navbar" aria-label="Navegación principal">
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <a href="#" id="accessBtn" class="navbar__link button button--access">Acceder</a>
+    </div>
+  </nav>
+
+  <main class="qr">
+    <div class="qr__container u-contenedor u-contenedor--medio">
+
+      <!-- 1. Qué es -->
+      <header class="qr__header">
+        <h1 class="qr__title">Generador de QR</h1>
+        <p class="qr__intro">
+          Convierte el link de tu formulario, tu página o tu evento en un código QR
+          con el sello de Taudux. Pégalo abajo, genera el QR y descárgalo para
+          imprimirlo, compartirlo o mostrarlo en pantalla.
+        </p>
+        <ul class="qr__beneficios">
+          <li><strong>Revisado con Google.</strong> Cada link pasa por Google Web Risk antes de convertirse en QR.</li>
+          <li><strong>Gratis con tu cuenta.</strong> Hasta 5 QR activos a la vez; cada uno dura 7 días.</li>
+          <li><strong>Listo para usar.</strong> Descárgalo en PNG o SVG, compártelo o proyéctalo en pantalla completa.</li>
+        </ul>
+      </header>
+
+      <noscript>
+        <p class="qr__estado panel">Necesitas habilitar JavaScript para crear QR.</p>
+      </noscript>
+
+      <!-- 2. La barra y, a la derecha, el QR -->
+      <section class="qr__generador panel" aria-labelledby="qrTituloGenerar">
+        <div class="qr__generador-formulario">
+          <h2 class="qr__subtitulo" id="qrTituloGenerar">Crea tu QR</h2>
+          <form class="qr__formulario" id="qrFormulario" novalidate>
+            <label class="qr__etiqueta" for="qrDestino">Link de destino</label>
+            <div class="qr__barra">
+              <input class="field qr__barra-campo" type="url" id="qrDestino" name="destino" inputmode="url"
+                autocomplete="off" spellcheck="false" placeholder="https://forms.gle/…"
+                aria-describedby="qrDestinoNota" required>
+              <button type="submit" class="button button--glow qr__barra-boton" id="qrGenerar"
+                data-loading-text="Revisando…">Generar QR</button>
+            </div>
+            <p class="qr__aviso qr__aviso--error" id="qrFormularioEstado" role="alert" hidden></p>
+            <p class="qr__nota" id="qrDestinoNota">
+              Sólo links seguros (https). Google Forms, Microsoft Forms y otros
+              proveedores conocidos se aprueban al instante; los demás los
+              revisamos con Google antes de crear el QR.
+            </p>
+            <label class="qr__etiqueta" for="qrNombre">Nombre <span class="qr__opcional">(opcional)</span></label>
+            <input class="field qr__nombre" type="text" id="qrNombre" name="nombre" maxlength="80"
+              autocomplete="off" placeholder="Para reconocerlo en tu lista: Encuesta del evento">
+            <p class="qr__cupo" id="qrCupo" aria-live="polite"></p>
+            <p class="qr__aviso" id="qrLimite" role="status" hidden></p>
+            <p class="qr__legal">
+              Al generar un QR aceptas los <a href="#terminos">términos y condiciones</a> del servicio.
+            </p>
+          </form>
+        </div>
+
+        <figure class="qr__marco" id="qrMarco" aria-labelledby="qrMarcoLink">
+          <div class="qr__marco-imagen" id="qrMarcoImagen"></div>
+          <div class="qr__marco-vacio" id="qrMarcoVacio">
+            <svg class="qr__marco-vacio-icono" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3zM14 18h3v3h-3zM18 14h3v3h-3z"
+                fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+            </svg>
+            <p>Tu QR aparecerá aquí</p>
+          </div>
+          <figcaption class="qr__marco-pie">
+            <span class="qr__marco-nombre" id="qrMarcoNombre" hidden></span>
+            <span class="qr__marco-link" id="qrMarcoLink"></span>
+            <span class="qr__marco-tiempo" id="qrMarcoTiempo"></span>
+          </figcaption>
+          <div class="qr__marco-acciones">
+            <div class="qr__descargar">
+              <button type="button" class="button button--outline qr__accion" id="qrMarcoDescargar"
+                aria-haspopup="true" aria-expanded="false" aria-controls="qrMenuDescargar" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                Descargar
+              </button>
+              <div class="qr__menu panel" id="qrMenuDescargar" hidden>
+                <button type="button" class="qr__menu-opcion" data-formato="png">
+                  PNG <span>para compartir</span>
+                </button>
+                <button type="button" class="qr__menu-opcion" data-formato="svg">
+                  SVG <span>para imprimir</span>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="button button--outline qr__accion" id="qrMarcoCompartir" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4M18 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM8 12a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM18 19a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+              Compartir
+            </button>
+            <button type="button" class="button button--outline qr__accion" id="qrMarcoPantalla" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              Pantalla completa
+            </button>
+          </div>
+        </figure>
+      </section>
+
+      <!-- 3. Los QR de la persona -->
+      <section class="qr__lista" aria-labelledby="qrTituloLista">
+        <div class="qr__lista-encabezado">
+          <h2 class="qr__subtitulo" id="qrTituloLista">Mis QR</h2>
+          <a class="button button--outline" id="qrModeracion" href="/app/features/qr/admin.html" hidden>Moderación</a>
+        </div>
+        <p class="qr__lista-estado" id="qrListaEstado" role="status" aria-live="polite">Cargando tus QR…</p>
+        <a class="button button--glow qr__lista-acceder" id="qrIrALogin" href="/app/features/auth/login/" hidden>Acceder</a>
+        <div class="qr__tabla-marco panel" id="qrTablaMarco" hidden>
+          <table class="qr__tabla">
+            <thead>
+              <tr>
+                <th scope="col">Fecha de creación</th>
+                <th scope="col">URL</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Tiempo para vencer</th>
+                <th scope="col" class="qr__tabla-numero">Escaneos</th>
+                <th scope="col"><span class="u-visually-hidden">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody id="qrFilas"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 4. Términos y condiciones -->
+      <section class="qr__terminos panel" id="terminos" aria-labelledby="qrTituloTerminos">
+        <h2 class="qr__subtitulo" id="qrTituloTerminos">Términos y condiciones del Generador de QR</h2>
+        <p class="qr__terminos-fecha">Última actualización: 28 de septiembre de 2026</p>
+
+        <h3>1. El servicio</h3>
+        <p>
+          El Generador de QR de Taudux crea códigos QR que llevan al link que tú
+          elijas, a través de una dirección corta de Taudux (go.taudux.com). Lo
+          opera René Samael Flores Ortega bajo la marca Taudux ("Taudux").
+        </p>
+
+        <h3>2. Tu cuenta</h3>
+        <p>
+          Para crear QR necesitas una cuenta de Taudux con el correo confirmado.
+          Cada QR queda asociado a la cuenta que lo creó, y eres responsable de los
+          QR que se creen con tu cuenta y de los sitios a los que llevan.
+        </p>
+
+        <h3>3. Usos no permitidos</h3>
+        <p>No puedes usar el servicio para:</p>
+        <ul>
+          <li>engañar a las personas u obtener sus datos (phishing);</li>
+          <li>distribuir programas maliciosos o no deseados;</li>
+          <li>cometer fraudes o estafas;</li>
+          <li>hacerte pasar por otra persona, empresa o institución;</li>
+          <li>difundir contenido ilegal o que infrinja derechos de terceros;</li>
+          <li>difundir contenido sexual que involucre a menores, o que incite a la violencia o al odio;</li>
+          <li>enviar spam, o esconder el destino real de un link (con acortadores o cadenas de redirecciones).</li>
+        </ul>
+
+        <h3>4. Revisión de los links</h3>
+        <p>
+          Antes de crear un QR revisamos el link con reglas propias y con Google
+          Web Risk, y podemos rechazarlo si parece riesgoso, aunque no lo sea.
+          Mientras el QR esté activo lo volvemos a revisar una vez al día. La
+          revisión es automática y no garantiza que un sitio sea seguro: el
+          contenido del destino es responsabilidad de quien creó el QR.
+        </p>
+
+        <h3>5. Plan gratuito</h3>
+        <p>
+          Cada QR dura 7 días desde que se crea; después deja de funcionar y no se
+          puede extender. Puedes tener hasta 5 QR activos a la vez y crear hasta 20
+          en 24 horas. Un QR no se puede editar: para cambiar el link, elimínalo y
+          crea otro. Estos límites pueden cambiar, y los planes de pago tendrán sus
+          propias condiciones.
+        </p>
+
+        <h3>6. Eliminación y conservación</h3>
+        <p>
+          Puedes eliminar un QR cuando quieras y deja de funcionar de inmediato.
+          Conservamos su registro (a qué link llevaba y qué cuenta lo creó) durante
+          90 días para atender casos de abuso, y después lo borramos. El código
+          de un QR nunca se reasigna a otra persona. El detalle está en el
+          <a href="/app/features/legal/privacidad.html">Aviso de Privacidad</a>.
+        </p>
+
+        <h3>7. Bloqueos</h3>
+        <p>
+          Podemos bloquear un QR, o impedir que una cuenta cree más, sin aviso
+          previo, si detectamos un uso no permitido. El motivo
+          aparece en tu lista de QR.
+        </p>
+
+        <h3>8. Disponibilidad y responsabilidad</h3>
+        <p>
+          El servicio se ofrece tal cual y puede tener interrupciones. Antes de
+          imprimir un QR, verifica que lleve a donde esperas. Taudux no responde
+          por el contenido de los sitios a los que llevan los QR, ni por los daños
+          que cause un QR que venció, se eliminó o se bloqueó.
+        </p>
+
+        <h3>9. Avisar de un QR peligroso</h3>
+        <p>
+          Si un QR de Taudux te llevó a un sitio engañoso o peligroso, escríbenos a
+          <a href="mailto:samaelflores@taudux.com">samaelflores@taudux.com</a> con
+          el link (go.taudux.com/…). Lo revisaremos y, si incumple estos términos,
+          lo desactivaremos.
+        </p>
+
+        <h3>10. Cambios</h3>
+        <p>
+          Podemos actualizar estos términos; la fecha de arriba indica la versión
+          vigente. Si sigues usando el servicio después de un cambio, aceptas la
+          versión nueva.
+        </p>
+      </section>
+    </div>
+  </main>
+
+  <!-- Pantalla completa: blanco de borde a borde, para proyectar o mostrar el
+       QR desde el celular. En iPhone no existe la API de pantalla completa
+       para esto: el diálogo por sí solo cubre la ventana. -->
+  <dialog class="qr-pantalla" id="qrPantalla" aria-labelledby="qrPantallaLink">
+    <p class="qr-pantalla__nombre" id="qrPantallaNombre" hidden></p>
+    <div class="qr-pantalla__imagen" id="qrPantallaImagen"></div>
+    <p class="qr-pantalla__link" id="qrPantallaLink"></p>
+    <button type="button" class="qr-pantalla__cerrar" id="qrPantallaCerrar">Cerrar</button>
+  </dialog>
+
+  <template id="qrPlantillaFila">
+    <tr>
+      <td data-etiqueta="Fecha de creación" data-qr="fecha"></td>
+      <td data-etiqueta="URL">
+        <span class="qr__tabla-nombre" data-qr="nombre" hidden></span>
+        <span class="qr__tabla-destino" data-qr="destino"></span>
+        <button type="button" class="qr__tabla-codigo" data-accion="ver" data-qr="link"></button>
+      </td>
+      <td data-etiqueta="Estado">
+        <span class="qr__insignia" data-qr="estado"></span>
+        <span class="qr__tabla-motivo" data-qr="motivo" hidden></span>
+      </td>
+      <td data-etiqueta="Tiempo para vencer" data-qr="tiempo"></td>
+      <td data-etiqueta="Escaneos" class="qr__tabla-numero" data-qr="escaneos"></td>
+      <td class="qr__tabla-acciones">
+        <button type="button" class="button button--outline qr__tabla-eliminar" data-accion="eliminar">Eliminar</button>
+        <button type="button" class="button button--outline" data-accion="descargar">Descargar</button>
+      </td>
+    </tr>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="/app/shared/confirm-dialog/confirm-dialog.js"></script>
+  <!-- Versión fija y con SRI: esta librería decide qué módulos van oscuros en
+       cada QR impreso. Un cambio silencioso en el CDN no debe poder tocarla. -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"
+    integrity="sha384-e9EFD6BGC90bkW9aDV5xbbBfzwN7G8YImHao2lfLVKV/hPB0E0go+H3I64h7oHtA"
+    crossorigin="anonymous"></script>
+  <script src="/app/features/qr/qr.nucleo.js"></script>
+  <script src="/app/features/qr/qr.imagen.js"></script>
+  <script src="/app/features/qr/qr.js"></script>
+
+  <!-- Fondo de estrellas: mismo CDN y misma versión que el inicio (src/index.html). -->
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script src="/app/features/qr/qr.fondo.js"></script>
+</body>
+
+</html>

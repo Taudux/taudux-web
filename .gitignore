@@ -41,6 +41,14 @@ venv/
 # Supabase local state
 supabase/.temp/
 
+# El redireccionador de QR (qr-redireccion/) es un proyecto de Vercel aparte:
+# sus dependencias y su enlace local con Vercel no se versionan. Las llaves
+# viven en las variables de entorno del proyecto en Vercel, nunca en un .env
+# de este repositorio público.
+qr-redireccion/node_modules/
+qr-redireccion/.vercel/
+qr-redireccion/.env*
+
 # Basura del sistema operativo
 .DS_Store
 Thumbs.db

@@ -1,0 +1,870 @@
+/* Generador de QR: la página del servicio (index.html) y la moderación (admin.html). */
+
+@layer features {
+/*
+  `hidden` es la única forma en que estas pantallas esconden cosas, y cualquier
+  `display` de autor le gana al `display: none` del navegador: con
+  .qr__contenido en grid, "Inicia sesión" y el formulario se veían A LA VEZ, y
+  la moderación se mostraba antes de comprobar el rol. Esta regla (0,2,0) le
+  gana a toda clase suelta de esta hoja.
+*/
+.qr [hidden] {
+  display: none;
+}
+
+/* Sin fondo propio: el color lo da el body, y así el cielo de estrellas
+   (#particles-fondo, abajo) se ve detrás de la página. */
+.qr {
+  min-block-size: 100vh;
+  padding: var(--espacio-bajo-navbar) 2rem 4rem;
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+/* Estrellas de fondo (tsParticles, qr.fondo.js): fijas detrás de TODO. Los
+   paneles son translúcidos, así que se asoman apenas entre ellos, como en el
+   extractor de PDF. El alto va en `lvh` y no en el viewport dinámico, como en
+   Slides: tsParticles rehace su lienzo cada vez que la caja cambia de tamaño,
+   y en el celular eso pasaba justo al empezar a deslizar. */
+#particles-fondo {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 100vh;
+  height: 100lvh;
+  z-index: var(--z-behind);
+  pointer-events: none;
+}
+
+#particles-fondo canvas {
+  display: block;
+}
+
+.qr__container {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.qr__header {
+  display: grid;
+  gap: 1rem;
+}
+
+.qr__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  background: var(--gradient-heading);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.qr__intro,
+.qr__texto {
+  max-inline-size: var(--ancho-lectura);
+  color: var(--color-text-muted);
+  line-height: 1.7;
+}
+
+.qr__beneficios {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  list-style: none;
+}
+
+.qr__beneficios li {
+  padding: 1rem 1.1rem;
+  border: var(--border-subtle);
+  border-radius: 14px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.qr__beneficios strong {
+  display: block;
+  margin-block-end: 0.25rem;
+  color: var(--color-text);
+}
+
+.qr__subtitulo {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.qr__estado {
+  padding: 2rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.qr__contenido {
+  display: grid;
+  gap: 2.5rem;
+}
+
+/* --- La barra y el marco ---------------------------------------------------- */
+
+.qr__generador {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20.5rem;
+  gap: 2.5rem;
+  align-items: start;
+  padding: 2rem;
+}
+
+.qr__generador-formulario {
+  display: grid;
+  gap: 1rem;
+}
+
+.qr__formulario {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.qr__etiqueta {
+  font-weight: 500;
+}
+
+.qr__barra {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.qr__barra-campo {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.qr__barra-boton {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.qr__barra-boton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.qr__nota,
+.qr__legal {
+  color: var(--color-text-subtle);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.qr__legal a,
+.qr__aviso a,
+.qr__terminos a {
+  color: var(--color-accent);
+}
+
+.qr__cupo {
+  color: var(--color-accent);
+  font-size: 0.95rem;
+}
+
+.qr__opcional {
+  color: var(--color-text-subtle);
+  font-weight: 400;
+}
+
+.qr__aviso {
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 55%, transparent);
+  border-radius: var(--radius-field);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.qr__aviso--error {
+  border-color: color-mix(in srgb, var(--color-error) 60%, transparent);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error-text);
+}
+
+/* El marco del QR, a la derecha de la barra. */
+.qr__marco {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: center;
+  margin: 0;
+  padding: 1.25rem;
+  border: var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.qr__marco-imagen,
+.qr__marco-vacio {
+  inline-size: 100%;
+  max-inline-size: 16rem;
+  aspect-ratio: 1;
+}
+
+.qr__marco-imagen {
+  line-height: 0;
+}
+
+.qr__marco-imagen svg {
+  inline-size: 100%;
+  block-size: 100%;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.35));
+}
+
+.qr__marco-vacio {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.75rem;
+  border: 1.5px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  color: var(--color-text-subtle);
+  font-size: 0.9rem;
+}
+
+.qr__marco-vacio-icono {
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  opacity: 0.6;
+}
+
+.qr__marco-pie {
+  display: grid;
+  gap: 0.2rem;
+  text-align: center;
+}
+
+.qr__marco-nombre {
+  color: var(--color-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.qr__marco-link {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.qr__marco-tiempo {
+  color: var(--color-text-subtle);
+  font-size: 0.85rem;
+}
+
+/* Tres botones iguales en una fila, con el ícono arriba: en los 19rem del marco
+   los tres con el texto al lado no cabían y se apilaban desparejos. */
+.qr__marco-acciones {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  inline-size: 100%;
+}
+
+.qr__accion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 0.65rem 0.25rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  text-align: center;
+  /* .button parte en cualquier letra (overflow-wrap: anywhere): acá cortaba
+     "Descarg/ar". Sólo se corta entre palabras ("Pantalla / completa"). */
+  overflow-wrap: normal;
+}
+
+.qr__accion svg {
+  inline-size: 1.4em;
+  block-size: 1.4em;
+  flex-shrink: 0;
+}
+
+.qr__accion:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.qr__descargar {
+  position: relative;
+}
+
+.qr__menu {
+  position: absolute;
+  inset-block-end: calc(100% + 0.4rem);
+  inset-inline-start: 0;
+  z-index: 5;
+  display: grid;
+  min-inline-size: 14rem;
+  white-space: nowrap;
+  padding: 0.35rem;
+  border-radius: 12px;
+  background: #16191d;
+}
+
+.qr__menu-opcion {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 500;
+  text-align: start;
+  cursor: pointer;
+}
+
+.qr__menu-opcion span {
+  color: var(--color-text-subtle);
+  font-weight: 400;
+}
+
+.qr__menu-opcion:hover,
+.qr__menu-opcion:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* --- La tabla --------------------------------------------------------------- */
+
+.qr__lista {
+  display: grid;
+  gap: 1rem;
+}
+
+.qr__lista-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+}
+
+.qr__lista-estado,
+.qr__vacio {
+  color: var(--color-text-muted);
+}
+
+.qr__lista-acceder {
+  justify-self: start;
+}
+
+.qr__tabla-marco {
+  overflow-x: auto;
+}
+
+.qr__tabla {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 0.925rem;
+}
+
+.qr__tabla th,
+.qr__tabla td {
+  padding: 0.9rem 0.75rem;
+  border-block-end: var(--border-subtle);
+  text-align: start;
+  vertical-align: middle;
+}
+
+.qr__tabla th:first-child,
+.qr__tabla td:first-child {
+  padding-inline-start: 1rem;
+}
+
+.qr__tabla th:last-child,
+.qr__tabla td:last-child {
+  padding-inline-end: 1rem;
+}
+
+.qr__tabla th {
+  color: var(--color-text-subtle);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.qr__tabla tbody tr:last-child td {
+  border-block-end: 0;
+}
+
+.qr__tabla tr[data-estado="vencido"] td:not(.qr__tabla-acciones),
+.qr__tabla tr[data-estado="bloqueado"] td:not(.qr__tabla-acciones) {
+  color: var(--color-text-subtle);
+}
+
+.qr__tabla-hora {
+  display: block;
+  color: var(--color-text-subtle);
+  font-size: 0.8rem;
+}
+
+.qr__tabla-nombre {
+  display: block;
+  max-inline-size: 15rem;
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qr__tabla-numero {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.qr__tabla-destino {
+  display: block;
+  max-inline-size: 15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qr__tabla-codigo {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.qr__tabla-codigo:disabled {
+  color: var(--color-text-subtle);
+  cursor: default;
+}
+
+.qr__tabla-codigo:not(:disabled):hover {
+  text-decoration: underline;
+}
+
+.qr__tabla-motivo {
+  display: block;
+  margin-block-start: 0.3rem;
+  color: var(--color-error-text);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.qr__tabla-acciones {
+  white-space: nowrap;
+  text-align: end;
+}
+
+.qr__tabla-acciones .button {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+  /* .button deja partir palabras; aquí "Descar-gar" no. */
+  white-space: nowrap;
+}
+
+.qr__tabla-acciones .button + .button {
+  margin-inline-start: 0.5rem;
+}
+
+.qr__tabla-acciones .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.qr__tabla-eliminar:not(:disabled):hover {
+  border-color: var(--color-error);
+  color: var(--color-error-text);
+}
+
+.qr__tabla tr.qr__tabla-fila--elegida {
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+
+.qr__insignia {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.qr__insignia[data-estado="activo"] {
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+  color: var(--color-success);
+}
+
+.qr__insignia[data-estado="vencido"] {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-subtle);
+}
+
+.qr__insignia[data-estado="bloqueado"] {
+  background: color-mix(in srgb, var(--color-error) 16%, transparent);
+  color: var(--color-error-text);
+}
+
+/* --- Términos --------------------------------------------------------------- */
+
+.qr__terminos {
+  display: grid;
+  gap: 0.9rem;
+  padding: 2rem;
+  color: var(--color-text-muted);
+  line-height: 1.7;
+}
+
+.qr__terminos > * {
+  max-inline-size: var(--ancho-lectura);
+}
+
+.qr__terminos h3 {
+  margin-block-start: 0.6rem;
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.qr__terminos ul {
+  display: grid;
+  gap: 0.3rem;
+  padding-inline-start: 1.25rem;
+}
+
+.qr__terminos-fecha {
+  color: var(--color-text-subtle);
+  font-size: 0.85rem;
+}
+
+/* --- Pantalla completa ------------------------------------------------------ */
+
+.qr-pantalla {
+  inline-size: 100vw;
+  block-size: 100dvh;
+  max-inline-size: none;
+  max-block-size: none;
+  margin: 0;
+  padding: 1.5rem;
+  border: 0;
+  background: #fff;
+  color: #0a1f4f;
+  font-family: var(--font-body);
+}
+
+.qr-pantalla[open] {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1.25rem;
+}
+
+.qr-pantalla::backdrop {
+  background: #fff;
+}
+
+.qr-pantalla__imagen {
+  inline-size: min(80vmin, 40rem);
+  aspect-ratio: 1;
+  line-height: 0;
+}
+
+.qr-pantalla__imagen svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.qr-pantalla__nombre {
+  font-size: clamp(1.3rem, 4vmin, 2.2rem);
+  font-weight: 700;
+  text-align: center;
+}
+
+.qr-pantalla__link {
+  font-size: clamp(1.1rem, 3vmin, 1.6rem);
+  font-weight: 700;
+}
+
+.qr-pantalla__cerrar {
+  padding: 0.6rem 1.4rem;
+  border: 1px solid #c7d0de;
+  border-radius: var(--radius-button);
+  background: #fff;
+  color: #0a1f4f;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.qr-pantalla__cerrar:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* --- Moderación (admin.html) ------------------------------------------------ */
+
+.qr-admin__barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+  margin-block-end: 1.25rem;
+}
+
+.qr-admin__panel {
+  padding: 2rem;
+}
+
+.qr-admin__control {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.qr-admin__control .field {
+  padding: 0.6rem 0.8rem;
+}
+
+.qr-admin__buscar {
+  flex: 1 1 16rem;
+}
+
+.qr-admin__actualizado {
+  color: var(--color-text-subtle);
+  font-size: 0.875rem;
+}
+
+.qr-admin__tabla-marco {
+  overflow-x: auto;
+}
+
+.qr-admin__tabla {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.qr-admin__tabla th,
+.qr-admin__tabla td {
+  padding: 0.75rem 0.6rem;
+  border-block-end: var(--border-subtle);
+  text-align: start;
+  vertical-align: top;
+}
+
+.qr-admin__tabla th {
+  color: var(--color-text-subtle);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.qr-admin__destino {
+  display: block;
+  max-inline-size: 16rem;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qr-admin__secundario {
+  display: block;
+  color: var(--color-text-subtle);
+  font-size: 0.8rem;
+}
+
+.qr-admin__acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-inline-size: 8.5rem;
+}
+
+.qr-admin__acciones .button {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.qr-admin__id {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-subtle);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: start;
+  text-decoration: underline dotted;
+  cursor: copy;
+}
+
+.qr-admin__id:hover {
+  color: var(--color-accent);
+}
+
+.qr-admin__id:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.qr-admin__dialogo {
+  inline-size: min(100% - 2rem, 32rem);
+  padding: 2rem;
+  color: var(--color-text);
+}
+
+.qr-admin__dialogo::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.qr-admin__dialogo-formulario {
+  display: grid;
+  gap: 1rem;
+}
+
+.qr-admin__dialogo-acciones {
+  display: flex;
+  justify-content: end;
+  gap: 0.75rem;
+}
+
+/* --- Pantallas angostas ----------------------------------------------------- */
+
+/* Mientras la tabla es tabla, los dos botones van uno sobre otro para que las
+   seis columnas quepan sin scroll lateral. */
+@media (max-width: 1120px) {
+  .qr__tabla-acciones .button {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .qr__tabla-acciones .button + .button {
+    margin-block-start: 0.4rem;
+    margin-inline-start: 0;
+  }
+
+  .qr__tabla-nombre,
+  .qr__tabla-destino {
+    max-inline-size: 13rem;
+  }
+}
+
+/* Cuando ya no cabe, la tabla se vuelve una pila de tarjetas: cada celda dice
+   qué es. La etiqueta va en la primera columna y todo lo de la celda (nombre,
+   link, código; o fecha y hora; o estado y motivo) en la segunda, una pieza
+   debajo de otra. */
+@media (max-width: 980px) {
+  .qr__tabla thead {
+    display: none;
+  }
+
+  .qr__tabla,
+  .qr__tabla tbody,
+  .qr__tabla tr,
+  .qr__tabla td {
+    display: block;
+  }
+
+  .qr__tabla tr {
+    padding: 0.75rem 0;
+    border-block-end: var(--border-subtle);
+  }
+
+  .qr__tabla tbody tr:last-child {
+    border-block-end: 0;
+  }
+
+  .qr__tabla td {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    column-gap: 0.75rem;
+    padding: 0.35rem 1rem;
+    border: 0;
+    text-align: start;
+  }
+
+  .qr__tabla td::before {
+    content: attr(data-etiqueta);
+    /* Las filas que sobran miden 0: no hay row-gap. */
+    grid-row: span 3;
+    color: var(--color-text-subtle);
+    font-size: 0.8rem;
+  }
+
+  .qr__tabla td > * {
+    grid-column: 2;
+    justify-self: start;
+    max-inline-size: 100%;
+  }
+
+  .qr__tabla td.qr__tabla-acciones {
+    display: flex;
+    justify-content: flex-end;
+    padding-block-start: 0.6rem;
+  }
+
+  .qr__tabla td.qr__tabla-acciones::before {
+    content: none;
+  }
+
+  .qr__tabla-acciones .button {
+    display: inline-block;
+    inline-size: auto;
+  }
+
+  .qr__tabla-acciones .button + .button {
+    margin-block-start: 0;
+    margin-inline-start: 0.5rem;
+  }
+
+  .qr__tabla-nombre,
+  .qr__tabla-destino {
+    max-inline-size: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .qr__generador {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .qr__marco {
+    justify-self: center;
+    inline-size: min(100%, 22rem);
+  }
+
+  .qr__beneficios {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .qr {
+    padding: var(--espacio-bajo-navbar) 1rem 3rem;
+  }
+
+  .qr__generador,
+  .qr__terminos {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .qr__barra {
+    flex-direction: column;
+  }
+
+  .qr__tabla td {
+    grid-template-columns: 7rem minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qr__tabla-eliminar {
+    transition: none;
+  }
+}
+}

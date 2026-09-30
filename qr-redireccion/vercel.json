@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    { "source": "/", "destination": "https://taudux.com/app/features/qr/", "permanent": false }
+  ],
+  "rewrites": [
+    { "source": "/:codigo", "destination": "/api/r?codigo=:codigo" }
+  ]
+}

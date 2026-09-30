@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Fuera de buscadores: acá se ven los links de todas las cuentas y quién
+       los creó. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Moderación de QR | Taudux</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/field/field.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <link rel="stylesheet" href="/app/shared/confirm-dialog/confirm-dialog.css">
+  <!-- El arranque de administración (#adminStartup) reusa el markup de las
+       pantallas de cursos, y sus estilos viven acá: mismo criterio que el
+       panel del extractor. -->
+  <link rel="stylesheet" href="/app/features/courses/gestionar-cursos.css">
+  <link rel="stylesheet" href="/app/features/qr/qr.css">
+  <script defer src="/app/core/analytics/ga4.js"></script>
+</head>
+
+<body>
+  <nav class="navbar" id="adminNavbar" aria-label="Navegación principal" hidden>
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <a href="#" id="accessBtn" class="navbar__link button button--access">Salir</a>
+    </div>
+  </nav>
+
+  <main class="qr">
+    <div class="qr__container u-contenedor u-contenedor--medio">
+
+      <!-- Arranque compartido: exige sesión, exige rol admin, y sólo entonces
+           revela #adminContent. El gate real es la RLS de 0044 y el
+           es_admin() dentro de qr_moderar(); esto es la puerta de UX. -->
+      <section class="courses__startup-status panel panel--spacious" id="adminStartup" role="status"
+        aria-live="polite" aria-busy="true" tabindex="-1">
+        <div class="courses__startup-loader" id="adminStartupLoader" aria-hidden="true"></div>
+        <p class="courses__startup-announcement" id="adminStartupLoadingMessage">
+          Cargando la moderación de QR.
+        </p>
+        <div class="courses__startup-error" id="adminStartupError" hidden>
+          <h2 class="courses__subtitle" id="adminStartupTitle">
+            No se pudo abrir la moderación de QR
+          </h2>
+          <p class="courses__startup-message" id="adminStartupMessage"></p>
+          <div class="courses__startup-actions">
+            <button class="button button--outline" type="button" id="adminStartupRetry" hidden>Reintentar</button>
+            <a class="button button--outline" href="/app/features/qr/">Volver al generador</a>
+          </div>
+        </div>
+      </section>
+
+      <noscript>
+        <p class="qr__estado panel">Necesitas habilitar JavaScript para moderar los QR.</p>
+      </noscript>
+
+      <div class="qr__contenido" id="adminContent" hidden>
+        <header class="qr__header">
+          <h1 class="qr__title">Moderación de QR</h1>
+          <p class="qr__intro">
+            Todos los QR del sitio y quién los creó. Bloquear un QR lo apaga al
+            instante; bloquear una cuenta apaga sus QR y le impide crear más.
+            Su dueño ve el motivo.
+          </p>
+        </header>
+
+        <section class="panel qr-admin__panel" aria-labelledby="qrAdminResumen">
+          <div class="qr-admin__barra">
+            <label class="qr-admin__control">
+              Estado
+              <select class="field" id="qrAdminFiltro">
+                <option value="todos">Todos</option>
+                <option value="activo">Activos</option>
+                <option value="vencido">Vencidos</option>
+                <option value="bloqueado">Bloqueados</option>
+                <option value="eliminado">Eliminados</option>
+              </select>
+            </label>
+            <label class="qr-admin__control qr-admin__buscar">
+              Buscar
+              <input class="field" type="search" id="qrAdminBuscar" autocomplete="off"
+                placeholder="Código, nombre, link o persona">
+            </label>
+            <button type="button" class="button button--outline" id="qrAdminRecargar">Actualizar</button>
+          </div>
+          <p class="qr-admin__actualizado">
+            <span id="qrAdminResumen"></span>
+            <span aria-hidden="true">·</span>
+            <span id="qrAdminActualizado"></span>
+          </p>
+        </section>
+
+        <p class="qr__vacio" id="qrAdminVacio" hidden>Ningún QR coincide con el filtro.</p>
+
+        <div class="qr-admin__tabla-marco panel">
+          <table class="qr-admin__tabla">
+            <thead>
+              <tr>
+                <th scope="col">QR</th>
+                <th scope="col">Destino</th>
+                <th scope="col">Creado por</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Escaneos</th>
+                <th scope="col">Revisión</th>
+                <th scope="col">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="qrAdminFilas"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <dialog class="qr-admin__dialogo panel" id="qrMotivoDialogo" aria-labelledby="qrMotivoTitulo">
+    <form class="qr-admin__dialogo-formulario" id="qrMotivoFormulario" novalidate>
+      <h2 class="qr__subtitulo" id="qrMotivoTitulo"></h2>
+      <p class="qr__texto" id="qrMotivoDescripcion"></p>
+      <label class="qr__etiqueta" for="qrMotivoTexto">Motivo</label>
+      <textarea class="field field--textarea" id="qrMotivoTexto" maxlength="300"
+        placeholder="Ej.: link de phishing detectado el 28 de septiembre"></textarea>
+      <p class="qr__aviso qr__aviso--error" id="qrMotivoError" role="alert" hidden>
+        Escribe el motivo: su dueño lo va a ver.
+      </p>
+      <div class="qr-admin__dialogo-acciones">
+        <button type="button" class="button button--outline" id="qrMotivoCancelar">Cancelar</button>
+        <button type="submit" class="button button--glow" id="qrMotivoConfirmar">Bloquear</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/core/telemetry/operaciones.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="/app/shared/confirm-dialog/confirm-dialog.js"></script>
+  <script src="/app/features/courses/admin-startup.js"></script>
+  <script src="/app/features/qr/qr.nucleo.js"></script>
+  <script src="/app/features/qr/admin.js"></script>
+</body>
+
+</html>
