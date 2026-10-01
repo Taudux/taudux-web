@@ -972,9 +972,11 @@ window.addEventListener("error", function (e) {
       case "chain": return `${LEAD(s)}<div class="chain">${s.stages.map((st, i) => `${i ? `<div class="arr">→</div>` : ""}<div class="stg${i === s.stages.length - 1 ? " hl" : ""}"><b>${md(st[0])}</b><div class="kw">${st[1].map(k => `<span>${md(k)}</span>`).join("")}</div><p>${md(st[2])}</p></div>`).join("")}</div>${BOXES(s)}${FOOT(s)}${SRC(s)}`;
       case "two": return `${LEAD(s)}<div class="two">${s.two.map(c => `<div class="col"><div class="ch">${md(c.h)}</div>${c.big ? `<p class="cq">${md(c.big)}</p>` : ""}${arr(c.p).map((p, i) => `<p class="cp${c.qi === i ? " q" : ""}">${md(p)}</p>`).join("")}</div>`).join("")}</div>${BOXES(s)}${FOOT(s)}${SRC(s)}`;
       // Las imágenes viven en una carpeta compartida de Slides para que otras
-      // presentaciones las reusen; sus nombres llevan espacios y acentos.
+      // presentaciones las reusen; sus nombres llevan espacios y acentos. La ruta
+      // va absoluta: en producción cleanUrls quita el index.html y la barra final,
+      // y una ruta relativa con ../ subiría un nivel de más.
       case "qr": return `${LEAD(s)}<div class="qrs">${s.items.map(q => `<figure class="qr">
-        <img src="../30-ocr-2026_QR/${encodeURIComponent(q[0])}" alt="Código QR: ${esc(q[1])}">
+        <img src="/content/slides/30-ocr-2026_QR/${encodeURIComponent(q[0])}" alt="Código QR: ${esc(q[1])}">
         <figcaption>${md(q[1])}</figcaption></figure>`).join("")}</div>${FOOT(s)}`;
       case "cases": return `${LEAD(s)}<div class="cases">${s.items.map(c => `<div class="case"><div class="chd"><b>${md(c.t)}</b><span>${md(c.m)}</span></div><p>${md(c.p)}</p><p class="w">${md(c.w)}</p></div>`).join("")}</div>${SRC(s)}`;
     }
