@@ -1,6 +1,6 @@
 /*
-  Moderación de QR: todos los QR del sitio, quién los creó, y los dos frenos
-  (bloquear un QR, bloquear una cuenta).
+  Moderación de QR: todos los QR del sitio, quién los creó, los dos frenos
+  (bloquear un QR, bloquear una cuenta) y quitarle el vencimiento a un QR.
 
   Qué NO muestra: el correo de nadie. Vive en auth.users y este repositorio
   nunca lo ha entregado al navegador (0031); acá alcanza con el nombre del
@@ -163,6 +163,11 @@
       acciones.append(estadoActual === "bloqueado"
         ? boton("Desbloquear QR", "desbloquear-qr", { id: qr.id })
         : boton("Bloquear QR", "bloquear-qr", { id: qr.id }));
+      // Un QR sin vencimiento es el que se imprimió para quedarse (un cartel,
+      // una credencial). También sirve con uno ya vencido: lo revive.
+      acciones.append(qr.vence_en
+        ? boton("Quitar vencimiento", "quitar-vencimiento", { id: qr.id })
+        : boton("Devolver vencimiento", "devolver-vencimiento", { id: qr.id }));
     }
     if (tienePerfil) {
       acciones.append(acceso?.bloqueado
@@ -266,6 +271,15 @@
     mostrarToast(bloquear ? "QR bloqueado." : "QR desbloqueado.");
   }
 
+  // Sin motivo ni confirmación: se activa y desactiva con un clic.
+  async function cambiarVencimiento(qr, quitar) {
+    const { error } = await supabaseClient.rpc("qr_cambiar_vencimiento", { p_id: qr.id, p_sin_vencimiento: quitar });
+    if (error) throw error;
+    await cargar();
+    pintar();
+    mostrarToast(quitar ? "El QR ya no vence." : "El QR vuelve a vencer.");
+  }
+
   async function moderarCuenta(usuarioId, bloquear) {
     const nombre = nombreDe({ usuario_id: usuarioId });
     let motivo = null;
@@ -310,6 +324,8 @@
       }
       if (accion === "bloquear-qr" && qr) await moderarQR(qr, true);
       if (accion === "desbloquear-qr" && qr) await moderarQR(qr, false);
+      if (accion === "quitar-vencimiento" && qr) await cambiarVencimiento(qr, true);
+      if (accion === "devolver-vencimiento" && qr) await cambiarVencimiento(qr, false);
       if (accion === "bloquear-cuenta") await moderarCuenta(usuario, true);
       if (accion === "desbloquear-cuenta") await moderarCuenta(usuario, false);
     } catch (error) {
