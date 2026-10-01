@@ -54,10 +54,14 @@ test("cada carpeta listada en el índice existe y trae un manifiesto válido", (
 });
 
 test("ninguna subcarpeta de /content/slides queda huérfana, sin listar en el índice", () => {
+  /* Sólo cuentan las carpetas con alguna página: una presentación siempre
+     trae su HTML. Las que sólo guardan recursos compartidos entre
+     presentaciones (los QR de una sesión, por ejemplo) no van al índice. */
   const subcarpetas = fs
     .readdirSync(DIRECTORIO_SLIDES, { withFileTypes: true })
     .filter((entrada) => entrada.isDirectory())
-    .map((entrada) => entrada.name);
+    .map((entrada) => entrada.name)
+    .filter((nombre) => fs.readdirSync(path.join(DIRECTORIO_SLIDES, nombre)).some((archivo) => archivo.endsWith(".html")));
 
   subcarpetas.forEach((nombre) => {
     assert.ok(

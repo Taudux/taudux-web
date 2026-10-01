@@ -14,6 +14,10 @@ const SLIDES = [
     img: "Multitud de espaldas mirando pantallas o un escenario; luz de pantallas en las caras.",
     note: "Se proyecta mientras entra la gente." },
 
+  { id: "asistencia", b: 0, lv: 1, t: "qr", core: true, title: "Antes de empezar",
+    items: [["Asistencia.jpeg", "Asistencia"], ["Herramientas digitales de BLOQUE.jpeg", "Herramientas digitales de BLOQUE"]],
+    note: "Dar un minuto para que registren su asistencia; el segundo QR lleva a las herramientas digitales de BLOQUE." },
+
   { id: "pregunta", b: 0, lv: 1, t: "statement", core: true, title: "La pregunta de la sesión",
     text: "¿Cómo sabemos lo que creemos saber, cuando casi todo nos llega por una pantalla?",
     simple: ["Esta sesión no trata de tecnología, sino de **conocimiento**. La tecnología cambió; las preguntas son las mismas que la filosofía se hace desde Platón: qué es saber, por qué creemos lo que creemos y en quién confiamos.",
@@ -892,6 +896,10 @@ SLIDES.push(
     note: "Anticipo de la segunda sesión del curso completo de cuatro sesiones." },
 
   // ════════ 15 · CIERRE
+  { id: "evaluacion", b: 15, lv: 1, t: "qr", core: true, title: "Antes de irte",
+    items: [["Encuesta de Evaluación del Desempeño Docente.jpeg", "Encuesta de Evaluación del Desempeño Docente"]],
+    note: "Pedir que contesten la encuesta antes de salir; dejar la lámina proyectada unos minutos." },
+
   { id: "gracias", b: 15, lv: 3, t: "close", core: true, ti: "Gracias",
     h: "Gracias",
     quote: "No hay lugar para el temor ni para la esperanza, sólo cabe buscar nuevas armas.",
@@ -963,6 +971,11 @@ window.addEventListener("error", function (e) {
       case "cards": return `${LEAD(s)}<div class="cards" style="grid-template-columns:repeat(${s.ncol || 3},1fr)">${s.items.map((x, i) => `<div class="card${s.hl === i ? " hl" : ""}"><b>${md(x[0])}</b><p>${md(x[1])}</p>${x[2] ? `<p class="x">${md(x[2])}</p>` : ""}</div>`).join("")}</div>${BOXES(s)}${FOOT(s)}${SRC(s)}`;
       case "chain": return `${LEAD(s)}<div class="chain">${s.stages.map((st, i) => `${i ? `<div class="arr">→</div>` : ""}<div class="stg${i === s.stages.length - 1 ? " hl" : ""}"><b>${md(st[0])}</b><div class="kw">${st[1].map(k => `<span>${md(k)}</span>`).join("")}</div><p>${md(st[2])}</p></div>`).join("")}</div>${BOXES(s)}${FOOT(s)}${SRC(s)}`;
       case "two": return `${LEAD(s)}<div class="two">${s.two.map(c => `<div class="col"><div class="ch">${md(c.h)}</div>${c.big ? `<p class="cq">${md(c.big)}</p>` : ""}${arr(c.p).map((p, i) => `<p class="cp${c.qi === i ? " q" : ""}">${md(p)}</p>`).join("")}</div>`).join("")}</div>${BOXES(s)}${FOOT(s)}${SRC(s)}`;
+      // Las imágenes viven en una carpeta compartida de Slides para que otras
+      // presentaciones las reusen; sus nombres llevan espacios y acentos.
+      case "qr": return `${LEAD(s)}<div class="qrs">${s.items.map(q => `<figure class="qr">
+        <img src="../30-ocr-2026_QR/${encodeURIComponent(q[0])}" alt="Código QR: ${esc(q[1])}">
+        <figcaption>${md(q[1])}</figcaption></figure>`).join("")}</div>${FOOT(s)}`;
       case "cases": return `${LEAD(s)}<div class="cases">${s.items.map(c => `<div class="case"><div class="chd"><b>${md(c.t)}</b><span>${md(c.m)}</span></div><p>${md(c.p)}</p><p class="w">${md(c.w)}</p></div>`).join("")}</div>${SRC(s)}`;
     }
     return "";
