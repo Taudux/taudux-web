@@ -1,0 +1,348 @@
+/* Página Usuarios de Administración: la gráfica de registros y la lista de
+ * cuentas. El menú, el encabezado, la insignia y el estilo plano son
+ * compartidos y viven en admin-nav.css; acá sólo lo propio. */
+@layer features {
+  .usuarios {
+    padding-block: var(--espacio-bajo-navbar) 4rem;
+    /* Canal lateral, igual que `.qr`: en celular baja a 1rem. */
+    padding-inline: 2rem;
+    color: var(--color-text);
+    font-family: var(--font-body);
+  }
+
+  @media (max-width: 760px) {
+    .usuarios {
+      padding-inline: 1rem;
+    }
+  }
+
+  /* `display: grid` / `flex` de abajo le ganan al `[hidden]` del navegador. */
+  .usuarios [hidden] {
+    display: none;
+  }
+
+  .usuarios .courses__subtitle {
+    margin-block-end: 1.25rem;
+    font-size: 1.2rem;
+    color: var(--color-text);
+  }
+
+  /* El «· 26» junto al título: el mismo gesto que «Gestión del extractor · 26».
+   * El título es texto con degradado (transparente); el total se pinta aparte. */
+  .usuarios__total {
+    margin-inline-start: 0.4rem;
+    font-size: 0.5em;
+    font-weight: 400;
+    -webkit-text-fill-color: var(--color-text-muted);
+    color: var(--color-text-muted);
+  }
+
+  .usuarios__vacio {
+    color: var(--color-text-muted);
+  }
+
+  /* --- La gráfica --------------------------------------------------------- */
+
+  .usuarios__grafica-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-block-end: 0.5rem;
+  }
+
+  .usuarios__grafica-cabecera .courses__subtitle {
+    margin-block-end: 0;
+  }
+
+  .usuarios__zoom {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .usuarios__zoom .button {
+    min-inline-size: 2.5rem;
+    padding-inline: 0.9rem;
+  }
+
+  /* Los .button del sitio no tienen estado deshabilitado propio. */
+  .usuarios .button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .usuarios__leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.25rem;
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+  }
+
+  .usuarios__leyenda li {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .usuarios__muestra {
+    display: inline-block;
+    inline-size: 0.8rem;
+    block-size: 0.8rem;
+    border-radius: 2px;
+  }
+
+  .usuarios__muestra--altas {
+    background: var(--color-accent);
+  }
+
+  .usuarios__muestra--bajas {
+    background: var(--color-error);
+  }
+
+  .usuarios__muestra--linea {
+    block-size: 3px;
+    inline-size: 1.1rem;
+    background: var(--color-warning);
+  }
+
+  /* El tooltip es HTML y se posiciona contra esta caja, que NO scrollea: el
+   * lienzo de adentro sí. */
+  .usuarios__grafica {
+    position: relative;
+  }
+
+  /* Lo ancho scrollea dentro de su caja, nunca la página. */
+  .usuarios__lienzo {
+    overflow-x: auto;
+  }
+
+  .usuarios__svg {
+    display: block;
+    inline-size: 100%;
+    min-inline-size: 34rem;
+    block-size: auto;
+    overflow: visible;
+  }
+
+  .usuarios__eje {
+    stroke: var(--color-border);
+    stroke-width: 1;
+  }
+
+  .usuarios__guia {
+    stroke: var(--color-border);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+    opacity: 0.5;
+  }
+
+  .usuarios__texto {
+    fill: var(--color-text-muted);
+    font-size: 11px;
+    font-family: var(--font-body);
+  }
+
+  .usuarios__texto--altas {
+    fill: var(--color-accent);
+  }
+
+  .usuarios__texto--bajas {
+    fill: var(--color-error-text, var(--color-error));
+  }
+
+  .usuarios__texto--linea {
+    fill: var(--color-warning);
+  }
+
+  .usuarios__barra--altas {
+    fill: var(--color-accent);
+  }
+
+  .usuarios__barra--bajas {
+    fill: var(--color-error);
+  }
+
+  .usuarios__linea {
+    fill: none;
+    stroke: var(--color-warning);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .usuarios__punto {
+    fill: var(--color-warning);
+  }
+
+  /* La columna iluminada: un rect transparente por periodo, de alto
+   * completo. Es también el objetivo de foco y de puntero. */
+  .usuarios__columna {
+    fill: transparent;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .usuarios__columna:hover,
+  .usuarios__columna:focus-visible,
+  .usuarios__columna[data-activa] {
+    fill: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+
+  .usuarios__columna:focus-visible {
+    stroke: var(--color-accent);
+    stroke-width: 1;
+  }
+
+  .usuarios__tooltip {
+    position: absolute;
+    z-index: 2;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    display: grid;
+    gap: 0.2rem;
+    min-inline-size: 11rem;
+    padding: 0.7rem 0.9rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-field);
+    background: rgba(8, 14, 28, 0.94);
+    box-shadow: var(--shadow-panel);
+    font-size: 0.8rem;
+    pointer-events: none;
+  }
+
+  .usuarios__tooltip-titulo {
+    margin: 0 0 0.2rem;
+    color: var(--color-text);
+    font-weight: 700;
+  }
+
+  .usuarios__tooltip-fila {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+
+  .usuarios__tooltip-fila strong {
+    color: var(--color-text);
+    font-weight: 500;
+  }
+
+  .usuarios__tooltip-fila--altas strong {
+    color: var(--color-accent);
+  }
+
+  .usuarios__tooltip-fila--bajas strong {
+    color: var(--color-error-text, var(--color-error));
+  }
+
+  .usuarios__tooltip-fila--linea strong {
+    color: var(--color-warning);
+  }
+
+  /* --- La lista ----------------------------------------------------------- */
+
+  /* Contenedor de scroll: lo ancho scrollea acá, no la página. */
+  .usuarios__lista {
+    overflow-x: auto;
+  }
+
+  /* Plana, igual que la tabla del extractor: sólo las líneas entre filas. */
+  .usuarios__tabla {
+    inline-size: 100%;
+    border-collapse: collapse;
+  }
+
+  .usuarios__tabla th,
+  .usuarios__tabla td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .usuarios__tabla thead th {
+    border-bottom: var(--border-subtle);
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .usuarios__tabla tbody tr:not(:last-child) td {
+    border-bottom: var(--border-subtle);
+  }
+
+  /* La insignia va sola en su celda: sin el margen que lleva junto a un nombre. */
+  .usuarios__insignia {
+    margin-inline-start: 0;
+  }
+
+  .usuarios__rol-colaborador {
+    color: var(--color-accent);
+    font-weight: 600;
+  }
+
+  .usuarios__nombre {
+    display: block;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  /* El correo bajo el nombre, como `.admin__meta` en la tabla del extractor. */
+  .usuarios__correo {
+    display: block;
+    margin-block-start: 0.15rem;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+  }
+
+  .usuarios__fecha {
+    white-space: nowrap;
+    color: var(--color-text-muted);
+  }
+
+  /* En celular la fecha con hora sin partir le robaba el ancho a la columna
+     del nombre, que terminaba cortando el correo en pedazos de cinco letras.
+     Ahí la hora baja de renglón y el nombre conserva un mínimo legible. */
+  @media (max-width: 760px) {
+    .usuarios__fecha {
+      white-space: normal;
+    }
+
+    .usuarios__tabla td:first-child {
+      min-inline-size: 10rem;
+    }
+  }
+
+  /* --- Paginación: el mismo pie que la tabla del extractor ------------------ */
+
+  .usuarios__paginacion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem 1rem;
+    margin-block-start: 0.75rem;
+  }
+
+  .usuarios__paginacion-texto {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .usuarios__paginacion-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}

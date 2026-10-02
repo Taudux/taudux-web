@@ -12,7 +12,7 @@
  *
  * El 2026-08-21 la tabla dejó de ser sólo lectura: la columna Plan —que
  * repetía "free" en todas las filas— dio lugar a los dos números editables y a
- * su botón (`.admin__numero`, `.admin__toggle`, `.admin__guardar`), y
+ * su botón (`.admin__numero`, `.admin__toggle`), y
  * `.admin__plan` se fue con ella.
  */
 @layer features {
@@ -42,6 +42,9 @@
    * 8rem, así que no se mueve nada en pantalla. */
   .courses {
     padding-block-start: var(--espacio-bajo-navbar);
+    /* El canal lateral, igual que `.qr` en la moderación: sin él, en celular
+       el menú y el título quedaban pegados al borde (medido el 2026-10-01). */
+    padding-inline: 2rem;
 
     /* Las dos series del panel, con nombre propio y en UN solo lugar.
      *
@@ -58,6 +61,15 @@
     --serie-con-sesion: var(--color-accent);
     --serie-sin-sesion: var(--color-warning);
   }
+
+  @media (max-width: 760px) {
+    .courses {
+      padding-inline: 1rem;
+    }
+  }
+
+  /* El encabezado de la página (`.admin-cabecera*`) vive en admin-nav.css,
+   * compartido con Usuarios y QR. */
 
   /* EL ATRIBUTO `hidden` GANA. Y hay que decirlo acá porque esta hoja se lo
    * quitó tres veces sin querer.
@@ -107,7 +119,7 @@
    *
    * `overflow` sólo recorta lo que cae dentro de su cadena de bloques
    * contenedores. Dentro del `<th>` del botón vive un
-   * `<span class="u-visually-hidden">Guardar cambios</span>`, que es
+   * `<span class="u-visually-hidden">…</span>`, que es
    * `position: absolute` (styles.css). Sin un ancestro posicionado acá, su
    * bloque contenedor era la `<section>` —fuera de esta caja—, así que este
    * `overflow-x` nunca lo recortaba: se plantaba en el extremo derecho de una
@@ -133,20 +145,22 @@
     overflow-x: auto;
   }
 
+  /* Plana (2026-10-01): sin fondo, borde ni esquinas; sólo las líneas entre
+   * filas. Es el mismo estilo que la tabla de Usuarios. */
   .admin__tabla {
     width: 100%;
     border-collapse: collapse;
-    background: var(--color-field);
-    border: var(--border-subtle);
-    border-radius: var(--radius-field);
-    overflow: hidden;
+    background: none;
+    border: 0;
+    border-radius: 0;
   }
 
   /* El mínimo es el umbral donde empieza el scroll horizontal: por debajo, las
-     celdas se apretarían y el botón "Guardar" partiría su texto en dos líneas.
+     celdas se apretarían y las columnas editables se partirían en dos líneas.
      Subió de 40rem a 64rem con las columnas editables, y volvió a 52rem el
      mismo día al apilar nombre y correo en una sola celda — una columna menos
-     de texto ancho es exactamente lo que sobraba.
+     de texto ancho es exactamente lo que sobraba. El 2026-10-01 bajó a 40rem
+     al desaparecer la columna del botón Guardar.
 
      Acotado a la lista de perfiles porque `.admin__tabla` también la lleva la
      tabla de métricas por banco, que mide 366px de max-content y nunca pidió
@@ -154,7 +168,7 @@
      caja sin scroll y estiraba la página entera (medido 2026-08-31: 396px de
      desborde en una ventana de 485px). */
   .admin__lista .admin__tabla {
-    min-inline-size: 52rem;
+    min-inline-size: 40rem;
   }
 
   /* `vertical-align: top` y no el `middle` por defecto.
@@ -262,38 +276,10 @@
     font-weight: 400;
   }
 
-  /* La administración se distingue por el acento y no sólo por la insignia:
-     la tabla se lee de un vistazo y el color hace el trabajo antes que la
-     lectura. El nombre viene de cuando marcaba el acceso ilimitado; hoy
-     marca el rol. Una fila no tiene borde propio que teñir, así que el
-     criterio pasa a un tinte de fondo más una franja a la izquierda. */
-  .admin__fila--ilimitado td {
-    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
-  }
-
-  /* La franja NO puede ser un `border`.
-   *
-   * Un borde ocupa espacio: empujaba el contenido 3px a la derecha, así que
-   * las filas de administración arrancaban en X=489 y el resto en X=486. A
-   * simple vista se lee como filas desalineadas, y el ojo lo nota antes de
-   * poder nombrarlo — medido el 2026-08-21.
-   *
-   * `inset-inline-start: 0` sobre un pseudo-elemento absoluto pinta la franja
-   * SIN participar del layout: todas las celdas conservan el mismo padding y
-   * el texto de todas las filas arranca en la misma columna. La celda necesita
-   * `position: relative` para ser el ancla. */
-  .admin__fila--ilimitado td:first-child {
-    position: relative;
-  }
-
-  .admin__fila--ilimitado td:first-child::before {
-    content: "";
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-    inline-size: 3px;
-    background: var(--color-accent);
-  }
+  /* Las filas de administración ya no llevan tinte ni franja (2026-10-01): el
+     rol se marca con la insignia «Admin» junto al nombre (`.admin-insignia`,
+     admin-nav.css). El nombre de la clase viene de cuando marcaba el acceso
+     ilimitado. */
 
   /* Nombre y correo apilados en UNA celda (2026-08-21).
    *
@@ -373,34 +359,103 @@
     cursor: pointer;
   }
 
-  /* Un botón por fila, no uno por pantalla: el `.button--outline` compartido
-     está dimensionado para acciones de página y en una celda se ve enorme. */
-  .admin__guardar {
-    padding: 0.45rem 0.9rem;
-    font-size: 0.8rem;
-    white-space: nowrap;
+  /* Un solo Guardar para toda la tabla (ya no uno por fila). El aviso aparece
+     sólo con cambios pendientes y no lleva fondo: es una línea de la página. */
+  .admin__cambios {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-block-start: 1rem;
   }
 
-  /* Deshabilitado ES el indicador de "sin cambios" de esta tabla, así que
-     tiene que leerse como apagado y no como disponible. */
-  .admin__guardar:disabled {
-    opacity: 0.45;
-    cursor: default;
+  /* `display: flex` le gana al `[hidden]` del navegador. */
+  .admin__cambios[hidden] {
+    display: none;
   }
 
-  .admin__guardar:disabled:hover {
-    border-color: var(--color-border);
-    color: var(--color-text-muted);
+  .admin__cambios-texto {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.95rem;
   }
 
-  /* La fila que está viajando. El botón ya dice "Guardando…"; esto le da el
-     mismo estado al resto de la fila, que sigue editable pero desactualizada. */
+  .admin__cambios-texto strong {
+    color: var(--color-accent);
+  }
+
+  .admin__cambios-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .admin__cambios .button {
+    color: var(--color-text);
+  }
+
+  .admin__cambios .button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* La fila con cambios sin guardar lleva un punto de acento junto al nombre. */
+  .admin__fila--cambiada .admin__usuario::before {
+    content: "";
+    display: inline-block;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 8px var(--color-accent);
+    margin-inline-end: 0.5rem;
+    vertical-align: middle;
+  }
+
+  /* La fila que está viajando: sigue editable pero desactualizada. */
   .admin__fila[aria-busy="true"] td {
     opacity: 0.6;
   }
 
   .admin__vacio {
     color: var(--color-text-muted);
+  }
+
+  /* Paginación de la tabla de cuentas: el mismo pie que la vista Base de
+     datos del entorno de Código (codigo/practica.css). */
+  .admin__paginacion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem 1rem;
+    margin-block: 0.75rem 0;
+  }
+
+  /* `display: flex` le gana al `[hidden]` del navegador: sin esto el pie
+     vacío ocuparía su margen aunque la tabla quepa en una página. */
+  .admin__paginacion[hidden] {
+    display: none;
+  }
+
+  .admin__paginacion-texto {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .admin__paginacion-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Los .button del sitio no tienen estado deshabilitado propio. */
+  .admin__paginacion-botones .button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 
   /* --- Desde dónde se usa ------------------------------------------------ */
@@ -540,9 +595,10 @@
      navegación, no un dato. La etiqueta va en el gris de las notas por lo
      mismo. */
   .admin__periodo {
-    display: inline-flex;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.4rem;
     margin-block-end: 1.25rem;
   }
 
@@ -551,9 +607,63 @@
     font-size: 0.85rem;
   }
 
+  /* `.field` se estira al 100% si no se le dice otra cosa. */
   .admin__periodo .field {
     inline-size: auto;
+    flex: 0 0 auto;
     padding: 0.45rem 0.7rem;
+  }
+
+  .admin__periodo #periodoMes {
+    min-inline-size: 9.5rem;
+  }
+
+  .admin__periodo-flecha {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-field);
+    background: transparent;
+    color: var(--color-text);
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+
+  .admin__periodo-flecha:hover {
+    border-color: var(--color-accent);
+  }
+
+  .admin__periodo-flecha:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .admin__periodo-en-curso {
+    color: var(--color-accent);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-inline-start: 0.4rem;
+  }
+
+  .admin__periodo-en-curso[hidden] {
+    display: none;
+  }
+
+  /* En celular «‹ Mes Año ›» no cabía en 358px y la flecha de adelante caía
+     sola a otro renglón. Sin el rótulo —las listas ya dicen «Mes» y «Año»
+     a quien usa lector— y con la lista de meses más angosta, las cuatro
+     piezas van juntas; «Mes en curso» es lo único que baja. */
+  @media (max-width: 760px) {
+    .admin__periodo-etiqueta {
+      display: none;
+    }
+
+    .admin__periodo #periodoMes {
+      min-inline-size: 8rem;
+    }
   }
 
   .admin__filtro-global {

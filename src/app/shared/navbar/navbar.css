@@ -198,31 +198,8 @@
     vertical-align: middle;
   }
 
-  /*
-    El menú de navegación es exclusivo de mobile: en desktop la navegación ya
-    está en la fila de enlaces (landing) o dentro del menú de cuenta (resto).
-    Se revela en el bloque de 760px, sin JS ni matchMedia de por medio.
-  */
-  .nav-menu--site {
-    display: none;
-    margin-inline-start: 0;
-  }
-
-  .nav-menu--site .nav-menu__list {
-    right: auto;
-    left: 0;
-    max-inline-size: calc(100vw - 2rem);
-  }
-
-  .nav-menu__toggle--site {
-    color: var(--color-text);
-    font-size: 1.6rem;
-    line-height: 1;
-  }
-
-  /* Ninguna de las dos variantes usa placa ni borde: el toggle de sitio es un
-     glifo suelto y el de cuenta ya trae su propio brillo vía ::before, así
-     que el reset de <button> vive acá una sola vez. */
+  /* El toggle no usa placa ni borde: el de cuenta ya trae su propio brillo
+     vía ::before, así que el reset de <button> vive acá una sola vez. */
   .nav-menu__toggle {
     position: relative;
     display: flex;
@@ -308,6 +285,32 @@
       nav-menu-bounce 6s ease-in-out infinite;
   }
 
+  /*
+    Nombre de quien inició sesión, bajo el ícono (2026-10-02). Flota fuera del
+    botón para no cambiar el alto de la barra ni hacerla saltar cuando resuelve
+    la sesión; cabe en el margen inferior de los 88px de la barra.
+  */
+  .nav-menu__nombre {
+    position: absolute;
+    inset-block-start: calc(100% + 1px);
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    max-inline-size: 7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    color: var(--color-text-muted);
+    pointer-events: none;
+    transition: color 0.25s ease;
+  }
+
+  .nav-menu__toggle--account:hover .nav-menu__nombre,
+  .nav-menu--open .nav-menu__nombre {
+    color: var(--color-text);
+  }
+
   .nav-menu__toggle--account:hover::before,
   .nav-menu--open .nav-menu__toggle--account::before {
     filter: drop-shadow(
@@ -378,6 +381,16 @@
     overflow-y: auto;
   }
 
+  /*
+    Con el nombre bajo el ícono, el menú abría encima de él (empezaba en el
+    px 76 y el nombre llega al 83). Se corre lo que mide el nombre (0.7rem de
+    letra × 1.2 de interlineado, más su px de separación). En mobile el nombre
+    va al costado y este corrimiento se anula en el bloque de 760px.
+  */
+  .nav-menu--account:has(.nav-menu__nombre) .nav-menu__list {
+    margin-top: calc(8px + 1px + 0.84rem);
+  }
+
   /* Cuando no cabe, scrollea con la misma barra que la página (ver html en
      styles.css): degradado de la marca, riel oscuro, flechas cian. */
   .nav-menu__list::-webkit-scrollbar { width: 8px; }
@@ -413,15 +426,6 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-  }
-
-  .nav-menu__header {
-    padding: 10px 14px 8px;
-    color: var(--color-accent);
-    font-weight: 700;
-    font-size: 0.85rem;
-    overflow-wrap: anywhere;
-    text-align: center;
   }
 
   /*
@@ -571,31 +575,18 @@
   }
 
   @media (max-width: 760px) {
-    .nav-menu--site {
-      display: inline-block;
-    }
-
-    /* La hamburguesa y el isotipo ya identifican la marca; el logo central
-       solo le resta espacio a los dos controles reales en un ancho chico. */
+    /*
+      En un ancho chico el isotipo del logo quedaba a centímetros del isotipo
+      de la cuenta: dos marcas iguales que son ruido. La cuenta ya identifica
+      la marca (decisión del 2026-10-02).
+    */
     .navbar__brand {
       display: none;
     }
 
-    /* Mismo criterio: en un ancho chico, tres etiquetas que ni siquiera son
-       clickeables le quitan lugar a la hamburguesa y al menú de cuenta. Se
-       ocultan acá porque son <span> sin href, así que el selector de anclas
-       de abajo no las alcanza. */
+    /* En un ancho chico, tres etiquetas que ni siquiera son clickeables le
+       quitan lugar al logo y al menú de cuenta. */
     .navbar__principios {
-      display: none;
-    }
-
-    /*
-      Las anclas de sección pasan al panel de la hamburguesa; acá solo queda el
-      contenedor con el menú de cuenta. El :not(#accessBtn) es obligatorio: en
-      las páginas sin anclas el propio #accessBtn tiene href="#" y sin la
-      exclusión quedaría oculto si el JS fallara antes de reemplazarlo.
-    */
-    .navbar__links > .navbar__link[href^="#"]:not(#accessBtn) {
       display: none;
     }
 
@@ -608,17 +599,28 @@
       margin-inline-start: 0;
     }
 
-    /* La navegación del sitio vive en la hamburguesa; el isotipo queda para cuenta. */
-    .nav-menu__group--nav {
-      display: none;
+    /*
+      En mobile la barra mide ~65px y el nombre bajo el ícono se salía 10px
+      por debajo: acá va a su izquierda, centrado en alto. El tope de ancho
+      lo pone el hueco entre el logo y el ícono a 390px (~74px).
+    */
+    .nav-menu__nombre {
+      inset-block-start: 50%;
+      inset-inline-start: auto;
+      inset-inline-end: calc(100% + 0.35rem);
+      transform: translateY(-50%);
+      max-inline-size: 4rem;
+      text-align: end;
+    }
+
+    /* Al costado el nombre no estorba: el menú vuelve a su separación base. */
+    .nav-menu--account:has(.nav-menu__nombre) .nav-menu__list {
+      margin-top: 8px;
     }
 
     /*
-      Sin enlaces de navegación arriba, el divisor quedaría como primer elemento
-      del menú de cuenta (o pegado al nombre) sin nada que separar.
+      Sin hamburguesa desde el 2026-10-02: la navegación del sitio vive en el
+      menú de cuenta en todos los tamaños, así que su grupo ya no se oculta.
     */
-    .nav-menu__group--nav + .nav-menu__divider {
-      display: none;
-    }
   }
 }

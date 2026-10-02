@@ -8,7 +8,8 @@
   con el `usuario_id`, que sí se muestra.
 
   El destino se muestra como TEXTO, no como enlace: esta pantalla existe para
-  revisar links sospechosos, y un clic distraído no debe abrir uno.
+  revisar links sospechosos, y un clic distraído no debe abrir uno. Va en un
+  campo de sólo lectura que se selecciona entero al enfocarlo.
 
   Depende de: supabase-client.js, auth.service.js, telemetry/operaciones.js,
   toast.js, confirm-dialog.js, admin-startup.js y qr.nucleo.js.
@@ -69,7 +70,7 @@
 
     const ids = [...new Set(data.map((qr) => qr.usuario_id))];
     const [perfiles, accesos] = await Promise.all([
-      porLotes(ids, (lote) => supabaseClient.from("perfiles").select("id,nombre,apellidos").in("id", lote)),
+      porLotes(ids, (lote) => supabaseClient.from("perfiles").select("id,nombre,apellidos,rol").in("id", lote)),
       porLotes(ids, (lote) => supabaseClient.from("qr_acceso")
         .select("user_id,ilimitado,bloqueado,bloqueo_motivo").in("user_id", lote)),
     ]);
@@ -124,14 +125,19 @@
   function celdaEstado(qr, estadoActual, ahora) {
     const detalle = [];
     if (estadoActual === "bloqueado") {
-      detalle.push(`${BLOQUEADO_POR[qr.bloqueado_por] ?? ""}: ${qr.bloqueo_motivo}`);
+      detalle.push(secundario(`${BLOQUEADO_POR[qr.bloqueado_por] ?? ""}: ${qr.bloqueo_motivo}`));
     } else if (estadoActual === "eliminado") {
-      detalle.push(qr.eliminado_por === "cuenta_eliminada" ? "al borrarse la cuenta" : "por su dueño");
+      detalle.push(secundario(qr.eliminado_por === "cuenta_eliminada" ? "al borrarse la cuenta" : "por su dueño"));
     } else {
-      detalle.push(tiempoRestanteQR(qr.vence_en, ahora).texto);
+      // `data-vence` le da el color con halo (qr.css): rojo si vence, verde
+      // si no. "Venció" no lleva marca y se queda en gris.
+      const { vencido, texto } = tiempoRestanteQR(qr.vence_en, ahora);
+      const tiempo = secundario(texto);
+      if (!vencido) tiempo.dataset.vence = qr.vence_en ? "pronto" : "nunca";
+      detalle.push(tiempo);
     }
-    detalle.push(`Creado ${fecha.format(new Date(qr.creado_en))}`);
-    return celda(nodo("strong", ETIQUETAS_ESTADO[estadoActual]), ...detalle.map(secundario));
+    detalle.push(secundario(`Creado ${fecha.format(new Date(qr.creado_en))}`));
+    return celda(nodo("strong", ETIQUETAS_ESTADO[estadoActual]), ...detalle);
   }
 
   function fila(qr, ahora) {
@@ -140,8 +146,19 @@
     const tienePerfil = estado.perfiles.has(qr.usuario_id);
     const tr = document.createElement("tr");
 
-    const destino = nodo("span", qr.destino, "qr-admin__destino");
+    // Campo de sólo lectura y no un enlace: se revisa el link completo y se
+    // copia con un clic (focusin lo selecciona), sin riesgo de abrirlo.
+    const destino = nodo("input", null, "field qr-admin__destino");
+    destino.type = "text";
+    destino.readOnly = true;
+    destino.value = qr.destino;
     destino.title = qr.destino;
+    destino.setAttribute("aria-label", `Destino de ${urlVisibleQR(qr.codigo)}`);
+
+    // La insignia se decide por el ID de la cuenta, no por el nombre: dos
+    // cuentas pueden llamarse igual.
+    const esAdmin = estado.perfiles.get(qr.usuario_id)?.rol === "admin";
+    const creador = nodo("span", nombreDe(qr));
 
     const cuenta = [];
     if (acceso?.bloqueado) cuenta.push(secundario(`Cuenta bloqueada: ${acceso.bloqueo_motivo}`));
@@ -176,9 +193,9 @@
     }
 
     tr.append(
+      celda(creador, esAdmin && nodo("span", "Admin", "admin-insignia"), ...cuenta),
       celda(nodo("strong", urlVisibleQR(qr.codigo)), secundario(qr.titulo || "Sin nombre")),
       celda(destino),
-      celda(nodo("span", nombreDe(qr)), ...cuenta),
       celdaEstado(qr, estadoActual, ahora),
       celda(nodo("span", String(qr.escaneos))),
       celda(nodo("span", revision), secundario(webRisk)),
@@ -358,6 +375,10 @@
       }
     });
     el("qrAdminFilas").addEventListener("click", alHacerClick);
+    // Un clic en el destino lo selecciona entero, listo para copiar.
+    el("qrAdminFilas").addEventListener("focusin", (evento) => {
+      if (evento.target.matches?.(".qr-admin__destino")) evento.target.select();
+    });
   }
 
   // --- Arranque ------------------------------------------------------------

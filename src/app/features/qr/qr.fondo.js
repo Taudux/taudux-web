@@ -8,7 +8,9 @@
   tests/colaboradores-pagina.test.js compara los literales y falla en cuanto
   uno cambie solo: si ajustas el cielo del inicio, trae el cambio también acá.
 
-  El lienzo lo posiciona qr.css (#particles-fondo, fijo detrás de todo). Si el
+  El lienzo lo posiciona qr.css (#particles-fondo, fijo detrás de todo); en las
+  tres páginas de Administración lo posiciona admin-nav.css, que carga este
+  mismo script (su observador de #qrPantalla se sale solo ahí). Si el
   CDN no carga, la página funciona igual: es atmósfera, no funcionalidad.
 
   Mientras el QR está en pantalla completa, el cielo queda tapado por el

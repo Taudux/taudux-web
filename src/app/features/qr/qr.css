@@ -616,8 +616,10 @@
   margin-block-end: 1.25rem;
 }
 
+/* Sin recuadro (admin-nav.css lo aplana): el padding lo da el espaciado de
+   la sección, para que el contenido alinee con el título. */
 .qr-admin__panel {
-  padding: 2rem;
+  padding: 0;
 }
 
 .qr-admin__control {
@@ -664,19 +666,45 @@
   white-space: nowrap;
 }
 
+/* El destino va en un campo de sólo lectura (admin.js lo selecciona entero al
+   enfocarlo): se ve el link completo desplazándolo y se copia con un clic.
+   11.5rem y no 16: con 16 la columna Acciones quedaba 61px fuera de la tabla
+   a 1240px de ancho. */
 .qr-admin__destino {
-  display: block;
-  max-inline-size: 16rem;
-  overflow: hidden;
+  inline-size: 11.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
   color: var(--color-text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* «Vence en 6 días 20 h» partía en cuatro renglones en la columna Estado
+   (la cuarta: Creado por, QR, Destino, Estado). */
+.qr-admin__tabla th:nth-child(4),
+.qr-admin__tabla td:nth-child(4) {
+  min-inline-size: 9rem;
 }
 
 .qr-admin__secundario {
   display: block;
   color: var(--color-text-subtle);
   font-size: 0.8rem;
+}
+
+/* El tiempo de un QR activo, con halo (2026-10-01): rojo si vence, verde si
+   no vence. Es lo primero que se busca al moderar, y en gris se perdía entre
+   el "Creado …" de abajo. El halo es estático: nada aquí se anima. */
+.qr-admin__secundario[data-vence="pronto"] {
+  color: #ff6b70;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--color-error) 85%, transparent),
+    0 0 14px color-mix(in srgb, var(--color-error) 50%, transparent);
+}
+
+.qr-admin__secundario[data-vence="nunca"] {
+  color: #3ef08a;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--color-success) 85%, transparent),
+    0 0 14px color-mix(in srgb, var(--color-success) 50%, transparent);
 }
 
 .qr-admin__acciones {

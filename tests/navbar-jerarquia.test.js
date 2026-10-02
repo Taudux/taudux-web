@@ -243,6 +243,7 @@ test("neither Tools page is offered to search engines", () => {
     "src/app/features/transactions/index.html": "transactions",
     "src/app/features/qr/index.html": "features/qr/",
     "src/app/features/qr/admin.html": "features/qr/admin",
+    "src/app/features/admin/usuarios.html": "features/admin/usuarios",
   };
 
   // Estar fuera del sitemap no impide indexar: no listar algo no le pide a
@@ -284,9 +285,37 @@ test("the navbar resolves the profile once and reuses it for both role and name"
   );
 });
 
+test("the signed-in name shows under the account icon, hidden from screen readers", () => {
+  /*
+    2026-10-02: el nombre a la vista bajo el ícono, para saber quién inició
+    sesión sin abrir el menú. Sólo con sesión (sin ella el ícono pulsa como
+    invitación), por textContent (el nombre lo escribe el usuario) y oculto al
+    lector de pantalla, que ya lo oye en el aria-label «Cuenta: <nombre>».
+  */
+  const fuente = read("src/app/shared/navbar/navbar.js");
+  const bloque = fuente.match(/if \(session && nombreCuenta\) \{([\s\S]*?)\n    \}/);
+  assert.ok(bloque, "el nombre se pinta sólo con sesión");
+  assert.match(bloque[1], /className = "nav-menu__nombre"/);
+  assert.match(bloque[1], /setAttribute\("aria-hidden", "true"\)/);
+  assert.match(bloque[1], /textContent = nombreCuenta/);
+  assert.match(bloque[1], /toggle\.appendChild\(/);
+  assert.doesNotMatch(bloque[1], /innerHTML/);
+  // El nombre ya no se repite como encabezado dentro del menú.
+  assert.doesNotMatch(fuente, /nav-menu__header/);
+
+  const css = read("src/app/shared/navbar/navbar.css");
+  const regla = css.match(/\.nav-menu__nombre\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(regla, /position:\s*absolute/, "flota: no cambia el alto de la barra");
+  assert.match(regla, /text-overflow:\s*ellipsis/);
+  assert.match(regla, /white-space:\s*nowrap/);
+
+  // El menú abierto no tapa el nombre: se corre lo que el nombre mide.
+  assert.match(css, /\.nav-menu--account:has\(\.nav-menu__nombre\) \.nav-menu__list\s*\{[^}]*margin-top:\s*calc\(/);
+});
+
 test("the navbar is resolved by class, not by id", () => {
   /*
-    montarNavegacionMovil() (:441) ya resolvía la barra con querySelector(".navbar");
+    El navbar ya resolvía la barra con querySelector(".navbar") en otro punto;
     la función que calcula el estado por scroll seguía usando getElementById("navbar"),
     una contradicción dentro del mismo archivo (design.md §3.2). El id se borra
     del markup en esta fase: esta línea era su único consumidor en todo el repo.
@@ -364,17 +393,17 @@ test("the toggle's aria-controls matches the panel's id", () => {
   assert.equal(toggle.attributes["aria-controls"], panel.id);
 });
 
-test("the same group texto produces different panel ids under different prefijoId, so mobile and desktop never collide", () => {
+test("the same group texto produces different panel ids under different prefijoId, so two panels never collide", () => {
   const { crearAcordeonMenu, ENLACES_NAVEGACION_BASE } = cargarNavbar();
   const academy = ENLACES_NAVEGACION_BASE.find((enlace) => enlace.texto === "Academy");
 
-  const nodoMobile = crearAcordeonMenu(academy, { registroDeCierres: [], prefijoId: "menuNavegacionLista" });
+  const nodoOtro = crearAcordeonMenu(academy, { registroDeCierres: [], prefijoId: "otroPanelLista" });
   const nodoCuenta = crearAcordeonMenu(academy, { registroDeCierres: [], prefijoId: "menuCuentaLista" });
 
-  const panelMobile = nodoMobile.children.find((hijo) => hijo.className.includes("nav-menu__accordion-panel"));
+  const panelOtro = nodoOtro.children.find((hijo) => hijo.className.includes("nav-menu__accordion-panel"));
   const panelCuenta = nodoCuenta.children.find((hijo) => hijo.className.includes("nav-menu__accordion-panel"));
 
-  assert.notEqual(panelMobile.id, panelCuenta.id);
+  assert.notEqual(panelOtro.id, panelCuenta.id);
 });
 
 /* crearItemMenu: indentación (camino de las hojas, sin hijos). */
@@ -526,16 +555,16 @@ test("no feature script writes over the navbar's own menu", () => {
   });
 });
 
-test("the shared menu no longer offers the admin panel; the extractor page does", () => {
+test("the admin panel heads the shared menu, only for admins", () => {
   /*
-    Estuvo en el menú de cuenta de todo el sitio del 2026-08-20 al 2026-09-24,
-    encabezando los enlaces. Se sacó a pedido: el panel administra el
-    extractor, y ahora vive en esa página como la píldora "⚙ Administración" (ver
-    tests/extractor-descargas.test.js). Costo asumido: desde Cursos o el Portal
-    ya no se llega por el menú.
+    Estuvo en el menú de cuenta del 2026-08-20 al 2026-09-24, encabezando los
+    enlaces; de ahí pasó a una píldora en la página del extractor ("administra
+    el extractor, no el sitio"), y el 2026-10-01 volvió al menú a pedido, para
+    llegar desde cualquier página. La píldora se retiró (ver
+    tests/extractor-descargas.test.js).
 
-    Se fija la ausencia para que nadie la devuelva al menú sin decidirlo: el
-    array es un literal y agregar una entrada no rompe nada por sí solo.
+    Se fija el lugar para que nadie lo mueva sin decidirlo: el array es un
+    literal y cambiarlo de sitio no rompe nada por sí solo.
   */
   const { ENLACES_NAVEGACION_BASE, filtrarEnlacesVisibles } = cargarNavbar();
 
@@ -547,14 +576,20 @@ test("the shared menu no longer offers the admin panel; the extractor page does"
   const lleva = (enlace) =>
     /administraci/i.test(enlace.texto || "") || /admin\.html/.test(enlace.href || "");
 
-  assert.ok(!aplanar(ENLACES_NAVEGACION_BASE).some(lleva),
-    "el menú compartido no debe ofrecer el panel de administración");
+  const [primero] = ENLACES_NAVEGACION_BASE;
+  assert.ok(lleva(primero), "el panel de administración encabeza el menú");
+  assert.equal(primero.texto, "Administración");
+  // Lleva a Usuarios, la primera sección de Administración (2026-10-02).
+  assert.equal(primero.href, "/app/features/admin/usuarios.html");
+  assert.equal(primero.habilitado, true);
+  assert.equal(primero.soloAdmin, true, "sólo el admin lo ve");
+  assert.equal(aplanar(ENLACES_NAVEGACION_BASE).filter(lleva).length, 1, "un solo acceso en el menú");
 
-  // Ni siquiera para un admin: el primer enlace de su menú es "Mi cuenta".
-  assert.equal(
-    filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin: true, haySesion: true })[0].texto,
-    "Mi cuenta"
-  );
+  const visibles = (esAdmin) =>
+    aplanar(filtrarEnlacesVisibles(ENLACES_NAVEGACION_BASE, { esAdmin, haySesion: true }));
+  assert.ok(lleva(visibles(true)[0]), "para un admin es lo primero del menú");
+  assert.ok(!visibles(false).some(lleva), "para los demás no aparece");
+  assert.equal(visibles(false)[0].texto, "Mi cuenta", "y su menú sigue empezando por Mi cuenta");
 });
 
 test("every page that mounts the navbar loads the stylesheets it needs", () => {
@@ -640,8 +675,8 @@ test("the dropdown grows to the window height instead of a fixed cap", () => {
     barra de scroll aparece sólo cuando de verdad no cabe.
   */
   const css = sinComentariosCss(read("src/app/shared/navbar/navbar.css"));
-  // Anclada al inicio de la línea: `.nav-menu--site .nav-menu__list {` también
-  // contiene el texto y aparece antes en el archivo.
+  // Anclada al inicio de la línea: un selector compuesto que termine en
+  // `.nav-menu__list {` no debe confundirse con la regla base.
   const regla = css.match(/(?:^|\n)\s*\.nav-menu__list\s*\{([^}]*)\}/);
   assert.ok(regla, "falta la regla .nav-menu__list");
   const cuerpo = regla[1];

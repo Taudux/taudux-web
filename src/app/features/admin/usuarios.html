@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Fuera de buscadores: acá se ve el padrón de cuentas del sitio. -->
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/images/1.png">
+  <title>Usuarios | Taudux</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/app/shared/floating-menu/floating-menu.css">
+  <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
+  <link rel="stylesheet" href="/app/shared/button/button.css">
+  <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/toast/toast.css">
+  <!-- El arranque de administración (#adminStartup) reusa el markup de las
+       pantallas de cursos, y sus estilos viven acá: mismo criterio que las
+       otras dos páginas de Administración. -->
+  <link rel="stylesheet" href="/app/features/courses/gestionar-cursos.css">
+  <link rel="stylesheet" href="/app/shared/admin-nav/admin-nav.css">
+  <link rel="stylesheet" href="/app/features/admin/usuarios.css">
+  <script defer src="/app/core/analytics/ga4.js"></script>
+</head>
+
+<body>
+  <!-- Estrellas de fondo: qr.fondo.js las carga en este div (admin-nav.css lo
+       posiciona). -->
+  <div id="particles-fondo" aria-hidden="true"></div>
+
+  <nav class="navbar" id="adminNavbar" aria-label="Navegación principal" hidden>
+    <a href="/" class="navbar__brand">
+      <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
+    </a>
+    <div class="navbar__links navbar__links--visible navbar__links--simple">
+      <a href="#" id="accessBtn" class="navbar__link button button--access">Salir</a>
+    </div>
+  </nav>
+
+  <main class="usuarios">
+    <div class="usuarios__container u-contenedor">
+
+      <!-- Arranque compartido: exige sesión, exige rol admin, y sólo entonces
+           revela #adminContent. El gate real es la RLS de `perfiles` (0031);
+           esto es la puerta de UX. -->
+      <section class="courses__startup-status panel panel--spacious" id="adminStartup" role="status"
+        aria-live="polite" aria-busy="true" tabindex="-1">
+        <div class="courses__startup-loader" id="adminStartupLoader" aria-hidden="true"></div>
+        <p class="courses__startup-announcement" id="adminStartupLoadingMessage">
+          Cargando los usuarios.
+        </p>
+        <div class="courses__startup-error" id="adminStartupError" hidden>
+          <h2 class="courses__subtitle" id="adminStartupTitle">
+            No se pudo abrir la página de usuarios
+          </h2>
+          <p class="courses__startup-message" id="adminStartupMessage"></p>
+          <div class="courses__startup-actions">
+            <button class="button button--outline" type="button" id="adminStartupRetry" hidden>Reintentar</button>
+            <a class="button button--outline" href="/">Volver al inicio</a>
+          </div>
+        </div>
+      </section>
+
+      <noscript>
+        <p class="usuarios__noscript panel">Necesitas habilitar JavaScript para ver los usuarios.</p>
+      </noscript>
+
+      <div class="admin-layout" id="adminContent" hidden>
+        <!-- Menú de la sección Administración: el mismo en las tres páginas
+             de admin (admin/usuarios.html, transactions/admin.html y
+             qr/admin.html), con aria-current en la propia. Lo fija
+             tests/admin-nav.test.js. -->
+        <nav class="admin-nav" aria-label="Secciones de administración">
+          <p class="admin-nav__titulo" aria-hidden="true">Administración</p>
+          <a class="admin-nav__link" href="/app/features/admin/usuarios.html" aria-current="page">Usuarios</a>
+          <a class="admin-nav__link" href="/app/features/transactions/admin.html">Extractor</a>
+          <a class="admin-nav__link" href="/app/features/qr/admin.html">QR</a>
+        </nav>
+
+        <div class="admin-layout__contenido">
+          <header class="admin-cabecera">
+            <h1 class="admin-cabecera__titulo">
+              Usuarios
+              <span class="usuarios__total" id="usuariosTotal"></span>
+            </h1>
+            <p class="admin-cabecera__intro">
+              Las cuentas registradas en el sitio: cuántas entran y cuántas se
+              van en cada periodo, y quién es cada una.
+            </p>
+          </header>
+
+          <!-- La gráfica la dibuja usuarios.js (SVG propio, sin librerías). -->
+          <section class="panel panel--spacious" aria-labelledby="usuariosGraficaTitulo">
+            <div class="usuarios__grafica-cabecera">
+              <h2 class="courses__subtitle" id="usuariosGraficaTitulo">Registros por semana</h2>
+              <div class="usuarios__zoom" role="group" aria-label="Nivel de la gráfica">
+                <button type="button" class="button button--outline" id="usuariosAlejar"
+                  aria-label="Alejar">&minus;</button>
+                <button type="button" class="button button--outline" id="usuariosAcercar"
+                  aria-label="Acercar">+</button>
+              </div>
+            </div>
+            <ul class="usuarios__leyenda" aria-label="Leyenda">
+              <li><span class="usuarios__muestra usuarios__muestra--altas" aria-hidden="true"></span>Cuentas nuevas</li>
+              <li><span class="usuarios__muestra usuarios__muestra--bajas" aria-hidden="true"></span>Eliminadas</li>
+              <li><span class="usuarios__muestra usuarios__muestra--linea" aria-hidden="true"></span>Cuentas al cierre</li>
+            </ul>
+            <div class="usuarios__grafica" id="usuariosGrafica">
+              <div class="usuarios__lienzo" id="usuariosLienzo">
+                <p class="usuarios__vacio">Cargando…</p>
+              </div>
+              <div class="usuarios__tooltip" id="usuariosTooltip" role="status" hidden></div>
+            </div>
+          </section>
+
+          <section class="panel panel--spacious" aria-labelledby="usuariosListaTitulo">
+            <h2 class="courses__subtitle" id="usuariosListaTitulo">Cuentas</h2>
+            <div class="usuarios__lista" id="usuariosLista" aria-live="polite">
+              <p class="usuarios__vacio">Cargando…</p>
+            </div>
+            <!-- Fuera de la lista: la lista scrollea en horizontal cuando la
+                 tabla no cabe, y el pie no tiene que irse con ella. Nace
+                 oculto; lo pinta usuarios.js. -->
+            <div class="usuarios__paginacion" id="usuariosPaginacion" hidden></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="/app/core/auth/auth.service.js"></script>
+  <script src="/app/core/telemetry/operaciones.js"></script>
+  <script src="/app/shared/navbar/navbar.js"></script>
+  <script src="/app/shared/toast/toast.js"></script>
+  <script src="/app/features/courses/admin-startup.js"></script>
+  <!-- Para el correo: vive en auth.users y sólo lo entrega el servidor del
+       extractor (`GET /api/admin/perfiles`, admin-only en Cloud Run), el
+       mismo que lo pone en «Gestión del extractor». -->
+  <script src="/app/features/transactions/api-cliente.js"></script>
+  <script src="/app/features/admin/usuarios.nucleo.js"></script>
+  <script src="/app/features/admin/usuarios.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script src="/app/features/qr/qr.fondo.js"></script>
+</body>
+
+</html>
