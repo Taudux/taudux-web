@@ -466,8 +466,10 @@
         return;
       }
       estado.sesion = sesion;
-      const [administrador] = await Promise.all([esAdmin(sesion).catch(() => false), cargar()]);
-      el("qrModeracion").hidden = administrador !== true;
+      // Sin botón «Moderación» desde el 2026-10-02: la moderación se abre desde
+      // Administración (menú de la cuenta → QR), así que acá no hace falta
+      // preguntar si quien entra es administrador.
+      await cargar();
       pintar();
       setInterval(tic, INTERVALO_RELOJ_MS);
     } catch (error) {

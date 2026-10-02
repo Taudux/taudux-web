@@ -515,7 +515,7 @@ test("its stylesheet pays for the top offset that cursos.css never delivered", (
 
     El contenido SIEMPRE arrancó debajo de la barra. No se notaba porque lo
     primero era el aviso de accesos temporales, que nadie extrañaba tapado; al
-    quedar "Usuarios del sitio" en cabeza (2026-08-20) el título apareció
+    quedar "Usuarios del sitio" (hoy "Gestión del extractor") en cabeza (2026-08-20) el título apareció
     cortado. El defecto es viejo, el borrado sólo lo destapó.
 
     Lo que se fija acá es de QUIÉN es el offset, no cuánto mide: esta hoja
@@ -546,8 +546,8 @@ test("the scroll box can actually clip what it scrolls", () => {
     cumplirlo: **`overflow` sólo recorta lo que cae dentro de su cadena de
     bloques contenedores.**
 
-    Dentro del `<th>` del botón vive un `<span class="u-visually-hidden">Guardar
-    cambios</span>`, que es `position: absolute` (`src/styles.css:201`). Sin un
+    Antes, dentro del `<th>` del botón vivía un `<span class="u-visually-hidden">Guardar
+    cambios</span>` (hoy la tabla ya no tiene esa columna), que era `position: absolute` (`src/styles.css:201`). Sin un
     ancestro posicionado, su bloque contenedor terminaba siendo la `<section>`,
     fuera del contenedor con scroll — así que no se recortaba: se plantaba en el
     extremo derecho de una tabla de 832px y estiraba el DOCUMENTO entero.
@@ -578,8 +578,8 @@ test("the scroll box can actually clip what it scrolls", () => {
 test("the wide-table floor belongs to the profile table alone", () => {
   /*
     `.admin__tabla` la comparten DOS tablas con necesidades opuestas: la de
-    perfiles (5 columnas editables, que pidió el mínimo ancho para que "Guardar"
-    no parta su texto) y la de métricas por banco (3 columnas, 366px de
+    perfiles (4 columnas editables, que pidió el mínimo ancho para que sus
+    celdas no se partan) y la de métricas por banco (3 columnas, 366px de
     max-content medidos — nunca necesitó más).
 
     Con el mínimo en la clase compartida, la tabla de bancos heredaba 832px
@@ -678,7 +678,8 @@ test("its stylesheet keeps only the rules the profile list still uses", () => {
     ".admin__ayuda",
     ".admin__numero",
     ".admin__toggle",
-    ".admin__guardar",
+    ".admin__cambios",
+    ".admin__fila--cambiada",
     ".admin__consumo",
   ].forEach((selector) => {
     assert.ok(css.includes(selector), `${selector} sigue en uso: no se borra`);
@@ -960,7 +961,7 @@ test("the panel no longer says WHO used it and WHEN", () => {
 
     Lo que la sección aportaba de operativo ya vivía en otro lado:
 
-      · cuántas hizo cada cuenta → la tabla "Usuarios del sitio", donde sirve
+      · cuántas hizo cada cuenta → la tabla "Gestión del extractor", donde sirve
         para ajustar los límites;
       · desde dónde → "Distribución Geográfica", en agregado.
 
@@ -1563,7 +1564,7 @@ test("the panel warns when the sample is too small to read a trend", () => {
  * otras dos seguían contando las pruebas de administración mientras el control
  * decía "excluir" — la misma clase de mentira que costó el bug 58 ↔ 7.
  *
- * Tres de las cuatro secciones lo honran. La cuarta —"Usuarios del sitio"— NO,
+ * Tres de las cuatro secciones lo honran. La cuarta —"Gestión del extractor"— NO,
  * y es deliberado: los gráficos MIDEN uso, la tabla ADMINISTRA cuentas. Ocultar
  * filas ahí te esconde tu propia fila y con ella el botón de editar tus
  * límites.
@@ -2204,20 +2205,125 @@ test("an older server that cannot filter says so instead of lying", () => {
      servidor decía septiembre. Un `max` calculado con `new Date()` local
      ofrecería un mes que el servidor considera futuro, o negaría el actual.
 */
-test("the admin panel can look back: a month selector ruled by the server clock", () => {
+test("the admin panel can look back: month and year selects ruled by the server clock", () => {
   const html = sinComentariosHtml(read(PAGINA));
 
-  assert.match(html, /id="selectorPeriodo"/, "falta el selector de mes");
-  const input = html.match(/<input[^>]*id="selectorPeriodo"[^>]*>/)?.[0] ?? "";
-  assert.ok(input, "el selector debe ser un <input>");
-  assert.match(input, /type="month"/, "de tipo month: el grano del panel es el mes");
+  ["periodoMes", "periodoAnio", "periodoAnterior", "periodoSiguiente"].forEach((id) => {
+    assert.match(html, new RegExp(`id="${id}"`), `falta #${id}`);
+  });
+  assert.doesNotMatch(html, /type="month"/,
+    "el <input type=month> se reemplazó por dos selects con flechas");
 
   const js = sinComentariosJs(read(SCRIPT));
 
   assert.match(js, /periodo=\$\{/,
     "el fetch debe poder llevar el mes elegido en la URL");
-  assert.match(js, /\.max\s*=\s*[a-zA-Z_$.]*periodo/,
-    "el tope del selector sale del periodo que echa el servidor");
-  assert.match(js, /\.value\s*=\s*[a-zA-Z_$.]*periodo/,
-    "y el valor inicial también: el reloj del cliente no opina");
+  assert.match(js, /periodoServidor\s*=\s*periodo/,
+    "el mes en curso y el tope salen del periodo que echa el servidor");
+
+  // Sólo las funciones del selector: otras partes del archivo sí usan Date
+  // (la serie diaria), y esa no es la regla del tope.
+  const inicio = js.indexOf("function mesVecino(");
+  const fin = js.indexOf("function cambiarPeriodo(");
+  assert.ok(inicio !== -1 && fin > inicio, "faltan las funciones del selector");
+  assert.doesNotMatch(js.slice(inicio, fin), /new Date|Date\.now/,
+    "el reloj del cliente no opina sobre el mes en curso ni el tope");
+});
+
+function cargarFuncionPura(nombre) {
+  const js = read(SCRIPT);
+  const inicio = js.indexOf(`function ${nombre}(`);
+  assert.notEqual(inicio, -1, `falta ${nombre} en admin.js`);
+  const fin = js.indexOf("\n  }\n", inicio) + 4;
+  return new Function(`${js.slice(inicio, fin)}; return ${nombre};`)();
+}
+
+test("mesVecino moves a YYYY-MM month and crosses year boundaries", () => {
+  const mesVecino = cargarFuncionPura("mesVecino");
+  assert.equal(mesVecino("2026-10", -1), "2026-09");
+  assert.equal(mesVecino("2026-01", -1), "2025-12");
+  assert.equal(mesVecino("2026-12", 1), "2027-01");
+});
+
+test("acotarMes clamps a month between the oldest profile and the server month", () => {
+  const acotarMes = cargarFuncionPura("acotarMes");
+  assert.equal(acotarMes("2027-10", "2026-07", "2026-10"), "2026-10");
+  assert.equal(acotarMes("2026-03", "2026-07", "2026-10"), "2026-07");
+  assert.equal(acotarMes("2026-08", "2026-07", "2026-10"), "2026-08");
+});
+
+test("one Guardar for the whole accounts table", () => {
+  const html = sinComentariosHtml(read(PAGINA));
+  const js = sinComentariosJs(read(SCRIPT));
+
+  const aviso = html.indexOf(`id="cambiosPerfiles"`);
+  assert.notEqual(aviso, -1, "falta #cambiosPerfiles");
+  assert.match(html.slice(aviso, aviso + 40), /hidden/, "el aviso nace oculto");
+  assert.ok(aviso < html.indexOf(`id="paginacionPerfiles"`),
+    "el aviso va antes del pie de paginación");
+
+  ["guardarCambios", "validarFila", "enviarFila", "descartarCambios"].forEach((f) => {
+    assert.match(js, new RegExp(`function ${f}\\(`), `falta ${f}`);
+  });
+  assert.ok(!js.includes("admin__guardar"), "ya no hay botón por fila");
+
+  const desde = js.indexOf("async function guardarCambios(");
+  const cuerpo = js.slice(desde, js.indexOf("\n  }\n", desde));
+  const validar = cuerpo.indexOf("validarFila(");
+  const enviar = cuerpo.indexOf("enviarFila(");
+  assert.ok(validar !== -1 && enviar !== -1 && validar < enviar,
+    "se valida todo antes del primer envío");
+  assert.match(cuerpo, /for \([^)]*\)[\s\S]*await enviarFila\(/,
+    "los envíos son en serie");
+});
+
+/* ------------------------------------------------------------------------
+ * La tabla de cuentas se pagina de 6 en 6 (2026-10-01).
+ *
+ * `admin.js` es un IIFE sin exports: la función pura del rango se saca del
+ * fuente y se evalúa sola, y el resto se fija leyendo el código, como los
+ * demás tests de este archivo.
+ * ------------------------------------------------------------------------ */
+
+function cargarRangoDePagina() {
+  const js = read(SCRIPT);
+  const inicio = js.indexOf("function rangoDePagina(");
+  assert.notEqual(inicio, -1, "falta rangoDePagina en admin.js");
+  const fin = js.indexOf("\n  }\n", inicio) + 4;
+  return new Function(`${js.slice(inicio, fin)}; return rangoDePagina;`)();
+}
+
+test("the accounts table shows 6 rows per page", () => {
+  assert.match(read(SCRIPT), /const FILAS_POR_PAGINA = 6;/);
+});
+
+test("rangoDePagina splits 26 accounts into five pages of 6", () => {
+  const rango = cargarRangoDePagina();
+  assert.deepEqual(rango(26, 0, 6), { pagina: 0, totalPaginas: 5, desde: 1, hasta: 6 });
+  assert.deepEqual(rango(26, 1, 6), { pagina: 1, totalPaginas: 5, desde: 7, hasta: 12 });
+  assert.deepEqual(rango(26, 4, 6), { pagina: 4, totalPaginas: 5, desde: 25, hasta: 26 });
+});
+
+test("rangoDePagina clamps a page that no longer exists and handles small lists", () => {
+  const rango = cargarRangoDePagina();
+  // Otro mes con menos cuentas: la página pedida se acota a la última.
+  assert.deepEqual(rango(8, 4, 6), { pagina: 1, totalPaginas: 2, desde: 7, hasta: 8 });
+  assert.deepEqual(rango(26, -1, 6).pagina, 0);
+  assert.deepEqual(rango(6, 0, 6), { pagina: 0, totalPaginas: 1, desde: 1, hasta: 6 });
+  assert.deepEqual(rango(0, 0, 6), { pagina: 0, totalPaginas: 1, desde: 0, hasta: 0 });
+});
+
+test("the pager sits outside the scrolling list and hides when one page is enough", () => {
+  const pagina = sinComentariosHtml(read(PAGINA));
+  assert.match(pagina, /id="listaPerfiles"[^>]*>[\s\S]*?<\/div>\s*<div class="admin__paginacion" id="paginacionPerfiles" hidden><\/div>/,
+    "el pie va justo después de la lista, no dentro: la lista scrollea en horizontal");
+  // `.admin__paginacion` declara `display: flex`, que le gana al `[hidden]`.
+  assert.match(sinComentariosCss(read(HOJA)), /\.admin__paginacion\[hidden\]\s*\{\s*display:\s*none;/);
+
+  const js = sinComentariosJs(read(SCRIPT));
+  assert.match(js, /‹ Anterior/);
+  assert.match(js, /Siguiente ›/);
+  assert.match(js, /Cuentas \$\{rango\.desde\}–\$\{rango\.hasta\} de \$\{filas\.length\}/);
+  // Se esconden filas, no se repintan: lo tecleado sin guardar sobrevive.
+  assert.match(js, /fila\.hidden = /);
 });

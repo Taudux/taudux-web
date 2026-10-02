@@ -11,13 +11,22 @@
   índice (ver crearAcordeonMenu).
 */
 /*
-  El "Panel de administración" encabezó esta lista del 2026-08-20 al
-  2026-09-24. Ya no está en el menú: vive en la página de transacciones como la
-  píldora "⚙ Administración" (ver `#enlaceAdmin` en features/transactions/), porque
-  administra el extractor y no el sitio. Su ausencia la fija
-  tests/navbar-jerarquia.test.js.
+  El panel de administración del extractor encabeza esta lista, sólo para
+  admin. Historia: estuvo aquí del 2026-08-20 al 2026-09-24; ese día se sacó
+  a una píldora "⚙ Administración" en la página de transacciones, porque
+  administra el extractor y no el sitio; el 2026-10-01 volvió al menú a pedido,
+  para llegar desde cualquier página, y la píldora se retiró. Desde el
+  2026-10-02 lleva a Usuarios, la primera sección del menú lateral de
+  Administración (Usuarios, Extractor, QR), y no al extractor directo. Su
+  lugar lo fija tests/navbar-jerarquia.test.js.
 */
 const ENLACES_NAVEGACION_BASE = [
+  {
+    texto: "Administración",
+    href: "/app/features/admin/usuarios.html",
+    habilitado: true,
+    soloAdmin: true,
+  },
   {
     /*
       `soloSesion` porque el portal es lo único del menú que exige sesión
@@ -90,9 +99,8 @@ const ENLACES_NAVEGACION_BASE = [
   Los criterios viajan en un objeto y no como booleanos sueltos: en la llamada,
   `filtrar(enlaces, false, true)` no dice cuál es cuál.
 
-  Devuelve copias: ENLACES_NAVEGACION_BASE es un módulo compartido entre los dos
-  paneles (mobile y cuenta), y filtrarlo en el lugar dejaría el menú recortado
-  para el siguiente montaje.
+  Devuelve copias: ENLACES_NAVEGACION_BASE es un módulo compartido, y filtrarlo
+  en el lugar dejaría el menú recortado para el siguiente montaje.
 */
 function filtrarEnlacesVisibles(enlaces, { esAdmin, haySesion }) {
   return enlaces
@@ -270,10 +278,8 @@ function crearItemMenu({ texto, href, alHacerClick, destacado, habilitado = true
 
 /*
   Combina el prefijo del contenedor padre (idLista del desplegable:
-  "menuNavegacionLista" en mobile, "menuCuentaLista" en la cuenta de
-  escritorio) con el texto normalizado del grupo, para que un mismo grupo
-  ("Academy", "Tools") no choque de id entre ambos paneles: los dos conviven
-  en el mismo documento y aria-controls exige unicidad.
+  "menuCuentaLista" en la cuenta) con el texto normalizado del grupo, para
+  que el id del panel sea único en el documento: aria-controls lo exige.
 */
 function idDePanelAcordeon(prefijoId, texto) {
   const slug = texto
@@ -291,11 +297,10 @@ function idDePanelAcordeon(prefijoId, texto) {
   de un <a> (`evento.target.closest("a")`), y un botón no matchea ese
   selector, así que expandir el grupo no cierra el desplegable completo.
 
-  `registroDeCierres` es un array local del panel que llama a esta función
-  (uno por cada punto de render: panel mobile, grupo de cuenta), NO el
-  `cerradoresDeDesplegables` global de arriba — ese resuelve la exclusión
-  mutua entre los paneles "site" y "account"; este resuelve la exclusión
-  mutua entre Academy y Tools dentro de un mismo panel.
+  `registroDeCierres` es un array local del panel que llama a esta función,
+  NO el `cerradoresDeDesplegables` global de arriba — ese resuelve la
+  exclusión mutua entre desplegables; este, la exclusión mutua entre Academy
+  y Tools dentro de un mismo panel.
 */
 function crearAcordeonMenu({ texto, hijos }, { registroDeCierres, prefijoId }) {
   const contenedor = document.createElement("div");
@@ -363,77 +368,6 @@ async function nombreParaMenu(session, perfil) {
   return nombre || "Mi cuenta";
 }
 
-/*
-  Las anclas salen del DOM, no de una constante: el markup de index.html sigue
-  siendo la única fuente de esas secciones y no hay riesgo de que las dos copias
-  se desincronicen. En páginas sin anclas devuelve [] y el panel arranca directo
-  con los enlaces del sitio.
-*/
-function anclasDeLaPagina() {
-  const anclas = document.querySelectorAll('.navbar__links .navbar__link[href^="#"]');
-  return Array.from(anclas)
-    .filter((ancla) => ancla.id !== "accessBtn")
-    .map((ancla) => ({
-      texto: ancla.textContent.trim(),
-      href: ancla.getAttribute("href"),
-    }));
-}
-
-function montarPanelNavegacion(lista, { anclas, enlaces }) {
-  // `enlaces` llega con `hijos` tal cual está en ENLACES_NAVEGACION_BASE: el
-  // dedupe y el render operan directo sobre ese array de nivel superior, sin
-  // aplanar (ver crearAcordeonMenu).
-  const textosDeAnclas = new Set(anclas.map((ancla) => ancla.texto.toLowerCase()));
-  /*
-    "Herramientas" puede existir a la vez como ancla del landing y como enlace
-    del sitio. Si el ancla ya ocupa ese texto, el enlace se omite: dos entradas
-    con el mismo nombre y distinto destino son indistinguibles.
-  */
-  const enlacesSinRepetir = enlaces.filter(
-    (enlace) => !textosDeAnclas.has(enlace.texto.toLowerCase())
-  );
-
-  anclas.forEach((ancla) => lista.appendChild(crearItemMenu(ancla)));
-
-  if (anclas.length && enlacesSinRepetir.length) {
-    const divisor = document.createElement("hr");
-    divisor.className = "nav-menu__divider";
-    lista.appendChild(divisor);
-  }
-
-  // Registro propio de este panel: la exclusión mutua entre Academy y Tools
-  // no se comparte con el grupo de cuenta (otro punto de render, ver
-  // montarMenus) ni con cerradoresDeDesplegables (otro concern).
-  const registroDeCierres = [];
-  enlacesSinRepetir.forEach((enlace) => {
-    if (enlace.hijos && enlace.hijos.length) {
-      lista.appendChild(crearAcordeonMenu(enlace, { registroDeCierres, prefijoId: lista.id }));
-    } else {
-      lista.appendChild(crearItemMenu(enlace));
-    }
-  });
-}
-
-/*
-  Shell síncrono: el botón se monta en DOMContentLoaded con su tamaño final para
-  que el brand no salte cuando resuelve la sesión. El contenido de la lista lo
-  completa montarMenus() después, con los datos de sesión ya resueltos.
-*/
-function montarNavegacionMovil() {
-  const navbar = document.querySelector(".navbar");
-  if (!navbar || !navbar.querySelector(".navbar__links")) return;
-
-  const { menu, toggle, lista } = crearDesplegable({
-    clase: "site",
-    idLista: "menuNavegacionLista",
-    etiqueta: "Menú de navegación",
-  });
-  toggle.textContent = "☰";
-
-  navbar.prepend(menu);
-  conectarDesplegable({ menu, toggle, lista });
-}
-
 async function montarMenus() {
   const boton = document.getElementById("accessBtn");
   if (!boton) return;
@@ -456,14 +390,6 @@ async function montarMenus() {
       haySesion: Boolean(session),
     });
 
-    const listaNavegacion = document.getElementById("menuNavegacionLista");
-    if (listaNavegacion) {
-      montarPanelNavegacion(listaNavegacion, {
-        anclas: anclasDeLaPagina(),
-        enlaces: enlacesNavegacion,
-      });
-    }
-
     const nombreCuenta = await nombreParaMenu(session, perfil);
 
     const { menu, toggle, lista } = crearDesplegable({
@@ -473,22 +399,29 @@ async function montarMenus() {
     });
     toggle.classList.toggle("nav-menu__toggle--pulsing", !session);
 
-    if (nombreCuenta) {
-      const encabezado = document.createElement("div");
-      encabezado.className = "nav-menu__header";
-      encabezado.textContent = nombreCuenta;
-      lista.appendChild(encabezado);
+    /*
+      Quién inició sesión, a la vista bajo el ícono (2026-10-02). Reemplaza al
+      encabezado con el nombre que abría el menú: repetirlo ahí sobraba. Va
+      oculto al lector de pantalla: el aria-label del botón ya dice
+      «Cuenta: <nombre>».
+    */
+    if (session && nombreCuenta) {
+      const nombreVisible = document.createElement("span");
+      nombreVisible.className = "nav-menu__nombre";
+      nombreVisible.setAttribute("aria-hidden", "true");
+      nombreVisible.textContent = nombreCuenta;
+      toggle.appendChild(nombreVisible);
     }
 
     /*
-      En mobile la navegación vive en la hamburguesa, así que este grupo se
-      oculta por CSS. En desktop sigue siendo la única vía de navegación de las
-      páginas sin fila de enlaces (cursos, transacciones, privacidad).
+      Este grupo es la navegación del sitio en todos los tamaños: desde el
+      2026-10-02 no hay hamburguesa en mobile, y en desktop es la única vía de
+      las páginas sin fila de enlaces (cursos, transacciones, privacidad).
     */
     const grupoNavegacion = document.createElement("div");
     grupoNavegacion.className = "nav-menu__group nav-menu__group--nav";
-    // Registro propio de este grupo: no comparte exclusión mutua con el
-    // panel mobile (montarPanelNavegacion arma el suyo).
+    // Registro propio de este grupo: la exclusión mutua entre Academy y Tools
+    // no se mezcla con cerradoresDeDesplegables (otro concern).
     const registroDeCierresCuenta = [];
     enlacesNavegacion.forEach((enlace) => {
       if (enlace.hijos && enlace.hijos.length) {
@@ -514,7 +447,6 @@ async function montarMenus() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  montarNavegacionMovil();
   cachearElementosDeScroll();
   actualizarEstadoVisualNavbar();
   actualizarEnlaceActivo();

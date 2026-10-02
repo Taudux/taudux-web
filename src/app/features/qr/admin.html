@@ -25,10 +25,14 @@
        panel del extractor. -->
   <link rel="stylesheet" href="/app/features/courses/gestionar-cursos.css">
   <link rel="stylesheet" href="/app/features/qr/qr.css">
+  <link rel="stylesheet" href="/app/shared/admin-nav/admin-nav.css">
   <script defer src="/app/core/analytics/ga4.js"></script>
 </head>
 
 <body>
+  <!-- Estrellas de fondo: qr.fondo.js las carga en este div. -->
+  <div id="particles-fondo" aria-hidden="true"></div>
+
   <nav class="navbar" id="adminNavbar" aria-label="Navegación principal" hidden>
     <a href="/" class="navbar__brand">
       <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
@@ -39,7 +43,7 @@
   </nav>
 
   <main class="qr">
-    <div class="qr__container u-contenedor u-contenedor--medio">
+    <div class="qr__container u-contenedor">
 
       <!-- Arranque compartido: exige sesión, exige rol admin, y sólo entonces
            revela #adminContent. El gate real es la RLS de 0044 y el
@@ -66,7 +70,19 @@
         <p class="qr__estado panel">Necesitas habilitar JavaScript para moderar los QR.</p>
       </noscript>
 
-      <div class="qr__contenido" id="adminContent" hidden>
+      <div class="admin-layout" id="adminContent" hidden>
+          <!-- Menú de la sección Administración: el mismo en las tres páginas
+               de admin (admin/usuarios.html, transactions/admin.html y
+               qr/admin.html), con
+               aria-current en la propia. Lo fija tests/admin-nav.test.js. -->
+          <nav class="admin-nav" aria-label="Secciones de administración">
+            <p class="admin-nav__titulo" aria-hidden="true">Administración</p>
+            <a class="admin-nav__link" href="/app/features/admin/usuarios.html">Usuarios</a>
+            <a class="admin-nav__link" href="/app/features/transactions/admin.html">Extractor</a>
+            <a class="admin-nav__link" href="/app/features/qr/admin.html" aria-current="page">QR</a>
+          </nav>
+
+        <div class="admin-layout__contenido qr__contenido">
         <header class="qr__header">
           <h1 class="qr__title">Moderación de QR</h1>
           <p class="qr__intro">
@@ -108,9 +124,9 @@
           <table class="qr-admin__tabla">
             <thead>
               <tr>
+                <th scope="col">Creado por</th>
                 <th scope="col">QR</th>
                 <th scope="col">Destino</th>
-                <th scope="col">Creado por</th>
                 <th scope="col">Estado</th>
                 <th scope="col">Escaneos</th>
                 <th scope="col">Revisión</th>
@@ -119,6 +135,7 @@
             </thead>
             <tbody id="qrAdminFilas"></tbody>
           </table>
+        </div>
         </div>
       </div>
     </div>
@@ -151,6 +168,9 @@
   <script src="/app/features/courses/admin-startup.js"></script>
   <script src="/app/features/qr/qr.nucleo.js"></script>
   <script src="/app/features/qr/admin.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script src="/app/features/qr/qr.fondo.js"></script>
 </body>
 
 </html>

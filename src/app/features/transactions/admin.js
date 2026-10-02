@@ -172,7 +172,7 @@
 
     return `
       <td class="admin__quien">
-        <span class="admin__usuario">${escapar(datos.nombre)}</span>
+        <span class="admin__usuario">${escapar(datos.nombre)}${datos.esAdmin ? '<span class="admin-insignia">Admin</span>' : ""}</span>
         <span class="admin__meta">${escapar(datos.correo || "—")}</span>
       </td>
       <td>
@@ -186,19 +186,15 @@
         <input class="admin__toggle" type="checkbox" data-campo="personalizado"
                aria-label="Límites propios de esta cuenta"
                ${personalizado ? "checked" : ""}${inerte}>
-      </td>
-      <td>
-        <button class="button button--outline admin__guardar" type="button" disabled>
-          Guardar
-        </button>
       </td>`;
   }
 
   /*
     Lo que hay AHORA en los controles de una fila, como texto comparable.
 
-    El botón deshabilitado es el único indicador de "sin cambios" que tiene
-    esta tabla, así que hace falta saber si algo se movió. Comparar contra una
+    La marca `admin__fila--cambiada` y el aviso de «cuentas con cambios» son los
+    únicos indicadores de "sin cambios" que tiene esta tabla, así que hace falta
+    saber si algo se movió. Comparar contra una
     firma tomada del markup recién pintado —que sale de la respuesta del
     servidor— evita mantener una copia paralela de cada valor.
   */
@@ -218,12 +214,34 @@
     fila.dataset.firma = firma(fila);
   }
 
-  function refrescarGuardar(fila) {
-    // Mientras la fila está en vuelo el botón lo gobierna `guardarAcceso`: que
-    // un `input` tardío lo reactive dejaría mandar la misma fila dos veces.
+  function refrescarFila(fila) {
+    // Mientras la fila está en vuelo la gobierna `enviarFila`: que un `input`
+    // tardío le quitara la marca dejaría perder un cambio que aún no se guardó.
     if (guardando.has(fila.dataset.uid)) return;
-    const boton = fila.querySelector(".admin__guardar");
-    if (boton) boton.disabled = firma(fila) === fila.dataset.firma;
+    fila.classList.toggle("admin__fila--cambiada", firma(fila) !== fila.dataset.firma);
+    refrescarCambios();
+  }
+
+  // Filas con cambios sin guardar, de TODAS las páginas: la tabla esconde
+  // filas, no las quita, así que la marca sobrevive al cambio de página.
+  function filasCambiadas() {
+    return [...el("listaPerfiles").querySelectorAll(".admin__fila--cambiada")];
+  }
+
+  // El aviso con los dos botones (Descartar / Guardar) sólo existe mientras
+  // haya algo que guardar. También gobierna el selector de mes: ver
+  // `pintarSelectorPeriodo()`.
+  function refrescarCambios() {
+    const aviso = el("cambiosPerfiles");
+    if (aviso) {
+      const n = filasCambiadas().length;
+      aviso.hidden = n === 0;
+      const texto = aviso.querySelector(".admin__cambios-texto");
+      if (texto && n) {
+        texto.innerHTML = `<strong>${n}</strong> ${n === 1 ? "cuenta con cambios sin guardar" : "cuentas con cambios sin guardar"}`;
+      }
+    }
+    pintarSelectorPeriodo();
   }
 
   /*
@@ -264,7 +282,7 @@
 
       `data-control` existe justamente para esto: es el ancla que sobrevive al
       cambio de etiqueta. `data-campo` no serviría —sólo lo lleva el input,
-      porque `firma()` y `guardarAcceso()` leen `.value` por ahí y un `<span>`
+      porque `firma()` y `validarFila()` leen `.value` por ahí y un `<span>`
       no tiene—, y localizar la celda por su posición ataría este código al
       orden de las columnas.
 
@@ -303,11 +321,12 @@
     };
   }
 
-  async function guardarAcceso(fila) {
-    const uid = fila.dataset.uid;
-    if (guardando.has(uid)) return;
-
-    const datos = perfilesPorUid.get(uid) || {};
+  /*
+    Lee y valida una fila SIN tocar la red: devuelve `{ payload }` listo para
+    el PUT o `{ error, campo }` con el mensaje y el input que lo causó.
+  */
+  function validarFila(fila) {
+    const datos = perfilesPorUid.get(fila.dataset.uid) || {};
     const entradaLimite = fila.querySelector('[data-campo="limite"]');
     const entradaLote = fila.querySelector('[data-campo="lote"]');
     const personalizado = Boolean(
@@ -339,37 +358,50 @@
     const lote = conservar(entradaLote, guardado.lote);
 
     if (Number.isNaN(limite) || Number.isNaN(lote)) {
-      mostrarToast("Los límites tienen que ser números enteros.", "error");
-      return;
+      return {
+        error: "Los límites tienen que ser números enteros.",
+        campo: Number.isNaN(limite) ? entradaLimite : entradaLote,
+      };
     }
     // El servidor también lo rechaza, pero con un viaje de por medio: no hace
     // falta preguntar para saber que una personalización sin lote no se guarda.
     if (personalizado && lote === null) {
-      mostrarToast("Con límites propios hay que decir cuántos PDF por envío.", "error");
-      return;
+      return {
+        error: "Con límites propios hay que decir cuántos PDF por envío.",
+        campo: entradaLote,
+      };
     }
 
+    return {
+      payload: {
+        personalizado,
+        limite,
+        lote,
+        // El motivo se reenvía tal cual vino: la tabla no lo edita, y como
+        // el endpoint escribe la fila entera, omitirlo lo borraría sin que
+        // nadie lo haya pedido acá.
+        motivo: datos.motivo || "",
+      },
+    };
+  }
+
+  /*
+    Manda UNA fila ya validada. No avisa con toast —el resumen lo da
+    `guardarCambios`— y devuelve `{ ok, mensaje }`.
+  */
+  async function enviarFila(fila, payload) {
+    const uid = fila.dataset.uid;
+    if (guardando.has(uid)) return { ok: false, mensaje: "Ya se está guardando esta cuenta." };
+
+    const datos = perfilesPorUid.get(uid) || {};
     guardando.add(uid);
     fila.setAttribute("aria-busy", "true");
-    const boton = fila.querySelector(".admin__guardar");
-    if (boton) {
-      boton.disabled = true;
-      boton.textContent = "Guardando…";
-    }
 
     try {
       const r = await apiFetch(`/api/admin/acceso/${encodeURIComponent(uid)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          personalizado,
-          limite,
-          lote,
-          // El motivo se reenvía tal cual vino: la tabla no lo edita, y como
-          // el endpoint escribe la fila entera, omitirlo lo borraría sin que
-          // nadie lo haya pedido acá.
-          motivo: datos.motivo || "",
-        }),
+        body: JSON.stringify(payload),
       });
       const respuesta = await r.json().catch(() => ({}));
 
@@ -383,30 +415,98 @@
           Y NO se repinta: lo tipeado se conserva para corregir y reintentar.
           Repintar acá borraría el trabajo de quien acaba de escribirlo.
         */
-        mostrarToast(
-          respuesta.mensaje || "No se pudieron guardar los límites.", "error");
-        return;
+        return {
+          ok: false,
+          mensaje: respuesta.mensaje || "No se pudieron guardar los límites.",
+        };
       }
 
       perfilesPorUid.set(uid, fusionarRespuesta(datos, respuesta));
       pintarFila(fila, perfilesPorUid.get(uid));
-      mostrarToast("Límites guardados.", "success");
+      fila.classList.remove("admin__fila--cambiada");
+      return { ok: true, mensaje: "" };
     } catch (error) {
       console.warn("[admin] no se pudieron guardar los límites:", error);
-      mostrarToast("No se pudieron guardar los límites.", "error");
+      return { ok: false, mensaje: "No se pudieron guardar los límites." };
     } finally {
       guardando.delete(uid);
       fila.removeAttribute("aria-busy");
-      // Se busca de nuevo: si el guardado salió bien, `pintarFila` reemplazó el
-      // botón anterior y aquel nodo ya no está en la página.
-      const activo = fila.querySelector(".admin__guardar");
-      if (activo) {
-        activo.textContent = "Guardar";
-        // Tras un éxito la firma coincide y queda deshabilitado; tras un error
-        // sigue habiendo cambios pendientes y vuelve a estar disponible.
-        activo.disabled = firma(fila) === fila.dataset.firma;
-      }
     }
+  }
+
+  function nombreDeFila(fila) {
+    return perfilesPorUid.get(fila.dataset.uid)?.nombre || "(sin nombre)";
+  }
+
+  /*
+    UN solo «Guardar» para toda la tabla. Primero se valida TODO y recién
+    entonces se manda: un error en la fila 14 no puede dejar las 13 anteriores
+    guardadas y a la persona sin saber por qué se detuvo. El envío es en serie
+    a propósito: el endpoint escribe filas enteras y no hay motivo para
+    disparar N PUT a la vez contra la misma API.
+  */
+  async function guardarCambios() {
+    const aviso = el("cambiosPerfiles");
+    if (!aviso || aviso.dataset.ocupado === "true") return;
+
+    const filas = filasCambiadas();
+    if (!filas.length) return;
+
+    const listos = [];
+    for (const fila of filas) {
+      const v = validarFila(fila);
+      if (v.error) {
+        // La fila con el problema puede estar en otra página: se lleva a la
+        // vista antes de avisar, o el mensaje señalaría algo invisible.
+        const todas = [...el("listaPerfiles").querySelectorAll(".admin__fila")];
+        paginaPerfiles = Math.floor(todas.indexOf(fila) / FILAS_POR_PAGINA);
+        aplicarPaginaPerfiles();
+        v.campo?.focus();
+        mostrarToast(v.error, "error");
+        return;
+      }
+      listos.push({ fila, payload: v.payload });
+    }
+
+    aviso.dataset.ocupado = "true";
+    const botones = [...aviso.querySelectorAll("button")];
+    botones.forEach((b) => { b.disabled = true; });
+    const guardar = aviso.querySelector('[data-accion="guardar"]');
+    if (guardar) guardar.textContent = "Guardando…";
+
+    const fallos = [];
+    try {
+      for (const { fila, payload } of listos) {
+        const r = await enviarFila(fila, payload);
+        if (!r.ok) fallos.push({ nombre: nombreDeFila(fila), mensaje: r.mensaje });
+      }
+
+      const n = listos.length;
+      if (!fallos.length) {
+        mostrarToast(n === 1 ? "1 cuenta guardada." : `${n} cuentas guardadas.`, "success");
+      } else {
+        const primero = fallos[0];
+        const resto = fallos.length > 1 ? ` y ${fallos.length - 1} más` : "";
+        mostrarToast(
+          `${n - fallos.length} de ${n} guardadas; falló la de ${primero.nombre}${resto}: ${primero.mensaje}`,
+          "error");
+      }
+    } finally {
+      delete aviso.dataset.ocupado;
+      botones.forEach((b) => { b.disabled = false; });
+      if (guardar) guardar.textContent = "Guardar";
+      refrescarCambios();
+    }
+  }
+
+  // Vuelve cada fila marcada a lo que dijo el servidor, sin red.
+  function descartarCambios() {
+    filasCambiadas().forEach((fila) => {
+      if (guardando.has(fila.dataset.uid)) return;
+      pintarFila(fila, perfilesPorUid.get(fila.dataset.uid));
+      fila.classList.remove("admin__fila--cambiada");
+    });
+    refrescarCambios();
   }
 
   // --- El filtro de administración -----------------------------------------
@@ -1524,7 +1624,7 @@
       </table>`;
   }
 
-  // --- Usuarios del sitio --------------------------------------------------
+  // --- Gestión del extractor -----------------------------------------------
 
   /*
     Los usuarios REALES, leídos de `perfiles`. Están todos, hayan usado la
@@ -1545,34 +1645,187 @@
   */
 
   /*
-    El mes que el panel está mirando. Vacío = el actual del servidor.
+    El mes que el panel está mirando.
 
     EL SERVIDOR MANDA EL RELOJ, y no es un capricho: el 2026-08-31 a las 18:00
     de México el reloj local decía agosto y el del servidor —que calcula el
     mes en UTC— decía septiembre, y el panel entero "se vació" seis horas antes
-    de la medianoche local. Por eso el valor inicial y el tope del selector
-    salen del `periodo` que echa la respuesta, nunca de `new Date()`: un tope
-    calculado acá ofrecería un mes que el servidor considera futuro, o le
-    negaría al administrador el mes en curso.
+    de la medianoche local. Por eso el mes en curso y el tope de los selectores
+    salen del `periodo` que echa la respuesta, nunca del reloj del cliente: un
+    tope calculado acá ofrecería un mes que el servidor considera futuro, o le
+    negaría al administrador el mes en curso. Las funciones de abajo sólo hacen
+    aritmética sobre textos "AAAA-MM", sin objetos de fecha.
+
+    · `periodoServidor`: el mes en curso según el servidor. Se fija UNA vez, con
+      la primera respuesta; al navegar hacia atrás sigue siendo el tope.
+    · `periodoMinimo`: el mes del perfil más antiguo; antes no hay nada que ver.
+    · `periodoElegido`: vacío = el actual del servidor.
   */
+  let periodoServidor = "";
+  let periodoMinimo = "";
   let periodoElegido = "";
 
-  function gobernarSelectorPeriodo(periodo) {
-    const nodo = el("selectorPeriodo");
-    if (!nodo || !periodo) return;
-    // Sólo la primera respuesta fija el tope y el valor: al navegar hacia
-    // atrás, el tope tiene que seguir siendo el mes actual del servidor.
-    if (!nodo.max) nodo.max = periodo;
-    if (!nodo.value) nodo.value = periodo;
+  function mesVecino(mes, delta) {
+    const [anio, mm] = mes.split("-").map(Number);
+    const indice = anio * 12 + (mm - 1) + delta;
+    const nuevoAnio = Math.floor(indice / 12);
+    const nuevoMes = (indice % 12) + 1;
+    return `${nuevoAnio}-${String(nuevoMes).padStart(2, "0")}`;
   }
 
-  el("selectorPeriodo")?.addEventListener("change", () => {
-    const nodo = el("selectorPeriodo");
-    // Vaciar el campo no significa "ningún mes": se ignora hasta elegir uno.
-    if (!nodo.value) return;
-    periodoElegido = nodo.value;
+  // "AAAA-MM" ordena bien como texto, así que acotar es comparar cadenas.
+  function acotarMes(mes, min, max) {
+    if (mes < min) return min;
+    if (mes > max) return max;
+    return mes;
+  }
+
+  function mesEfectivo() {
+    return periodoElegido || periodoServidor;
+  }
+
+  // Rango navegable: del perfil más antiguo al mes en curso del servidor.
+  function limitesPeriodo() {
+    const max = periodoServidor;
+    const min = periodoMinimo && periodoMinimo <= max ? periodoMinimo : max;
+    return { min, max };
+  }
+
+  function pintarSelectorPeriodo() {
+    const selMes = el("periodoMes");
+    const selAnio = el("periodoAnio");
+    const anterior = el("periodoAnterior");
+    const siguiente = el("periodoSiguiente");
+    const grupo = selMes?.closest(".admin__periodo");
+    // Sin la primera respuesta del servidor no hay mes en curso: los
+    // controles se quedan deshabilitados en vez de inventar uno.
+    if (!selMes || !selAnio || !anterior || !siguiente || !grupo || !periodoServidor) return;
+
+    const { min, max } = limitesPeriodo();
+    const efectivo = acotarMes(mesEfectivo(), min, max);
+    const [anio, mm] = efectivo.split("-");
+
+    let anios = "";
+    for (let a = Number(max.slice(0, 4)); a >= Number(min.slice(0, 4)); a--) {
+      anios += `<option value="${a}">${a}</option>`;
+    }
+    selAnio.innerHTML = anios;
+    selAnio.value = anio;
+
+    // Los meses fuera de [min, max] se ven pero no se pueden elegir.
+    [...selMes.options].forEach((op) => {
+      const m = `${anio}-${op.value}`;
+      op.disabled = m < min || m > max;
+    });
+    selMes.value = mm;
+
+    // Cambiar de mes repinta la tabla y se llevaría lo tecleado sin guardar.
+    const bloqueado = filasCambiadas().length > 0;
+    selMes.disabled = bloqueado;
+    selAnio.disabled = bloqueado;
+    anterior.disabled = bloqueado || efectivo <= min;
+    siguiente.disabled = bloqueado || efectivo >= max;
+    if (bloqueado) {
+      grupo.title = "Guarda o descarta los cambios antes de cambiar de mes";
+    } else {
+      grupo.removeAttribute("title");
+    }
+
+    const enCurso = el("periodoEnCurso");
+    if (enCurso) enCurso.hidden = efectivo !== periodoServidor;
+  }
+
+  function gobernarSelectorPeriodo(periodo) {
+    if (!periodo) return;
+    // Sólo la primera respuesta fija el mes en curso y el tope: al navegar
+    // hacia atrás, el tope tiene que seguir siendo el mes actual del servidor.
+    if (!periodoServidor) periodoServidor = periodo;
+    pintarSelectorPeriodo();
+  }
+
+  function cambiarPeriodo(mes) {
+    // Con cambios sin guardar los controles están deshabilitados; esto cubre
+    // lo que llegue por otro camino.
+    if (filasCambiadas().length) return;
+    if (mes === mesEfectivo()) return;
+    periodoElegido = mes;
+    // Otro mes es otra tabla: se vuelve a mirar desde el principio.
+    paginaPerfiles = 0;
+    pintarSelectorPeriodo();
     cargarUsuariosDelSitio();
+  }
+
+  function elegirDesdeSelectores() {
+    if (!periodoServidor) return;
+    const { min, max } = limitesPeriodo();
+    const nuevo = `${el("periodoAnio").value}-${el("periodoMes").value}`;
+    cambiarPeriodo(acotarMes(nuevo, min, max));
+  }
+
+  el("periodoMes")?.addEventListener("change", elegirDesdeSelectores);
+  el("periodoAnio")?.addEventListener("change", elegirDesdeSelectores);
+
+  [["periodoAnterior", -1], ["periodoSiguiente", 1]].forEach(([id, delta]) => {
+    el(id)?.addEventListener("click", () => {
+      if (!periodoServidor) return;
+      const { min, max } = limitesPeriodo();
+      cambiarPeriodo(acotarMes(mesVecino(mesEfectivo(), delta), min, max));
+    });
   });
+
+  /*
+    La tabla se pagina de 6 en 6 (pedido del 2026-10-01: con 26 cuentas ya no
+    cabía en una pantalla). Las filas se pintan TODAS y sólo se esconden las
+    que no tocan: un límite tecleado y sin guardar en la página 2 sigue ahí al
+    volver, y la firma de cada fila (con la que se decide si hay cambios) no se
+    pierde por cambiar de página. Repintar sólo seis las borraría.
+  */
+  const FILAS_POR_PAGINA = 6;
+  let paginaPerfiles = 0;
+
+  // Pura: qué página se puede mostrar de verdad (la pedida, acotada) y qué
+  // filas abarca, contadas desde 1 para el pie.
+  function rangoDePagina(total, pagina, porPagina) {
+    const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
+    const acotada = Math.min(Math.max(0, pagina), totalPaginas - 1);
+    const desde = total ? acotada * porPagina + 1 : 0;
+    const hasta = Math.min(total, (acotada + 1) * porPagina);
+    return { pagina: acotada, totalPaginas, desde, hasta };
+  }
+
+  function aplicarPaginaPerfiles() {
+    const filas = [...el("listaPerfiles").querySelectorAll(".admin__fila")];
+    const pie = el("paginacionPerfiles");
+    const rango = rangoDePagina(filas.length, paginaPerfiles, FILAS_POR_PAGINA);
+    paginaPerfiles = rango.pagina;
+
+    filas.forEach((fila, i) => {
+      fila.hidden = i < rango.desde - 1 || i >= rango.hasta;
+    });
+
+    if (rango.totalPaginas <= 1) {
+      pie.hidden = true;
+      pie.innerHTML = "";
+      return;
+    }
+    pie.hidden = false;
+    pie.innerHTML = `
+      <p class="admin__paginacion-texto" role="status" aria-live="polite">
+        Cuentas ${rango.desde}–${rango.hasta} de ${filas.length} · página ${rango.pagina + 1} de ${rango.totalPaginas}
+      </p>
+      <div class="admin__paginacion-botones">
+        <button type="button" class="button button--outline" data-pagina="anterior"
+                ${rango.pagina === 0 ? "disabled" : ""}>‹ Anterior</button>
+        <button type="button" class="button button--outline" data-pagina="siguiente"
+                ${rango.pagina === rango.totalPaginas - 1 ? "disabled" : ""}>Siguiente ›</button>
+      </div>`;
+  }
+
+  function sinPaginacionPerfiles() {
+    const pie = el("paginacionPerfiles");
+    pie.hidden = true;
+    pie.innerHTML = "";
+  }
 
   async function cargarUsuariosDelSitio() {
     const lista = el("listaPerfiles");
@@ -1584,15 +1837,22 @@
       .order("creado_en", { ascending: false });
 
     if (error) {
+      sinPaginacionPerfiles();
       lista.innerHTML = '<p class="admin__vacio">No pudimos leer los perfiles.</p>';
       console.warn("[admin] fallo al leer perfiles:", error);
       return;
     }
 
     const perfiles = data || [];
+    // El mes más antiguo con cuentas: antes no hay nada que mirar. "AAAA-MM"
+    // son los primeros 7 caracteres de `creado_en`.
+    const creados = perfiles.map((p) => String(p.creado_en || "").slice(0, 7))
+      .filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
+    periodoMinimo = creados[0] || "";
     el("totalPerfiles").textContent = `· ${perfiles.length}`;
 
     if (!perfiles.length) {
+      sinPaginacionPerfiles();
       lista.innerHTML = '<p class="admin__vacio">No hay perfiles que mostrar.</p>';
       return;
     }
@@ -1644,11 +1904,11 @@
         // El nombre sale de `perfiles`; todo lo demás, del endpoint.
         nombre: [p.nombre, p.apellidos].filter(Boolean).join(" ").trim()
           || "(sin nombre)",
-        // `esAdmin` vivía acá para la insignia de las tarjetas de actividad.
-        // Se fue con ellas el 2026-08-28: nadie lo leía ya, y un campo que se
-        // calcula y no se usa es lo que hace creer que algo depende de él.
-        // El acento de las filas de administración sale de `p.rol` directo.
+        // `esAdmin` vivía acá para la insignia de las tarjetas de actividad y
+        // se fue con ellas el 2026-08-28. Vuelve el 2026-10-01 para la insignia
+        // «Admin» de la tabla, que reemplazó a la franja de acento de las filas.
         conocido: Boolean(datos),
+        esAdmin: p.rol === "admin",
       });
     });
 
@@ -1660,10 +1920,6 @@
             <th scope="col">Cupo mensual</th>
             <th scope="col">PDF por envío</th>
             <th scope="col">Con límite</th>
-            <!-- Sin rótulo visible: la columna es un botón y su texto ya lo
-                 dice. El nombre queda para quien navega por lectura de
-                 pantalla, que sin él escucharía una columna anónima. -->
-            <th scope="col"><span class="u-visually-hidden">Guardar cambios</span></th>
           </tr>
         </thead>
         <tbody>
@@ -1680,6 +1936,10 @@
     lista.querySelectorAll(".admin__fila").forEach((fila) => {
       fila.dataset.firma = firma(fila);
     });
+    aplicarPaginaPerfiles();
+    // Tabla nueva = sin cambios pendientes: el aviso se esconde y el selector
+    // de mes se libera.
+    refrescarCambios();
   }
 
   /*
@@ -1694,10 +1954,12 @@
   function conectarTabla() {
     const lista = el("listaPerfiles");
 
-    lista.addEventListener("click", (evento) => {
-      const boton = evento.target.closest(".admin__guardar");
-      const fila = boton && boton.closest("[data-uid]");
-      if (fila) guardarAcceso(fila);
+    // El aviso de cambios vive fuera de la lista (ver admin.html).
+    el("cambiosPerfiles").addEventListener("click", (evento) => {
+      const boton = evento.target.closest("[data-accion]");
+      if (!boton || boton.disabled) return;
+      if (boton.dataset.accion === "guardar") guardarCambios();
+      else if (boton.dataset.accion === "descartar") descartarCambios();
     });
 
     lista.addEventListener("change", (evento) => {
@@ -1706,12 +1968,27 @@
       if (evento.target.matches('[data-campo="personalizado"]')) {
         alternarPersonalizado(fila);
       }
-      refrescarGuardar(fila);
+      refrescarFila(fila);
     });
 
     lista.addEventListener("input", (evento) => {
       const fila = evento.target.closest("[data-uid]");
-      if (fila) refrescarGuardar(fila);
+      if (fila) refrescarFila(fila);
+    });
+
+    // El pie se repinta en cada cambio de página: por delegación, igual que
+    // la tabla.
+    el("paginacionPerfiles").addEventListener("click", (evento) => {
+      const boton = evento.target.closest("[data-pagina]");
+      if (!boton || boton.disabled) return;
+      paginaPerfiles += boton.dataset.pagina === "siguiente" ? 1 : -1;
+      aplicarPaginaPerfiles();
+      // El botón recién pulsado se reemplazó: el foco vuelve al mismo lado
+      // para poder seguir avanzando con el teclado.
+      const destino = el("paginacionPerfiles")
+        .querySelector(`[data-pagina="${boton.dataset.pagina}"]:not(:disabled)`)
+        || el("paginacionPerfiles").querySelector("[data-pagina]:not(:disabled)");
+      destino?.focus();
     });
   }
 

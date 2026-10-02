@@ -218,92 +218,35 @@ test("operation failures get one visible generic report unless an alert is alrea
   assert.equal(messages.length, 1);
 });
 
-test("the navigation panel drops site links whose label already exists as an anchor", () => {
-  const context = {
-    window: { addEventListener() {}, scrollY: 0 },
-    document: {
-      addEventListener() {},
-      querySelector: () => null,
-      querySelectorAll: () => [],
-      getElementById: () => null,
-      createElement: (tagName) => new Element(tagName),
-    },
-    queueMicrotask,
-  };
-  vm.runInNewContext(`${read("src/app/shared/navbar/navbar.js")}\nthis.montarPanelNavegacion = montarPanelNavegacion;`, context);
-
-  const lista = new Element("div");
-  context.montarPanelNavegacion(lista, {
-    anclas: [{ texto: "Herramientas", href: "#herramientas" }],
-    enlaces: [
-      { texto: "Cursos", href: "/app/features/courses/cursos.html", habilitado: true },
-      { texto: "Herramientas", href: "/app/features/transactions/", habilitado: true },
-    ],
-  });
-
-  const etiquetas = lista.children.map((hijo) => hijo.textContent).filter(Boolean);
-  assert.deepEqual(etiquetas, ["Herramientas", "Cursos"]);
-  assert.equal(etiquetas.filter((texto) => texto === "Herramientas").length, 1);
-});
-
-test("when an anchor and a site link share a label, the anchor wins and the site link is dropped", () => {
+test("there is no hamburger: the account menu carries the site navigation at every width", () => {
   /*
-    Contrato del dedupe: ante el mismo texto gana el ancla de sección y se
-    descarta el enlace de sitio, aunque apunten a destinos distintos. La
-    alternativa —mostrar dos entradas con idéntico nombre y distinto
-    destino— es indistinguible para quien lee el menú.
-
-    Hoy ninguna página dispara este caso: el landing dejó de tener anclas
-    cuando el navbar pasó a Misión/Visión/Valores, y ningún texto de
-    ENLACES_NAVEGACION_BASE coincide con un ancla existente. El test se
-    conserva porque la regla sigue viva en montarPanelNavegacion y volvería a
-    aplicar apenas se agregue un ancla que choque con un enlace del sitio.
+    Desde el 2026-10-02 no hay menú de hamburguesa en mobile: un solo
+    desplegable, el de la cuenta, con la navegación del sitio en todos los
+    tamaños. Si el grupo volviera a ocultarse a 760px, el celular se quedaría
+    sin navegación.
   */
-  const context = {
-    window: { addEventListener() {}, scrollY: 0 },
-    document: {
-      addEventListener() {},
-      querySelector: () => null,
-      querySelectorAll: () => [],
-      getElementById: () => null,
-      createElement: (tagName) => new Element(tagName),
-    },
-    queueMicrotask,
-  };
-  vm.runInNewContext(`${read("src/app/shared/navbar/navbar.js")}\nthis.montarPanelNavegacion = montarPanelNavegacion;`, context);
-
-  const lista = new Element("div");
-  context.montarPanelNavegacion(lista, {
-    anclas: [{ texto: "Herramientas", href: "#herramientas" }],
-    enlaces: [
-      { texto: "Herramientas", href: "/app/features/transactions/", habilitado: true },
-    ],
-  });
-
-  const enlaceHerramientas = lista.children.find((hijo) => hijo.textContent === "Herramientas");
-  assert.equal(enlaceHerramientas.href, "#herramientas");
-});
-
-test("the navigation menu is revealed only on mobile", () => {
-  const css = read("src/app/shared/navbar/navbar.css");
-  /*
-    .nav-menu--site se oculta en la regla base y solo se revela dentro del
-    bloque de 760px: si esto se invierte, la hamburguesa aparece en desktop.
-  */
-  assert.match(css, /\.nav-menu--site\s*{[^}]*display:\s*none/);
-  assert.match(css, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.nav-menu--site\s*{[^}]*display:\s*inline-block/);
-});
-
-test("mobile navigation lives only in the hamburger, and the legacy links panel is gone", () => {
   const css = read("src/app/shared/navbar/navbar.css");
   const js = read("src/app/shared/navbar/navbar.js");
 
-  /* En desktop el grupo sigue siendo la única navegación de cursos/transacciones/privacidad. */
-  assert.match(js, /nav-menu__group--nav/);
-  assert.match(css, /@media\s*\(max-width:\s*760px\)[\s\S]*?\.nav-menu__group--nav\s*{[^}]*display:\s*none/);
-  assert.doesNotMatch(css.split(/@media\s*\(max-width:\s*760px\)/)[0], /\.nav-menu__group--nav\s*{[^}]*display:\s*none/);
+  assert.doesNotMatch(css + js, /nav-menu--site|nav-menu__toggle--site/);
+  assert.doesNotMatch(js, /montarNavegacionMovil|montarPanelNavegacion|anclasDeLaPagina|menuNavegacionLista/);
 
-  const fuente = `${css}\n${js}\n${read("src/index.html")}`;
+  assert.match(js, /nav-menu__group--nav/);
+  assert.doesNotMatch(css, /\.nav-menu__group--nav[^{]*\{[^}]*display:\s*none/);
+
+  // En mobile el logo se oculta: su isotipo repetía el de la cuenta a
+  // centímetros. En desktop sigue a la vista.
+  const [base, ...resto] = css.split(/@media\s*\(max-width:\s*760px\)/);
+  assert.match(resto.join(""), /\.navbar__brand\s*\{[^}]*display:\s*none/);
+  assert.doesNotMatch(base, /\.navbar__brand\s*\{[^}]*display:\s*none/);
+});
+
+test("the legacy links panel is gone", () => {
+  const css = read("src/app/shared/navbar/navbar.css");
+  const js = read("src/app/shared/navbar/navbar.js");
+  const fuente = `${css}
+${js}
+${read("src/index.html")}`;
   assert.doesNotMatch(fuente, /navbar__links--mobile-open/);
   assert.doesNotMatch(fuente, /navbar__toggle/);
   assert.doesNotMatch(css, /--z-mobile-menu|--z-mobile-toggle/);
@@ -316,7 +259,7 @@ test("the landing navbar shows Misión/Visión/Valores as disabled spans, not an
     Sin destino todavía, así que <span aria-disabled> y no <a href="#">:
     misma convención que footer__link--pending y nav-menu__link--disabled.
     Un <a> vacío promete una navegación que no ocurre y además entraría en
-    anclasDeLaPagina() / el cache de navbar__link--active.
+    el cache de navbar__link--active.
   */
   ["Misión", "Visión", "Valores"].forEach((texto) => {
     assert.match(
@@ -520,10 +463,14 @@ test("every page container carries its u-contenedor* class in the markup", () =>
     // sitio como Código. Sin contenedor medía 1457px a 1536 y nacía en x=32,
     // 128px afuera del eje del logo. El relleno lateral lo pone `.notas`.
     { file: "src/app/features/notas/index.html", needle: 'class="notas__disposicion u-contenedor"' },
-    // El generador de QR y su moderación comparten contenedor: --medio, como el
-    // portal, porque son pantallas de gestión y no de lectura.
+    // El generador de QR va a --medio, como el portal: es una pantalla de
+    // gestión y no de lectura.
     { file: "src/app/features/qr/index.html", needle: 'class="qr__container u-contenedor u-contenedor--medio"' },
-    { file: "src/app/features/qr/admin.html", needle: 'class="qr__container u-contenedor u-contenedor--medio"' },
+    // Las tres páginas de Administración van al ancho del sitio desde el
+    // 2026-10-01: el menú lateral (admin-nav) le quita 13rem a sus tablas.
+    { file: "src/app/features/qr/admin.html", needle: 'class="qr__container u-contenedor"' },
+    { file: "src/app/features/admin/usuarios.html", needle: 'class="usuarios__container u-contenedor"' },
+    { file: "src/app/features/transactions/admin.html", needle: 'class="courses__container u-contenedor"' },
     { file: "src/app/features/transactions/index.html", needle: 'class="extractor__contenido u-contenedor"' },
   ];
 

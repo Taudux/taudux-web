@@ -1,0 +1,178 @@
+@layer components {
+  /*
+    La sección Administración: un menú a la izquierda con sus paneles
+    (Usuarios, Extractor, QR) y el panel elegido a la derecha. Lo comparten
+    admin/usuarios.html, transactions/admin.html y qr/admin.html
+    (2026-10-01).
+
+    Son dos páginas y no una: cada panel trae su propio arranque de admin, su
+    script y su servidor, y fusionarlos obligaba a reescribir los dos. El menú
+    es el mismo markup en las dos, con `aria-current="page"` en la propia; lo
+    fija tests/admin-nav.test.js.
+
+    El envoltorio ES #adminContent: nace oculto y lo revela el arranque de
+    admin, así que el menú no se le muestra a nadie antes de saber que es
+    administrador.
+  */
+  .admin-layout {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    gap: 2rem;
+    align-items: start;
+  }
+
+  /* `display: grid` le gana al `[hidden]` del navegador. */
+  .admin-layout[hidden] {
+    display: none;
+  }
+
+  /* `minmax(0, 1fr)` arriba y esto acá: sin un mínimo de cero, una tabla
+     ancha estira la columna y empuja la página de lado en vez de scrollear
+     dentro de su propia caja. */
+  .admin-layout__contenido {
+    min-inline-size: 0;
+  }
+
+  .admin-nav {
+    position: sticky;
+    top: calc(var(--navbar-height, 76px) + 1.5rem);
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .admin-nav__titulo {
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+  }
+
+  .admin-nav__link {
+    display: block;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-field);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    transition: border-color var(--transition-base), color var(--transition-base),
+      background-color var(--transition-base);
+  }
+
+  .admin-nav__link:hover,
+  .admin-nav__link:focus-visible {
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+
+  .admin-nav__link[aria-current="page"] {
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+
+  /*
+    Estilo plano (2026-10-01): dentro de Administración los bloques no llevan
+    recuadro, fondo ni sombra; el contenido va directo sobre las estrellas.
+    Acotado a `.admin-layout`: el resto del sitio usa los mismos `.panel` y no
+    cambia, y tampoco lo hacen los diálogos (`#qrMotivoDialogo`) ni el
+    arranque (`#adminStartup`), que quedan fuera de #adminContent.
+  */
+  .admin-layout .panel {
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  /* `.panel--spacious` traía 4rem de alto por recuadro: sin recuadro, dos
+     secciones quedaban a ~8rem una de otra. 1.5rem + 1.5rem = 3rem parejos, y
+     sin relleno lateral para que el contenido alinee con el título. */
+  .admin-layout .panel--spacious {
+    padding: 1.5rem 0;
+  }
+
+  /* Encabezado de página: las mismas reglas que `.qr__title` / `.qr__intro`
+     (qr.css), para que Usuarios, Extractor y QR se lean como hermanas. Estas
+     hojas no cargan cursos.css, donde se vestían las clases `courses__*`. */
+  .admin-cabecera {
+    display: grid;
+    gap: 1rem;
+    margin-block-end: 2.5rem;
+  }
+
+  .admin-cabecera__titulo {
+    font-family: var(--font-display);
+    font-size: clamp(1.8rem, 4vw, 2.4rem);
+    background: var(--gradient-heading);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .admin-cabecera__intro {
+    max-inline-size: var(--ancho-lectura);
+    color: var(--color-text-muted);
+    line-height: 1.7;
+  }
+
+  /* Insignia del rol «Admin»: una pastilla luminosa. El halo es estático: una
+     animación por fila se pagaría en cada repintado de la tabla. */
+  .admin-insignia {
+    display: inline-block;
+    margin-inline-start: 0.5rem;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 60%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent) 45%, transparent),
+      inset 0 0 6px color-mix(in srgb, var(--color-accent) 30%, transparent);
+    color: #7befff;
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--color-accent) 70%, transparent);
+    vertical-align: middle;
+  }
+
+  /* Estrellas de fondo (qr.fondo.js): las mismas reglas que `#particles-fondo`
+     de qr.css, para las páginas de Administración que no cargan esa hoja. */
+  #particles-fondo {
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-behind);
+    pointer-events: none;
+  }
+
+  #particles-fondo canvas {
+    display: block;
+  }
+
+  /* En celular el menú pasa arriba, como pestañas en fila. */
+  @media (max-width: 760px) {
+    .admin-layout {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.25rem;
+    }
+
+    .admin-nav {
+      position: static;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .admin-nav__titulo {
+      grid-column: 1 / -1;
+      margin-bottom: 0;
+    }
+
+    .admin-nav__link {
+      text-align: center;
+    }
+  }
+}
