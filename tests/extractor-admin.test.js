@@ -1921,13 +1921,17 @@ test("the breakdown starts hidden: a missing field is not a zero", () => {
   assert.match(js, /sinIdentificarMetricaBanco/, "y el JS lo gobierna");
 });
 
-test("the accounts table is NOT filtered — it is a registry, not a measurement", () => {
+test("the accounts table ignores the admin switch — it is a registry, not a measurement", () => {
   /*
-    Filtrarla escondería tu propia fila y con ella el botón de editar tus
-    límites, y nada en pantalla diría por qué desapareció.
+    Filtrarla con el interruptor escondería tu propia fila y con ella el botón
+    de editar tus límites, y nada en pantalla diría por qué desapareció.
+
+    Desde el 2026-10-03 la tabla sí tiene UN filtro: solo quien aceptó los
+    Términos. Ése no depende del interruptor, y el encabezado lo dice
+    («X de Y aceptaron»).
   */
   const js = read(SCRIPT);
-  const armado = js.match(/const orden = \[\.\.\.perfiles\][\s\S]{0,400}/)?.[0] ?? "";
+  const armado = js.match(/const orden = \[\.\.\.conTerminos\][\s\S]{0,400}/)?.[0] ?? "";
 
   assert.notEqual(armado, "", "falta el armado de la tabla");
   assert.doesNotMatch(
@@ -2326,4 +2330,48 @@ test("the pager sits outside the scrolling list and hides when one page is enoug
   assert.match(js, /Cuentas \$\{rango\.desde\}–\$\{rango\.hasta\} de \$\{filas\.length\}/);
   // Se esconden filas, no se repintan: lo tecleado sin guardar sobrevive.
   assert.match(js, /fila\.hidden = /);
+});
+
+/*
+  2026-10-03: la tabla del Extractor muestra solo a quien aceptó los Términos.
+  La regla es la de `terminos_aceptados()` (migración 0047): el ÚLTIMO evento
+  de cada cuenta, y tiene que ser una aceptación de la versión vigente.
+*/
+test("aceptaronTerminos keeps only accounts whose latest event accepts the current version", () => {
+  const aceptaronTerminos = cargarFuncionPura("aceptaronTerminos");
+  // De la más reciente a la más vieja, como las pide admin.js.
+  const filas = [
+    { user_id: "a", evento: "aceptacion", version: "1.0" },
+    { user_id: "b", evento: "revocacion", version: "1.0" },
+    { user_id: "b", evento: "aceptacion", version: "1.0" },
+    { user_id: "c", evento: "aceptacion", version: "0.9" },
+    { user_id: "d", evento: "aceptacion", version: "1.0" },
+    { user_id: "d", evento: "revocacion", version: "1.0" },
+    { user_id: null, evento: "aceptacion", version: "1.0" },
+  ];
+  assert.deepEqual([...aceptaronTerminos(filas, "1.0")].sort(), ["a", "d"],
+    "b revocó después de aceptar; c aceptó una versión vieja; sin cuenta no cuenta");
+  assert.equal(aceptaronTerminos([], "1.0").size, 0);
+});
+
+test("the extractor table reads aceptacion_terminos and lists only who accepted", () => {
+  const js = sinComentariosJs(read(SCRIPT));
+  assert.match(js, /\.from\("aceptacion_terminos"\)\s*\.select\("user_id, version, evento, ocurrido_en"\)/);
+  assert.match(js, /\.order\("ocurrido_en", \{ ascending: false \}\)/,
+    "la más reciente primero: de eso depende quedarse con el último evento");
+  assert.match(js, /const orden = \[\.\.\.conTerminos\]/, "se pinta la lista filtrada, no todos los perfiles");
+  assert.match(js, /`· \$\{conTerminos\.length\} de \$\{perfiles\.length\} aceptaron`/);
+
+  // Sin la tabla (o sin poder leerla) no se puede decir quién aceptó: aviso,
+  // no la lista completa.
+  assert.match(js, /if \(aceptaciones\.error\)[\s\S]*?Todavía no hay registro de aceptaciones de los términos\.[\s\S]*?return;/);
+  assert.match(js, /Nadie ha aceptado los términos todavía\./);
+});
+
+test("admin.js and extractor.js agree on the current terms version", () => {
+  const admin = read(SCRIPT).match(/const TERMINOS_VERSION = "([^"]+)"/)?.[1];
+  const extractor = read("src/app/features/transactions/extractor.js")
+    .match(/const TERMINOS_VERSION_LOCAL = "([^"]+)"/)?.[1];
+  assert.ok(admin && extractor, "faltan las constantes de versión");
+  assert.equal(admin, extractor);
 });
