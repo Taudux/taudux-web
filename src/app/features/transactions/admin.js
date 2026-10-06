@@ -1827,14 +1827,49 @@
     pie.innerHTML = "";
   }
 
+  /*
+    Solo quien aceptó los Términos aparece en esta tabla (2026-10-03). La
+    prueba vive en `aceptacion_terminos` (migración 0047), que administración
+    puede leer por RLS. Vale la regla de `terminos_aceptados()` de esa
+    migración: cuenta el ÚLTIMO evento de cada cuenta, y tiene que ser una
+    aceptación de la versión vigente. Una revocación posterior la anula; una
+    aceptación de una versión vieja no cuenta.
+
+    La versión es la misma `TERMINOS_VERSION_LOCAL` de extractor.js: un test
+    exige que coincidan.
+  */
+  const TERMINOS_VERSION = "1.0";
+
+  // `filas` llega de la más reciente a la más vieja: la primera que aparece de
+  // cada cuenta es su último evento.
+  function aceptaronTerminos(filas, version) {
+    const ultimo = new Map();
+    filas.forEach((fila) => {
+      if (fila.user_id && !ultimo.has(fila.user_id)) ultimo.set(fila.user_id, fila);
+    });
+    const aceptaron = new Set();
+    ultimo.forEach((fila, uid) => {
+      if (fila.evento === "aceptacion" && fila.version === version) aceptaron.add(uid);
+    });
+    return aceptaron;
+  }
+
   async function cargarUsuariosDelSitio() {
     const lista = el("listaPerfiles");
 
-    const { data, error } = await supabaseClient
-      .from("perfiles")
-      .select("id, nombre, apellidos, rol, creado_en")
-      .order("rol", { ascending: true })
-      .order("creado_en", { ascending: false });
+    const [{ data, error }, aceptaciones] = await Promise.all([
+      supabaseClient
+        .from("perfiles")
+        .select("id, nombre, apellidos, rol, creado_en")
+        .order("rol", { ascending: true })
+        .order("creado_en", { ascending: false }),
+      supabaseClient
+        .from("aceptacion_terminos")
+        .select("user_id, version, evento, ocurrido_en")
+        .not("user_id", "is", null)
+        .order("ocurrido_en", { ascending: false })
+        .order("id", { ascending: false }),
+    ]);
 
     if (error) {
       sinPaginacionPerfiles();
@@ -1849,7 +1884,6 @@
     const creados = perfiles.map((p) => String(p.creado_en || "").slice(0, 7))
       .filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
     periodoMinimo = creados[0] || "";
-    el("totalPerfiles").textContent = `· ${perfiles.length}`;
 
     if (!perfiles.length) {
       sinPaginacionPerfiles();
@@ -1892,8 +1926,33 @@
       fallarRegiones();
     }
 
+    // Sin registro legible de aceptaciones no se puede decir quién aceptó: la
+    // tabla no se muestra. Las gráficas de arriba ya se pintaron y siguen
+    // contando a todos.
+    if (aceptaciones.error) {
+      console.warn("[admin] no se pudo leer aceptacion_terminos:", aceptaciones.error);
+      el("totalPerfiles").textContent = `· ${perfiles.length}`;
+      sinPaginacionPerfiles();
+      lista.innerHTML = '<p class="admin__vacio admin__vacio--aviso">'
+        + "Todavía no hay registro de aceptaciones de los términos.</p>";
+      refrescarCambios();
+      return;
+    }
+    const aceptaron = aceptaronTerminos(aceptaciones.data || [], TERMINOS_VERSION);
+    const conTerminos = perfiles.filter((p) => aceptaron.has(p.id));
+    el("totalPerfiles").textContent =
+      `· ${conTerminos.length} de ${perfiles.length} aceptaron`;
+
+    if (!conTerminos.length) {
+      sinPaginacionPerfiles();
+      lista.innerHTML = '<p class="admin__vacio">'
+        + "Nadie ha aceptado los términos todavía.</p>";
+      refrescarCambios();
+      return;
+    }
+
     // Administración primero: es lo que se busca al abrir esta lista.
-    const orden = [...perfiles].sort(
+    const orden = [...conTerminos].sort(
       (a, b) => Number(b.rol === "admin") - Number(a.rol === "admin"));
 
     perfilesPorUid.clear();

@@ -200,7 +200,11 @@ btnProcesar.addEventListener("click", async () => {
         producto_no_soportado: "Todavía no procesamos este producto",
         sin_cuota: "Se acabaron tus extracciones gratis",
         lote_no_permitido: "Solo un estado de cuenta a la vez",
+        terminos_no_aceptados: "Primero acepta los términos",
       };
+      // Cuando la API exija los términos, puede rechazar aunque aquí ya se
+      // hubieran aceptado (otro navegador, versión nueva): se reabre la puerta.
+      if (json.error === "terminos_no_aceptados") revisarPuertas(json.terminos);
       mostrarError(titulos[json.error] || "No pudimos procesarlo", json.mensaje,
                    json.puede_donar === true);
       return;
@@ -2076,6 +2080,9 @@ function actualizarCuota(cuota) {
     ? "o haz clic para elegirlos · puedes subir varios a la vez · PDF · máx. 25 MB c/u"
     : "o haz clic para elegir el archivo · PDF · máximo 25 MB";
   aplicarBloqueo();
+  // La puerta de los términos viaja con la cuota. Si la API aún no los
+  // conoce (no manda `terminos`), decide el registro local: ver más abajo.
+  revisarPuertas(cuota.terminos || terminosLocales());
 }
 
 /*
@@ -2446,6 +2453,202 @@ el("btnEnviarComentario").addEventListener("click", async () => {
   await enviarOpinion("comentario", texto);
   agradecerYCerrar("cajaFlotanteComentario", "textoComentario");
 });
+
+/* ------------------------------------------------- puertas de entrada --- */
+/*
+  Dos cuadros al ENTRAR, en orden: los Términos (bloqueante, se aceptan
+  escribiendo la frase) y el aviso de que nada se guarda ("Entendido" cierra
+  por esta visita; "No mostrar de nuevo" lo apaga en este navegador).
+
+  QUIÉN DECIDE si ya se aceptaron. La API es la autoridad: cuando conoce los
+  términos, manda `cuota.terminos`, registra la aceptación con su evidencia
+  (versión, fecha, identidad, IP, navegador) y rechaza con 403
+  `terminos_no_aceptados` cualquier extracción sin ella. Pero la API se
+  despliega aparte de esta página, y hasta que tenga esa parte, esta página
+  NO puede dejar a nadie encerrado detrás de un cuadro que no se cierra: si
+  la cuota no trae `terminos` o `/api/terminos/aceptar` responde 404, la
+  aceptación se registra en este navegador y se continúa. La frase se exige
+  igual; lo único que falta en ese modo es la evidencia del lado del
+  servidor, y eso llega sólo con desplegar la API.
+*/
+const FRASE_ACEPTACION = "acepto terminos y condiciones";
+const TERMINOS_VERSION_LOCAL = "1.0";
+const CLAVE_TERMINOS_LOCAL = "taudux.extractor.terminos_aceptados";
+const CLAVE_AVISO_OCULTO = "taudux.extractor.aviso_no_almacena_oculto";
+let terminosActuales = null;
+let avisoMostradoEstaVisita = false;
+
+// "Acepto Términos y Condiciones." también vale: se comparan sin acentos,
+// sin mayúsculas y sin puntuación, igual que hace la API.
+function normalizarFrase(texto) {
+  return (texto || "").toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[.!\u00a1]/g, "")
+    .replace(/\s+/g, " ").trim();
+}
+
+// Mismas guardas que `leerSesionAnon()`: localStorage LANZA cuando el
+// navegador bloquea el almacenamiento, y eso no debe romper la página.
+function leerLocal(clave) {
+  try { return localStorage.getItem(clave); } catch (error) { return null; }
+}
+function guardarLocal(clave, valor) {
+  try { localStorage.setItem(clave, valor); } catch (error) { /* se pedirá otra vez */ }
+}
+
+function terminosLocales() {
+  return {
+    version: TERMINOS_VERSION_LOCAL,
+    aceptados: leerLocal(CLAVE_TERMINOS_LOCAL) === TERMINOS_VERSION_LOCAL,
+    local: true,
+  };
+}
+
+// Mientras una puerta está abierta, el resto del body queda inerte: ni clic,
+// ni tabulador, ni lector de pantalla llegan a la herramienta de fondo.
+function bloquearFondo(bloquear) {
+  Array.from(document.body.children).forEach((nodo) => {
+    if (!nodo.classList.contains("puerta")) nodo.inert = bloquear;
+  });
+  document.body.classList.toggle("puerta-abierta", bloquear);
+}
+
+function abrirPuerta(id, enfocar) {
+  const puerta = el(id);
+  if (!puerta || !puerta.hidden) return;
+  puerta.hidden = false;
+  bloquearFondo(true);
+  const objetivo = enfocar ? el(enfocar) : null;
+  if (objetivo) objetivo.focus();
+}
+
+function cerrarPuerta(id) {
+  const puerta = el(id);
+  if (!puerta || puerta.hidden) return;
+  puerta.hidden = true;
+  const quedaAbierta = Array.from(document.querySelectorAll(".puerta"))
+    .some((p) => !p.hidden);
+  if (!quedaAbierta) bloquearFondo(false);
+}
+
+function mostrarAvisoSiProcede() {
+  if (avisoMostradoEstaVisita || leerLocal(CLAVE_AVISO_OCULTO) === "1") return;
+  avisoMostradoEstaVisita = true;
+  abrirPuerta("puertaAviso", "btnAvisoEntendido");
+}
+
+// Idempotente: se llama con cada cuota y con cada 403 de términos.
+function revisarPuertas(terminos) {
+  if (!terminos) return;
+  terminosActuales = terminos;
+  // Sin sesión (plan "anonimo") la aceptación no puede quedar registrada: se
+  // ignora cualquier aceptación local previa y la puerta siempre pide cuenta,
+  // con el login como único camino. El aviso "no almacena" espera a que haya
+  // sesión y términos aceptados.
+  const sinCuenta = planActual === "anonimo";
+  siExiste("terminosConCuenta", (n) => { n.hidden = sinCuenta; });
+  siExiste("terminosSinCuenta", (n) => { n.hidden = !sinCuenta; });
+  if (sinCuenta) {
+    siExiste("btnTerminosIniciarSesion", (a) => {
+      a.href = urlLoginConDestino(window.location.pathname + window.location.search);
+    });
+    if (!el("puertaAviso").hidden) {
+      cerrarPuerta("puertaAviso");
+      avisoMostradoEstaVisita = false;
+    }
+    document.querySelectorAll("[data-terminos-version]").forEach((n) => {
+      n.textContent = terminos.version || TERMINOS_VERSION_LOCAL;
+    });
+    abrirPuerta("puertaTerminos", "btnTerminosIniciarSesion");
+    return;
+  }
+  document.querySelectorAll("[data-terminos-version]").forEach((n) => {
+    n.textContent = terminos.version || TERMINOS_VERSION_LOCAL;
+  });
+  if (!terminos.aceptados) {
+    // Los términos van primero: si el aviso ya estaba abierto (el navegador
+    // creía que sí, la API dice que no), se cierra y se vuelve a mostrar
+    // después de aceptar.
+    if (!el("puertaAviso").hidden) {
+      cerrarPuerta("puertaAviso");
+      avisoMostradoEstaVisita = false;
+    }
+    abrirPuerta("puertaTerminos", "fraseTerminos");
+    return;
+  }
+  cerrarPuerta("puertaTerminos");
+  mostrarAvisoSiProcede();
+}
+
+function errorTerminos(texto) {
+  el("errorTerminos").textContent = texto;
+  el("errorTerminos").hidden = false;
+  el("btnAceptarTerminos").disabled = false;
+}
+
+siExiste("fraseTerminos", (campo) => {
+  const boton = el("btnAceptarTerminos");
+  campo.addEventListener("input", () => {
+    boton.disabled = normalizarFrase(campo.value) !== FRASE_ACEPTACION;
+    el("errorTerminos").hidden = true;
+  });
+  campo.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !boton.disabled) boton.click();
+  });
+
+  boton.addEventListener("click", async () => {
+    boton.disabled = true;
+    const version = terminosActuales ? terminosActuales.version : TERMINOS_VERSION_LOCAL;
+    let respuesta;
+    try {
+      respuesta = await apiFetch("/api/terminos/aceptar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frase: campo.value, version }),
+      });
+    } catch (error) {
+      errorTerminos("Sin conexión con el servidor. Inténtalo de nuevo.");
+      return;
+    }
+
+    // La API todavía no conoce los términos: se registra aquí y se sigue.
+    if (respuesta.status === 404) {
+      guardarLocal(CLAVE_TERMINOS_LOCAL, version);
+      campo.value = "";
+      revisarPuertas({ ...terminosLocales(), aceptados: true });
+      return;
+    }
+
+    let json = {};
+    try { json = await respuesta.json(); } catch (error) { /* sin cuerpo */ }
+    if (!respuesta.ok) {
+      if (json.terminos) terminosActuales = json.terminos;
+      errorTerminos(json.mensaje || "No se pudo registrar tu aceptación. Inténtalo de nuevo.");
+      return;
+    }
+    guardarLocal(CLAVE_TERMINOS_LOCAL, version);
+    campo.value = "";
+    if (json.cuota) actualizarCuota(json.cuota);   // trae terminos.aceptados = true
+    else revisarPuertas({ ...terminosLocales(), aceptados: true });
+  });
+});
+
+siExiste("btnAvisoEntendido", (b) => b.addEventListener("click", () => cerrarPuerta("puertaAviso")));
+siExiste("btnAvisoNoMostrar", (b) => b.addEventListener("click", () => {
+  guardarLocal(CLAVE_AVISO_OCULTO, "1");
+  cerrarPuerta("puertaAviso");
+}));
+// Escape cierra el aviso (equivale a "Entendido"); los términos, nunca.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && el("puertaAviso") && !el("puertaAviso").hidden) {
+    cerrarPuerta("puertaAviso");
+  }
+});
+
+// La puerta ESPERA a la cuota. Antes no la esperaba (si la API no respondía,
+// decidía este navegador), pero desde que el extractor exige cuenta, lo
+// primero que hay que saber es si hay sesión, y eso sólo lo dice el servidor:
+// `planActual` arranca en "anonimo" y abrir aquí le mostraba «Iniciar sesión»
+// por un instante a quien ya la tenía. Sin cuota tampoco se puede extraer,
+// así que no hay nada que proteger mientras tanto.
 
 /* ---------------------------------------------------------------- inicio --- */
 /*
