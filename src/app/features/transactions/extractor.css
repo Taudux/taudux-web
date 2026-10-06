@@ -1264,6 +1264,9 @@
   .puerta__campo { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.9rem; }
   .puerta__campo code { font-family: var(--font-ui); color: var(--color-accent); }
   .puerta__error { color: var(--color-error); font-size: 0.88rem; }
+  .puerta__sin-cuenta { font-size: 0.92rem; line-height: 1.5; }
+  /* El enlace de login imita al botón Continuar: mismo `button--glow`, sin subrayado. */
+  .puerta__acciones a.button--glow { display: inline-block; text-decoration: none; text-align: center; }
   .puerta__acciones { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.25rem; }
 
   @media (max-width: 40rem) {

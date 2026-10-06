@@ -2540,6 +2540,27 @@ function mostrarAvisoSiProcede() {
 function revisarPuertas(terminos) {
   if (!terminos) return;
   terminosActuales = terminos;
+  // Sin sesión (plan "anonimo") la aceptación no puede quedar registrada: se
+  // ignora cualquier aceptación local previa y la puerta siempre pide cuenta,
+  // con el login como único camino. El aviso "no almacena" espera a que haya
+  // sesión y términos aceptados.
+  const sinCuenta = planActual === "anonimo";
+  siExiste("terminosConCuenta", (n) => { n.hidden = sinCuenta; });
+  siExiste("terminosSinCuenta", (n) => { n.hidden = !sinCuenta; });
+  if (sinCuenta) {
+    siExiste("btnTerminosIniciarSesion", (a) => {
+      a.href = urlLoginConDestino(window.location.pathname + window.location.search);
+    });
+    if (!el("puertaAviso").hidden) {
+      cerrarPuerta("puertaAviso");
+      avisoMostradoEstaVisita = false;
+    }
+    document.querySelectorAll("[data-terminos-version]").forEach((n) => {
+      n.textContent = terminos.version || TERMINOS_VERSION_LOCAL;
+    });
+    abrirPuerta("puertaTerminos", "btnTerminosIniciarSesion");
+    return;
+  }
   document.querySelectorAll("[data-terminos-version]").forEach((n) => {
     n.textContent = terminos.version || TERMINOS_VERSION_LOCAL;
   });
@@ -2622,10 +2643,12 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// La puerta no espera a la API: si la cuota no llega (red caída, API
-// dormida), se decide con lo que sepa este navegador. Cuando la cuota llega,
-// `actualizarCuota()` vuelve a decidir con lo que diga el servidor.
-revisarPuertas(terminosLocales());
+// La puerta ESPERA a la cuota. Antes no la esperaba (si la API no respondía,
+// decidía este navegador), pero desde que el extractor exige cuenta, lo
+// primero que hay que saber es si hay sesión, y eso sólo lo dice el servidor:
+// `planActual` arranca en "anonimo" y abrir aquí le mostraba «Iniciar sesión»
+// por un instante a quien ya la tenía. Sin cuota tampoco se puede extraer,
+// así que no hay nada que proteger mientras tanto.
 
 /* ---------------------------------------------------------------- inicio --- */
 /*

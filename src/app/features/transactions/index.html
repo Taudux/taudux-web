@@ -560,15 +560,26 @@
         Aviso de Privacidad.
       </p>
 
-      <label class="puerta__campo">
-        <span>Para continuar, escribe: <code>acepto términos y condiciones</code></span>
-        <input type="text" class="field" id="fraseTerminos" autocomplete="off"
-               autocapitalize="off" spellcheck="false"
-               placeholder="acepto términos y condiciones">
-      </label>
-      <p class="puerta__error" id="errorTerminos" role="alert" hidden></p>
-      <div class="puerta__acciones">
-        <button type="button" class="button--glow" id="btnAceptarTerminos" disabled>Continuar</button>
+      <!-- Con sesión: frase + Continuar. Sin sesión (plan "anonimo"): la aceptación
+           queda ligada a una cuenta, así que se invita a iniciar sesión. extractor.js
+           alterna los dos bloques con `hidden` en revisarPuertas(). -->
+      <div id="terminosConCuenta">
+        <label class="puerta__campo">
+          <span>Para continuar, escribe: <code>acepto términos y condiciones</code></span>
+          <input type="text" class="field" id="fraseTerminos" autocomplete="off"
+                 autocapitalize="off" spellcheck="false"
+                 placeholder="acepto términos y condiciones">
+        </label>
+        <p class="puerta__error" id="errorTerminos" role="alert" hidden></p>
+        <div class="puerta__acciones">
+          <button type="button" class="button--glow" id="btnAceptarTerminos" disabled>Continuar</button>
+        </div>
+      </div>
+      <div id="terminosSinCuenta" hidden>
+        <p class="puerta__sin-cuenta">Para aceptar los términos necesitas una cuenta. Inicia sesión o crea tu cuenta gratis; al terminar volverás aquí.</p>
+        <div class="puerta__acciones">
+          <a class="button--glow" id="btnTerminosIniciarSesion" href="/app/features/auth/login/">Iniciar sesión</a>
+        </div>
       </div>
     </div>
   </div>
