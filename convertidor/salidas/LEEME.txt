@@ -1,0 +1,2 @@
+﻿Carpeta sugerida para guardar los PDF generados.
+Puedes elegirla en la aplicacion, en la seccion 2 (Donde guardar los PDF).
