@@ -133,10 +133,16 @@ test("el marco aislado no pide archivos: arranca en línea, valida event.source 
   assert.match(ad, /slides:pantalla-completa/);
 });
 
-test("vercel.json: la regla de _aislado va ÚLTIMA y no deja salir nada de red", () => {
+test("vercel.json: la regla de _aislado existe y no deja salir nada de red", () => {
   const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
-  const ultima = vercel.headers[vercel.headers.length - 1];
-  assert.equal(ultima.source, "/content/slides/_aislado(.*)");
+  // La regla de _captura va después (ver tests/slides-captura.test.js): ambas
+  // sólo se pisan con rutas distintas, así que el orden entre ellas no importa.
+  const ultima = vercel.headers.find((r) => r.source === "/content/slides/_aislado(.*)");
+  assert.ok(ultima, "la regla de _aislado existe");
+  assert.ok(
+    vercel.headers.indexOf(ultima) > vercel.headers.findIndex((r) => r.source === "/content/slides(.*)"),
+    "va después de la regla general de /content/slides"
+  );
   const valor = (n) => ultima.headers.find((h) => h.key === n)?.value;
   const csp = valor("Content-Security-Policy");
   assert.match(csp, /connect-src 'none'/);

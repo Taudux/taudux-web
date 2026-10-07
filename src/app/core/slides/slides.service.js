@@ -756,6 +756,27 @@ async function firmarPortadasDeSlides(catalogo) {
   return urls;
 }
 
+/*
+  El HTML de un deck ya subido, como texto, para generarle la portada sin que
+  quien edita tenga que volver a elegir el archivo. Mismo patrón que la página
+  puente: `?v=` con la versión, porque Storage sirve con cache de una hora.
+  Devuelve `null` si no se pudo; nunca lanza.
+*/
+async function descargarHtmlDeSlide(archivoPath, version) {
+  const cliente = clienteDeSlides();
+  if (!cliente || !archivoPath) return null;
+
+  try {
+    const descarga = await cliente.storage
+      .from(BUCKET_SLIDES)
+      .download(`${archivoPath}?v=${version || 1}`);
+    if (descarga.error || !descarga.data) return null;
+    return await descarga.data.text();
+  } catch {
+    return null;
+  }
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     RUTA_BASE_SLIDES,
@@ -771,5 +792,6 @@ if (typeof module === "object" && module.exports) {
     editarSlide,
     borrarSlide,
     firmarPortadasDeSlides,
+    descargarHtmlDeSlide,
   });
 }

@@ -782,6 +782,67 @@
       }
     }
 
+    /*
+      La portada automática: la primera lámina del deck, fotografiada dentro de
+      un marco de origen opaco (`sandbox="allow-scripts"` SIN allow-same-origin)
+      que el deck no puede usar para leer la sesión. Ver
+      /content/slides/_captura/index.html. Devuelve un Blob PNG o null; nunca
+      lanza, y siempre retira el marco y el listener.
+    */
+    async function capturarPrimeraLamina(textoHtml) {
+      let marco = null;
+      let alEscuchar = null;
+      let temporizador = null;
+      try {
+        const respuesta = await fetch("/content/slides/_captura/modern-screenshot.js");
+        if (!respuesta.ok) return null;
+        const libreria = await respuesta.text();
+
+        return await new Promise((resolver) => {
+          const terminar = (valor) => {
+            clearTimeout(temporizador);
+            if (alEscuchar) window.removeEventListener("message", alEscuchar);
+            if (marco) marco.remove();
+            marco = null;
+            alEscuchar = null;
+            resolver(valor);
+          };
+
+          marco = document.createElement("iframe");
+          marco.setAttribute("sandbox", "allow-scripts");
+          marco.setAttribute("aria-hidden", "true");
+          marco.setAttribute("tabindex", "-1");
+          marco.setAttribute("title", "Generando portada");
+          marco.style.cssText =
+            "position:fixed;left:-20000px;top:0;width:1600px;height:900px;border:0;pointer-events:none;";
+
+          alEscuchar = (evento) => {
+            if (!marco || evento.source !== marco.contentWindow) return;
+            const datos = evento.data;
+            if (!datos || datos.tipo !== "slides:captura") return;
+            terminar(datos.imagen instanceof Blob ? datos.imagen : null);
+          };
+          window.addEventListener("message", alEscuchar);
+          temporizador = setTimeout(() => terminar(null), 20000);
+
+          marco.addEventListener("load", () => {
+            if (!marco || !marco.contentWindow) return;
+            marco.contentWindow.postMessage(
+              { tipo: "slides:capturar", html: textoHtml, libreria, ancho: 1600, alto: 900 },
+              "*"
+            );
+          }, { once: true });
+          marco.src = "/content/slides/_captura/";
+          document.body.appendChild(marco);
+        });
+      } catch {
+        if (alEscuchar) window.removeEventListener("message", alEscuchar);
+        clearTimeout(temporizador);
+        if (marco) marco.remove();
+        return null;
+      }
+    }
+
     function mostrarErroresDeCampo(errores) {
       const campos = {
         titulo: ["Titulo", form.titulo],
@@ -862,6 +923,20 @@
           }
         }
 
+        // Sin portada elegida, se genera sola con la primera lámina. Si falla, se
+        // guarda igual (sin portada) y se avisa al final.
+        let portadaFallida = false;
+        if (!portada && debeGenerarPortada({ portadaElegida, quitarPortada: form.quitarPortada.checked, edicion })) {
+          form.enviar.textContent = "Generando portada…";
+          const textoHtml = archivo
+            ? await archivo.text().catch(() => null)
+            : await descargarHtmlDeSlide(edicion.archivo_path, edicion.version);
+          const captura = textoHtml ? await capturarPrimeraLamina(textoHtml) : null;
+          portada = captura ? await prepararPortada(captura) : null;
+          portadaFallida = !portada;
+          form.enviar.textContent = edicion ? "Guardando…" : "Subiendo…";
+        }
+
         const resultado = edicion
           ? await editarSlide({
             id: edicion.id,
@@ -913,6 +988,7 @@
             mensaje = "Listo. Un administrador la revisará antes de publicarla.";
           }
           mostrarToast(mensaje, "success");
+          if (portadaFallida) mostrarToast("No se pudo generar la portada; puedes subir una.", "warning");
         }
         await cargarCatalogo();
       } finally {

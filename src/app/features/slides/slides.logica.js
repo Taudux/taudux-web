@@ -550,6 +550,17 @@ function llenaElVisor(presentacion) {
   );
 }
 
+/*
+  ¿Hay que generar la portada sola? Sí cuando no se eligió una imagen, no se
+  marcó «Quitar portada» y la presentación no tiene portada todavía: una subida
+  nueva (sin `edicion`) o una edición de un deck sin `portada_path`.
+*/
+function debeGenerarPortada({ portadaElegida, quitarPortada, edicion } = {}) {
+  if (portadaElegida || quitarPortada) return false;
+  if (!edicion) return true;
+  return !edicion.portada_path;
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     indiceAcotado,
@@ -580,5 +591,6 @@ if (typeof module === "object" && module.exports) {
     contarLaminas,
     SLUGS_QUE_LLENAN_EL_VISOR,
     llenaElVisor,
+    debeGenerarPortada,
   });
 }
