@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/app/shared/navbar/navbar.css">
   <link rel="stylesheet" href="/app/shared/button/button.css">
   <link rel="stylesheet" href="/app/shared/panel/panel.css">
+  <link rel="stylesheet" href="/app/shared/field/field.css">
   <link rel="stylesheet" href="/app/features/slides/slides.css">
 </head>
 
@@ -39,7 +40,18 @@
       <section class="slides__catalogo" id="slidesCatalogo" aria-labelledby="slidesTitulo">
         <header class="slides__header">
           <p class="slides__eyebrow">Taudux Academy</p>
-          <h1 class="slides__titulo heading--gradient" id="slidesTitulo">Slides</h1>
+          <div class="slides__titulo-fila">
+            <h1 class="slides__titulo heading--gradient" id="slidesTitulo">Slides</h1>
+            <!-- Sólo lo ven administradores y autores (slides.js lo decide con
+                 es_admin() y es_autor_slides()); la RLS es la que protege. -->
+            <button type="button" class="slides__subir" id="slidesSubir" hidden>
+              <svg class="slides__subir-icono" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 16V4M7 9l5-5 5 5M5 20h14" />
+              </svg>
+              Subir presentación
+            </button>
+          </div>
 
           <noscript>
             <p class="slides__noscript panel">
@@ -56,6 +68,15 @@
           <button class="button button--outline" type="button" id="slidesReintentar" hidden>Reintentar carga</button>
         </div>
 
+        <!-- Las privadas: «Solo administradores» y «Por revisar». Arranca
+             cerrado y recuerda cómo lo dejó la persona. -->
+        <details class="slides__privadas" id="slidesPrivadas" hidden>
+          <summary class="slides__privadas-titulo" id="slidesPrivadasTitulo"></summary>
+          <ul class="slides__grilla" id="slidesGrillaPrivadas" aria-label="Presentaciones privadas"></ul>
+        </details>
+
+        <div class="slides__filtros" id="slidesFiltros" role="group" aria-label="Filtrar por categoría" hidden></div>
+
         <ul class="slides__grilla" id="slidesGrilla" aria-label="Presentaciones disponibles"></ul>
       </section>
 
@@ -69,8 +90,10 @@
         <div class="slides__marco" id="slidesMarco">
           <!-- Sin `sandbox` a propósito: allow-scripts + allow-same-origin lo
                anula del todo (el navegador lo avisa en consola), y el visor
-               necesita el mismo origen para escuchar el teclado adentro. Las
-               diapositivas son archivos propios del repo, no contenido ajeno. -->
+               necesita el mismo origen para escuchar el teclado adentro. Los
+               decks del repo son archivos propios. Los SUBIDOS no corren su
+               código: los abre /content/slides/_subida/, que les quita todo
+               <script> antes de pintarlos (ver subida.js). -->
           <iframe class="slides__iframe" id="slidesIframe" title="Diapositiva"></iframe>
         </div>
 
@@ -85,15 +108,90 @@
     </div>
   </main>
 
+  <dialog class="slides__dialogo" id="slidesDialogo" aria-labelledby="slidesDialogoTitulo">
+    <form class="slides__form" id="slidesForm" novalidate>
+      <h2 class="slides__dialogo-titulo" id="slidesDialogoTitulo">Subir presentación</h2>
+
+      <div class="slides__campo">
+        <label for="slidesFormTitulo">Título</label>
+        <input class="field" id="slidesFormTitulo" name="titulo" type="text" maxlength="160" required
+          autocomplete="off" aria-describedby="slidesFormTituloError">
+        <p class="slides__campo-error" id="slidesFormTituloError" role="alert"></p>
+      </div>
+
+      <div class="slides__campo">
+        <label for="slidesFormDescripcion">Descripción <span class="slides__opcional">(opcional)</span></label>
+        <textarea class="field field--textarea" id="slidesFormDescripcion" name="descripcion" maxlength="600" rows="3"
+          aria-describedby="slidesFormDescripcionError"></textarea>
+        <p class="slides__campo-error" id="slidesFormDescripcionError" role="alert"></p>
+      </div>
+
+      <div class="slides__campo">
+        <label for="slidesFormCategoria">Categoría</label>
+        <input class="field" id="slidesFormCategoria" name="categoria" type="text" list="slidesFormCategorias"
+          maxlength="40" required autocomplete="off" aria-describedby="slidesFormCategoriaError">
+        <datalist id="slidesFormCategorias"></datalist>
+        <p class="slides__campo-error" id="slidesFormCategoriaError" role="alert"></p>
+      </div>
+
+      <div class="slides__campo">
+        <label for="slidesFormPortada">Portada <span class="slides__opcional">(opcional)</span></label>
+        <input class="field" id="slidesFormPortada" name="portada" type="file"
+          accept="image/jpeg,image/png,image/webp" aria-describedby="slidesFormPortadaAyuda slidesFormPortadaError">
+        <p class="slides__campo-ayuda" id="slidesFormPortadaAyuda">JPG, PNG o WebP de hasta 2 MB. Se recorta a 16:10.</p>
+        <p class="slides__campo-error" id="slidesFormPortadaError" role="alert"></p>
+      </div>
+
+      <div class="slides__campo">
+        <label for="slidesFormArchivo">Archivo HTML</label>
+        <input class="field" id="slidesFormArchivo" name="archivo" type="file" accept=".html,.htm,text/html" required
+          aria-describedby="slidesFormArchivoAyuda slidesFormArchivoError">
+        <p class="slides__campo-ayuda" id="slidesFormArchivoAyuda" role="status">Un solo .html de hasta 15 MB, con sus láminas en section.slide.</p>
+        <p class="slides__campo-error" id="slidesFormArchivoError" role="alert"></p>
+      </div>
+
+      <div class="slides__campo" id="slidesFormAutorCampo" hidden>
+        <label for="slidesFormAutor">Autor</label>
+        <select class="field" id="slidesFormAutor" name="autor" required aria-describedby="slidesFormAutorError">
+          <option value="">Elige al autor</option>
+        </select>
+        <p class="slides__campo-error" id="slidesFormAutorError" role="alert"></p>
+      </div>
+
+      <fieldset class="slides__campo slides__visibilidad" id="slidesFormVisibilidadCampo" hidden>
+        <legend>Visibilidad</legend>
+        <label class="slides__radio">
+          <input type="radio" name="visibilidad" value="admins" checked>
+          <span>🔒 Solo administradores</span>
+        </label>
+        <label class="slides__radio">
+          <input type="radio" name="visibilidad" value="publico">
+          <span>Público</span>
+        </label>
+        <p class="slides__campo-error" id="slidesFormVisibilidadError" role="alert"></p>
+      </fieldset>
+
+      <p class="slides__campo-ayuda" id="slidesFormNotaAutor" hidden>Se publicará cuando un administrador la revise.</p>
+
+      <p class="slides__form-error" id="slidesFormError" role="alert"></p>
+
+      <div class="slides__form-acciones">
+        <button type="button" class="button button--outline" id="slidesFormCancelar">Cancelar</button>
+        <button type="submit" class="slides__subir slides__subir--form" id="slidesFormEnviar">Subir</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app/core/supabase/supabase-client.js"></script>
   <script src="/app/core/auth/auth.service.js"></script>
+  <!-- La lógica va antes que el servicio: subirSlide usa validarSubida. -->
+  <script src="/app/features/slides/slides.logica.js"></script>
   <script src="/app/core/slides/slides.service.js"></script>
   <script src="/app/shared/navbar/navbar.js"></script>
   <script src="/app/shared/toast/toast.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
-  <script src="/app/features/slides/slides.logica.js"></script>
   <script src="/app/features/slides/slides.fondo.js"></script>
   <script src="/app/features/slides/slides.js"></script>
 </body>

@@ -1,8 +1,9 @@
 /*
-  La página de Slides: pinta el catálogo de presentaciones y el visor. El
-  catálogo lo pide a cargarCatalogoDeSlides() (slides.service.js) y la lógica
-  pura (acotar el índice, mapear teclas, normalizar el índice y una entrada
-  del manifiesto) sale de slides.logica.js. Acá sólo hay DOM.
+  La página de Slides: pinta el catálogo de presentaciones, el formulario para
+  subir una y el visor. El catálogo lo pide a cargarCatalogoDeSlides()
+  (slides.service.js) y la lógica pura (acotar el índice, mapear teclas,
+  normalizar una entrada, categorías, fechas, validar el formulario) sale de
+  slides.logica.js. Acá sólo hay DOM.
 
   El hash es la fuente de verdad de qué se ve: `#/<slug>` abre esa
   presentación en el visor, cualquier otra cosa (incluido vacío) muestra el
@@ -10,14 +11,28 @@
   botón de volver: el visor deja toda la ventana a la diapositiva, y al
   catálogo se regresa con "atrás" o con "Slides" en el menú.
 
-  Cada presentación es HOY un deck autocontenido: un único HTML con todas sus
-  diapositivas como `<section class="slide">`, que corre dentro de un
-  <iframe> del mismo origen y expone `window.slidesDeck` — `{ total,
-  indice(), ir(n) }` — más un evento `slides:cambio` en cada cambio de
-  diapositiva (ver deck.js de cada carpeta). El visor sólo carga el <iframe>
-  UNA VEZ por presentación (con `location.replace`, nunca `iframe.src`: ver
-  cargarPresentacionEnIframe); moverse entre diapositivas de la MISMA
-  presentación no recarga nada, llama a `slidesDeck.ir(n)` del propio deck.
+  EL CATÁLOGO. Una grilla de tarjetas (portada 16:10, categoría, título,
+  «autor · fecha») con una fila de filtros por categoría encima. Las
+  presentaciones privadas —«Solo administradores» y «Por revisar»— no van en la
+  grilla: van en un <details> hasta arriba, que arranca cerrado y recuerda
+  cómo lo dejó la persona. Quién ve qué lo decide la RLS (0048); acá sólo se
+  reparte lo que llegó.
+
+  SUBIR. El botón «Subir presentación» sólo aparece para administradores y
+  autores, y es una comodidad: quien lo forzara en la consola se toparía con la
+  RLS. El administrador elige autor y visibilidad; un autor sube siempre a su
+  nombre y «por revisar».
+
+  Cada presentación es un deck: un único HTML con todas sus diapositivas como
+  `<section class="slide">`, que corre dentro de un <iframe> del mismo origen y
+  expone `window.slidesDeck` — `{ total, indice(), ir(n) }` — más un evento
+  `slides:cambio` en cada cambio de diapositiva (ver deck.js de cada carpeta).
+  Los decks SUBIDOS no se abren directo: los abre la página puente
+  /content/slides/_subida/, que cumple el mismo contrato. El visor sólo carga
+  el <iframe> UNA VEZ por presentación (con `location.replace`, nunca
+  `iframe.src`: ver cargarPresentacionEnIframe); moverse entre diapositivas de
+  la MISMA presentación no recarga nada, llama a `slidesDeck.ir(n)` del propio
+  deck.
 
   El teclado se conecta dos veces, con responsabilidades que no se pisan:
   - en `document` (la página): flechas, PageUp/Down, espacio, Home/End y F,
@@ -29,6 +44,10 @@
   Si el deck no expone `slidesDeck` (un HTML que no sigue el contrato), el
   visor lo muestra igual: los botones de navegación quedan deshabilitados y
   el contador se queda vacío, pero pantalla completa sigue andando.
+
+  Si el deck declara `slidesDeck.controlesPropios` (el puente lo hace cuando el
+  deck subido trae sus propios botones, como el de QR), el visor esconde los
+  suyos: dos barras de navegación a la vez no tienen sentido.
 */
 (function () {
   const AVISOS = {
@@ -37,6 +56,10 @@
     vacio: "Todavía no hay presentaciones para mostrar.",
   };
 
+  /* Cómo dejó la persona el desplegable de privadas. Preferencia de
+     comodidad: si el storage está bloqueado, arranca cerrado y ya. */
+  const LLAVE_PRIVADAS_ABIERTAS = "taudux_slides_privadas_abiertas";
+
   /* `#/<slug>` -> "slug", o "" si el hash no tiene esa forma. Mismo formato
      que notas.arbol.js, simplificado: acá no hay vistas ni segmentos, sólo
      qué presentación abrir. */
@@ -44,6 +67,22 @@
     const crudo = typeof hash === "string" ? hash.trim().replace(/^#/, "") : "";
     const partes = crudo.split("/").map((parte) => parte.trim().toLowerCase()).filter(Boolean);
     return partes[0] || "";
+  }
+
+  function leerPreferencia(llave) {
+    try {
+      return window.localStorage.getItem(llave);
+    } catch {
+      return null;
+    }
+  }
+
+  function guardarPreferencia(llave, valor) {
+    try {
+      window.localStorage.setItem(llave, valor);
+    } catch {
+      // Sin storage no se recuerda nada; no es un error.
+    }
   }
 
   function iniciar() {
@@ -60,10 +99,16 @@
       avisoMensaje: porId("slidesAvisoMensaje"),
       reintentar: porId("slidesReintentar"),
       grilla: porId("slidesGrilla"),
+      privadas: porId("slidesPrivadas"),
+      privadasTitulo: porId("slidesPrivadasTitulo"),
+      grillaPrivadas: porId("slidesGrillaPrivadas"),
+      filtros: porId("slidesFiltros"),
+      subir: porId("slidesSubir"),
       visorTitulo: porId("slidesVisorTitulo"),
       contador: porId("slidesContador"),
       marco: porId("slidesMarco"),
       iframe: porId("slidesIframe"),
+      controles: document.querySelector(".slides__controles"),
       anterior: porId("slidesAnterior"),
       siguiente: porId("slidesSiguiente"),
       pantallaCompleta: porId("slidesPantallaCompleta"),
@@ -71,16 +116,45 @@
 
     if (Object.values(el).some((nodo) => !nodo)) return undefined;
 
+    // El formulario es opcional para el resto de la página: sin él (o sin el
+    // servicio de subida) el botón simplemente no aparece.
+    const form = {
+      dialogo: porId("slidesDialogo"),
+      formulario: porId("slidesForm"),
+      titulo: porId("slidesFormTitulo"),
+      descripcion: porId("slidesFormDescripcion"),
+      categoria: porId("slidesFormCategoria"),
+      categorias: porId("slidesFormCategorias"),
+      portada: porId("slidesFormPortada"),
+      archivo: porId("slidesFormArchivo"),
+      archivoAyuda: porId("slidesFormArchivoAyuda"),
+      autorCampo: porId("slidesFormAutorCampo"),
+      autor: porId("slidesFormAutor"),
+      visibilidadCampo: porId("slidesFormVisibilidadCampo"),
+      notaAutor: porId("slidesFormNotaAutor"),
+      error: porId("slidesFormError"),
+      cancelar: porId("slidesFormCancelar"),
+      enviar: porId("slidesFormEnviar"),
+    };
+    const hayFormulario = Object.values(form).every(Boolean)
+      && typeof subirSlide === "function"
+      && typeof cargarPermisosDeSlides === "function";
+
     // El catálogo cargado (entradas ya normalizadas y válidas) y qué se está
     // mostrando ahora mismo. `totalActual` e `indiceActual` los manda el
     // propio deck (por `slidesDeck` al conectar y por el evento
     // `slides:cambio` después); mientras no haya deck conectado quedan en 0.
     let catalogo = [];
+    let permisos = { admin: false, autor: false };
+    let categoriaActiva = "";
+    let urlsDePortada = new Map();
     let presentacionActual = null;
     let indiceActual = 0;
     let totalActual = 0;
     let deckConectado = false;
     let conectada = false;
+    let laminasDetectadas = 0;
+    let subiendo = false;
 
     el.reintentar.addEventListener("click", reintentarCarga);
     el.anterior.addEventListener("click", () => irA(indiceActual - 1));
@@ -88,6 +162,16 @@
     el.pantallaCompleta.addEventListener("click", alternarPantallaCompleta);
     el.iframe.addEventListener("load", manejarCargaDelIframe);
     document.addEventListener("keydown", (evento) => manejarTecla(evento, evento.target));
+    // El puente (deck subido con botones propios) pide pantalla completa por
+    // aquí: el marco vive en esta página, no en el iframe.
+    document.addEventListener("slides:alternar-pantalla-completa", alternarPantallaCompleta);
+
+    el.privadas.addEventListener("toggle", () => {
+      guardarPreferencia(LLAVE_PRIVADAS_ABIERTAS, el.privadas.open ? "1" : "0");
+    });
+    el.privadas.open = leerPreferencia(LLAVE_PRIVADAS_ABIERTAS) === "1";
+
+    if (hayFormulario) conectarFormulario();
 
     return cargarCatalogo();
 
@@ -99,8 +183,14 @@
       mostrarAviso(AVISOS.cargando, { error: false });
 
       let resultado = null;
+      let resultadoPermisos = null;
       try {
-        resultado = await cargarCatalogoDeSlides();
+        [resultado, resultadoPermisos] = await Promise.all([
+          cargarCatalogoDeSlides(),
+          typeof cargarPermisosDeSlides === "function"
+            ? cargarPermisosDeSlides()
+            : Promise.resolve(null),
+        ]);
       } catch {
         // El servicio nunca lanza: esto es su script que no llegó a cargar.
       } finally {
@@ -115,14 +205,21 @@
         return false;
       }
 
+      permisos = {
+        admin: Boolean(resultadoPermisos && resultadoPermisos.admin),
+        autor: Boolean(resultadoPermisos && resultadoPermisos.autor),
+      };
+      el.subir.hidden = !(hayFormulario && (permisos.admin || permisos.autor));
+
       // Cada entrada se normaliza y las que no pasan la validación se
       // descartan: una presentación rota no debe tumbar a las demás. El
-      // servicio ya arma `url`; acá sólo se conserva si la entrada es válida.
+      // servicio ya arma `url`, `origen`, `visibilidad` y las rutas de
+      // portada; acá se conservan y los campos normalizados les ganan.
       const normalizadas = (resultado.catalogo || [])
         .map((entrada) => {
           const resultadoEntrada = normalizarPresentacion(entrada && entrada.slug, entrada);
           if (!resultadoEntrada.ok) return null;
-          return { ...resultadoEntrada.presentacion, url: entrada.url };
+          return { ...entrada, ...resultadoEntrada.presentacion };
         })
         .filter(Boolean);
 
@@ -139,12 +236,25 @@
       }
 
       aplicarHash();
+      firmarPortadasYRepintar(normalizadas);
       return true;
     }
 
     async function reintentarCarga() {
       const cargada = await cargarCatalogo();
       if (!cargada) el.aviso.focus();
+    }
+
+    // Las portadas subidas viven en un bucket privado y se leen con URL
+    // firmada. Se piden DESPUÉS de pintar: las tarjetas ya están y sólo
+    // ganan su imagen cuando llega.
+    async function firmarPortadasYRepintar(lista) {
+      if (typeof firmarPortadasDeSlides !== "function") return;
+      if (!lista.some((item) => item.portada_path)) return;
+      const urls = await firmarPortadasDeSlides(lista);
+      if (urls.size === 0 || lista !== catalogo) return;
+      urlsDePortada = urls;
+      pintarCatalogo();
     }
 
     function mostrarAviso(mensaje, { error }) {
@@ -159,15 +269,69 @@
       escribir(el.avisoMensaje, "");
     }
 
-    /* ---------- Construcción del catálogo (una vez por carga) ---------- */
+    /* ---------- Construcción del catálogo ---------- */
 
     function montarCatalogo(lista) {
       catalogo = lista;
-      el.grilla.replaceChildren(...catalogo.map(crearCelda));
+      urlsDePortada = new Map();
+      pintarCatalogo();
     }
 
-    // Sin conteo de diapositivas: eso sólo lo sabe el deck una vez cargado, y
-    // el catálogo no lo carga sólo para mostrar una cifra.
+    // Reparte el catálogo entre la grilla (lo público, filtrable por
+    // categoría) y el desplegable de privadas, y vuelve a pintar las dos.
+    function pintarCatalogo() {
+      const { publicas, privadas } = repartirCatalogo(catalogo);
+
+      pintarFiltros(publicas);
+      const visibles = filtrarPorCategoria(publicas, categoriaActiva);
+      el.grilla.replaceChildren(...visibles.map(crearCelda));
+
+      // Un autor sólo ve en el desplegable lo suyo «por revisar»: lo que un
+      // administrador le dejó en «Solo administradores» no es para él.
+      const delDesplegable = permisos.admin
+        ? privadas
+        : privadas.filter((item) => item.visibilidad === "por_revisar");
+      el.privadas.hidden = delDesplegable.length === 0;
+      escribir(
+        el.privadasTitulo,
+        permisos.admin
+          ? `🔒 Solo administradores · ${delDesplegable.length}`
+          : "Mis presentaciones por revisar"
+      );
+      el.grillaPrivadas.replaceChildren(...delDesplegable.map(crearCelda));
+    }
+
+    // La fila de filtros: «Todas» primero y el resto alfabético. Con una sola
+    // categoría (o ninguna) no hay nada que filtrar y no se muestra.
+    function pintarFiltros(publicas) {
+      const categorias = listarCategorias(publicas);
+      if (categoriaActiva && !categorias.some((c) => claveDeCategoria(c) === categoriaActiva)) {
+        categoriaActiva = "";
+      }
+
+      el.filtros.hidden = categorias.length <= 1;
+      if (categorias.length <= 1) {
+        el.filtros.replaceChildren();
+        return;
+      }
+
+      const opciones = [{ texto: "Todas", clave: "" }].concat(
+        categorias.map((texto) => ({ texto, clave: claveDeCategoria(texto) }))
+      );
+      el.filtros.replaceChildren(...opciones.map(({ texto, clave }) => {
+        const boton = document.createElement("button");
+        boton.type = "button";
+        boton.className = "slides__filtro";
+        boton.textContent = texto;
+        boton.setAttribute("aria-pressed", String(clave === categoriaActiva));
+        boton.addEventListener("click", () => {
+          categoriaActiva = clave;
+          pintarCatalogo();
+        });
+        return boton;
+      }));
+    }
+
     function crearCelda(presentacion) {
       const celda = document.createElement("li");
       celda.className = "slides__celda";
@@ -176,22 +340,355 @@
       boton.type = "button";
       boton.className = "slides__tarjeta";
       boton.setAttribute("aria-label", `Abrir ${presentacion.titulo}`);
+      // La descripción no se ve en la tarjeta: queda como texto al pasar el
+      // mouse y para el lector de pantalla.
+      if (presentacion.descripcion) {
+        boton.title = presentacion.descripcion;
+        const descripcion = document.createElement("span");
+        descripcion.className = "u-visually-hidden";
+        descripcion.id = `slides-descripcion-${presentacion.slug}`;
+        descripcion.textContent = presentacion.descripcion;
+        boton.setAttribute("aria-describedby", descripcion.id);
+        boton.append(descripcion);
+      }
       boton.addEventListener("click", () => abrirDesdeCatalogo(presentacion.slug));
 
-      const titulo = document.createElement("h2");
+      boton.append(crearPortada(presentacion));
+
+      if (presentacion.categoria) {
+        const categoria = document.createElement("span");
+        categoria.className = "slides__categoria";
+        categoria.textContent = presentacion.categoria;
+        boton.append(categoria);
+      }
+
+      const titulo = document.createElement("span");
       titulo.className = "slides__tarjeta-titulo";
       titulo.textContent = presentacion.titulo;
       boton.append(titulo);
 
-      if (presentacion.descripcion) {
-        const descripcion = document.createElement("p");
-        descripcion.className = "slides__tarjeta-descripcion";
-        descripcion.textContent = presentacion.descripcion;
-        boton.append(descripcion);
+      const meta = [presentacion.autor, fechaCorta(presentacion.actualizado)].filter(Boolean).join(" · ");
+      if (meta) {
+        const pie = document.createElement("span");
+        pie.className = "slides__meta";
+        pie.textContent = meta;
+        boton.append(pie);
       }
 
       celda.append(boton);
+
+      if (permisos.admin && presentacion.visibilidad === "por_revisar") {
+        const publicar = document.createElement("button");
+        publicar.type = "button";
+        publicar.className = "slides__publicar";
+        publicar.textContent = "Publicar";
+        publicar.setAttribute("aria-label", `Publicar ${presentacion.titulo}`);
+        publicar.addEventListener("click", () => publicarDesdeCatalogo(presentacion, publicar));
+        celda.append(publicar);
+      }
+
       return celda;
+    }
+
+    // La portada: la imagen si hay, y si no (o si no carga) un degradado de
+    // color fijo por categoría con sus iniciales. Las etiquetas «N láminas» y
+    // «Por revisar» van encima en los dos casos.
+    function crearPortada(presentacion) {
+      const portada = document.createElement("span");
+      portada.className = "slides__portada";
+      portada.style.background = degradadoDeCategoria(presentacion.categoria);
+
+      const iniciales = inicialesDeCategoria(presentacion.categoria || presentacion.titulo);
+      if (iniciales) {
+        const marca = document.createElement("span");
+        marca.className = "slides__iniciales";
+        marca.setAttribute("aria-hidden", "true");
+        marca.textContent = iniciales;
+        portada.append(marca);
+      }
+
+      const url = presentacion.portada_url || urlsDePortada.get(presentacion.portada_path) || "";
+      if (url) {
+        const imagen = document.createElement("img");
+        imagen.className = "slides__portada-imagen";
+        imagen.alt = "";
+        imagen.loading = "lazy";
+        imagen.decoding = "async";
+        imagen.addEventListener("error", () => imagen.remove());
+        imagen.src = url;
+        portada.append(imagen);
+      }
+
+      const laminas = textoLaminas(presentacion.total_laminas);
+      if (laminas) {
+        const etiqueta = document.createElement("span");
+        etiqueta.className = "slides__laminas";
+        etiqueta.textContent = laminas;
+        portada.append(etiqueta);
+      }
+
+      if (presentacion.visibilidad === "por_revisar") {
+        const estado = document.createElement("span");
+        estado.className = "slides__estado";
+        estado.textContent = "Por revisar";
+        portada.append(estado);
+      }
+
+      return portada;
+    }
+
+    async function publicarDesdeCatalogo(presentacion, boton) {
+      boton.disabled = true;
+      const resultado = await publicarSlide(presentacion.id);
+      if (typeof mostrarToast === "function") {
+        mostrarToast(
+          resultado.ok ? `«${presentacion.titulo}» ya es pública.` : resultado.mensaje,
+          resultado.ok ? "success" : "error"
+        );
+      }
+      if (resultado.ok) await cargarCatalogo();
+      else boton.disabled = false;
+    }
+
+    /* ---------- Subir una presentación ---------- */
+
+    function conectarFormulario() {
+      el.subir.addEventListener("click", abrirFormulario);
+      form.cancelar.addEventListener("click", () => form.dialogo.close());
+      form.formulario.addEventListener("submit", enviarFormulario);
+      form.archivo.addEventListener("change", leerArchivoElegido);
+      // Esc o el fondo cierran el diálogo, salvo en mitad de una subida.
+      form.dialogo.addEventListener("cancel", (evento) => {
+        if (subiendo) evento.preventDefault();
+      });
+    }
+
+    function campoError(nombre) {
+      return porId(`slidesForm${nombre}Error`);
+    }
+
+    function limpiarErrores() {
+      form.formulario.querySelectorAll(".slides__campo-error").forEach((nodo) => { nodo.textContent = ""; });
+      form.formulario.querySelectorAll("[aria-invalid]").forEach((nodo) => nodo.removeAttribute("aria-invalid"));
+      form.error.textContent = "";
+    }
+
+    async function abrirFormulario() {
+      form.formulario.reset();
+      limpiarErrores();
+      laminasDetectadas = 0;
+      escribir(form.archivoAyuda, "Un solo .html de hasta 15 MB, con sus láminas en section.slide.");
+
+      form.autorCampo.hidden = !permisos.admin;
+      form.visibilidadCampo.hidden = !permisos.admin;
+      form.notaAutor.hidden = permisos.admin;
+      form.autor.required = permisos.admin;
+
+      form.dialogo.showModal();
+      form.titulo.focus();
+
+      // Las sugerencias y la lista de autores llegan después de abrir: el
+      // formulario ya se puede llenar mientras tanto.
+      cargarSugerencias();
+      if (permisos.admin) cargarAutores();
+    }
+
+    // Las categorías ya usadas: las del catálogo que se ve (incluye las del
+    // repositorio) más las que devuelve categorias_slides().
+    async function cargarSugerencias() {
+      const conocidas = new Set(categoriasConocidas());
+      if (typeof cargarCategoriasDeSlides === "function") {
+        const resultado = await cargarCategoriasDeSlides();
+        if (resultado.ok) resultado.categorias.forEach((c) => conocidas.add(c));
+      }
+      const opciones = listarCategorias([...conocidas].map((categoria) => ({ categoria })));
+      form.categorias.replaceChildren(...opciones.map((categoria) => {
+        const opcion = document.createElement("option");
+        opcion.value = categoria;
+        return opcion;
+      }));
+    }
+
+    function categoriasConocidas() {
+      return listarCategorias(catalogo);
+    }
+
+    async function cargarAutores() {
+      const seleccionado = form.autor.value;
+      form.autor.replaceChildren(new Option("Elige al autor", ""));
+      const resultado = await cargarAutoresDeSlides();
+      if (!resultado.ok) {
+        campoError("Autor").textContent = resultado.mensaje;
+        return;
+      }
+      if (resultado.autores.length === 0) {
+        campoError("Autor").textContent =
+          "Todavía no hay autores marcados. Marca a alguien en Supabase antes de subir.";
+        return;
+      }
+      resultado.autores.forEach((autor) => form.autor.append(new Option(autor.nombre, autor.id)));
+      if (seleccionado) form.autor.value = seleccionado;
+    }
+
+    // Cuenta las láminas del HTML elegido, igual que las cuenta el puente:
+    // `section.slide` en el documento parseado, sin ejecutar nada.
+    async function leerArchivoElegido() {
+      laminasDetectadas = 0;
+      campoError("Archivo").textContent = "";
+      form.archivo.removeAttribute("aria-invalid");
+
+      const archivo = form.archivo.files && form.archivo.files[0];
+      if (!archivo) return;
+
+      try {
+        const texto = await archivo.text();
+        const documento = new DOMParser().parseFromString(texto, "text/html");
+        laminasDetectadas = contarLaminas(documento);
+      } catch {
+        laminasDetectadas = 0;
+      }
+
+      if (laminasDetectadas > 0) {
+        escribir(form.archivoAyuda, `Se detectaron ${textoLaminas(laminasDetectadas)}.`);
+      } else {
+        escribir(form.archivoAyuda, "Un solo .html de hasta 15 MB, con sus láminas en section.slide.");
+        campoError("Archivo").textContent = "No se encontró ninguna lámina (section.slide) en ese archivo.";
+        form.archivo.setAttribute("aria-invalid", "true");
+      }
+    }
+
+    // La portada se recorta al centro a 16:10 y se reduce a 1200x750 en un
+    // <canvas>; sale como WebP. Devuelve null si el navegador no pudo.
+    async function prepararPortada(archivo) {
+      try {
+        const imagen = await createImageBitmap(archivo);
+        const recorte = rectanguloDeRecorte(imagen.width, imagen.height);
+        if (!recorte) return null;
+        const lienzo = document.createElement("canvas");
+        lienzo.width = PORTADA_ANCHO;
+        lienzo.height = PORTADA_ALTO;
+        const contexto = lienzo.getContext("2d");
+        contexto.drawImage(
+          imagen, recorte.sx, recorte.sy, recorte.sw, recorte.sh, 0, 0, PORTADA_ANCHO, PORTADA_ALTO
+        );
+        if (typeof imagen.close === "function") imagen.close();
+        const blob = await new Promise((resolver) => lienzo.toBlob(resolver, "image/webp", 0.85));
+        return blob && blob.type === "image/webp" ? blob : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function mostrarErroresDeCampo(errores) {
+      const campos = {
+        titulo: ["Titulo", form.titulo],
+        descripcion: ["Descripcion", form.descripcion],
+        categoria: ["Categoria", form.categoria],
+        portada: ["Portada", form.portada],
+        archivo: ["Archivo", form.archivo],
+        autor: ["Autor", form.autor],
+        visibilidad: ["Visibilidad", null],
+      };
+      let primero = null;
+      Object.entries(errores).forEach(([clave, mensaje]) => {
+        const [nombre, control] = campos[clave] || [];
+        if (!nombre) return;
+        campoError(nombre).textContent = mensaje;
+        if (control) {
+          control.setAttribute("aria-invalid", "true");
+          if (!primero) primero = control;
+        }
+      });
+      if (primero) primero.focus();
+    }
+
+    async function enviarFormulario(evento) {
+      evento.preventDefault();
+      if (subiendo) return;
+      limpiarErrores();
+
+      const archivo = form.archivo.files && form.archivo.files[0];
+      const portadaElegida = form.portada.files && form.portada.files[0];
+      const visibilidad = form.formulario.querySelector('input[name="visibilidad"]:checked');
+
+      const validacion = validarSubida(
+        {
+          titulo: form.titulo.value,
+          descripcion: form.descripcion.value,
+          categoria: form.categoria.value,
+          portada: portadaElegida,
+          archivo,
+          autorId: form.autor.value,
+          visibilidad: visibilidad ? visibilidad.value : "",
+        },
+        {
+          esAdmin: permisos.admin,
+          categorias: categoriasConocidas(),
+          slugsOcupados: catalogo.map((item) => item.slug),
+        }
+      );
+      if (!validacion.ok) {
+        mostrarErroresDeCampo(validacion.errores);
+        return;
+      }
+
+      if (laminasDetectadas < 1) {
+        // Todavía no terminó de leerse, o de verdad no trae láminas.
+        await leerArchivoElegido();
+        if (laminasDetectadas < 1) {
+          form.archivo.focus();
+          return;
+        }
+      }
+
+      subiendo = true;
+      form.enviar.disabled = true;
+      form.enviar.textContent = "Subiendo…";
+      form.cancelar.disabled = true;
+
+      try {
+        let portada = null;
+        if (portadaElegida) {
+          portada = await prepararPortada(portadaElegida);
+          if (!portada) {
+            mostrarErroresDeCampo({ portada: "Tu navegador no pudo preparar la portada. Prueba con otra imagen." });
+            return;
+          }
+        }
+
+        const resultado = await subirSlide({
+          titulo: form.titulo.value,
+          descripcion: form.descripcion.value,
+          categoria: form.categoria.value,
+          categoriasExistentes: categoriasConocidas(),
+          archivo,
+          portada,
+          totalLaminas: laminasDetectadas,
+          autorId: form.autor.value,
+          visibilidad: visibilidad ? visibilidad.value : "",
+        });
+
+        if (!resultado.ok) {
+          form.error.textContent = resultado.mensaje;
+          return;
+        }
+
+        form.dialogo.close();
+        if (typeof mostrarToast === "function") {
+          mostrarToast(
+            resultado.visibilidad === "por_revisar"
+              ? "Listo. Un administrador la revisará antes de publicarla."
+              : "Presentación subida.",
+            "success"
+          );
+        }
+        await cargarCatalogo();
+      } finally {
+        subiendo = false;
+        form.enviar.disabled = false;
+        form.enviar.textContent = "Subir";
+        form.cancelar.disabled = false;
+      }
     }
 
     /* ---------- Hash: qué se ve ---------- */
@@ -249,6 +746,8 @@
         // Mismo origen siempre en este visor; si algún día no lo fuera, no
         // pasa nada por no poder descargarlo a mano.
       }
+      el.marco.classList.remove("slides__marco--subida");
+      el.controles.hidden = false;
       el.catalogo.hidden = false;
       el.visor.hidden = true;
     }
@@ -264,6 +763,10 @@
       indiceActual = 0;
       totalActual = 0;
       deckConectado = false;
+      // Un deck subido deja ver el cielo de la página detrás del marco: el
+      // marco negro es de los decks del repositorio, que pintan su propio fondo.
+      el.marco.classList.toggle("slides__marco--subida", presentacion.origen === "subida");
+      el.controles.hidden = false;
       escribir(el.visorTitulo, presentacion.titulo);
       escribir(el.contador, "");
       el.iframe.title = presentacion.titulo;
@@ -300,6 +803,8 @@
         indiceActual = indiceAcotado(deck.indice(), deck.total);
         totalActual = Number.isFinite(deck.total) ? deck.total : 0;
         deckConectado = true;
+        // El deck trae su propia barra: la del visor sobra.
+        el.controles.hidden = deck.controlesPropios === true;
       } else {
         indiceActual = 0;
         totalActual = 0;
@@ -312,6 +817,9 @@
       if (!presentacionActual) return;
       const detalle = (evento && evento.detail) || {};
       if (Number.isFinite(detalle.total)) totalActual = detalle.total;
+      // Los decks subidos publican `slidesDeck` antes de descargar su HTML, así
+      // que sólo en el primer cambio saben si traen botones propios.
+      if (typeof detalle.controlesPropios === "boolean") el.controles.hidden = detalle.controlesPropios;
       indiceActual = indiceAcotado(detalle.indice, totalActual);
       actualizarControles();
     }

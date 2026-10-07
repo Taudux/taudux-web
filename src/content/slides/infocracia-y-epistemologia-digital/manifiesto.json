@@ -1,5 +1,10 @@
 {
   "titulo": "Infocracia y epistemología digital",
   "descripcion": "Cómo sabemos lo que sabemos cuando la información circula por plataformas: de las teorías de la verdad a Habermas, Foucault, Deleuze, Han y la posverdad.",
-  "archivo": "index.html"
+  "archivo": "index.html",
+  "categoria": "Humanidades digitales",
+  "autor": "Equipo Taudux",
+  "actualizado": "2026-10-01",
+  "total_laminas": 96,
+  "portada": "portada.webp"
 }
