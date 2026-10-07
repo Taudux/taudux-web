@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Presentación | Taudux</title>
+</head>
+
+<!-- El marco AISLADO de los decks subidos que traen JavaScript. La página
+     puente (/content/slides/_subida/) lo abre como
+       <iframe sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox">
+     SIN `allow-same-origin`: el documento tiene un origen opaco y su código no
+     puede leer la sesión, el localStorage ni las cookies de taudux.com. Aquí
+     no hay nada que robar: esta página sólo espera UN mensaje del puente con
+     el HTML del deck (la descarga con la sesión ocurre afuera, en el puente) y
+     se reemplaza por él (aislado.js).
+
+     CSP propia en vercel.json (regla `/content/slides/_aislado(.*)`, la
+     ÚLTIMA de `headers`: para una misma cabecera gana la última regla que
+     coincide): scripts propios e inline sí, `connect-src 'none'` (el deck no
+     puede mandar nada a ningún lado), imágenes y medios sólo por https. -->
+
+<body>
+  <script src="/content/slides/_aislado/aislado.js"></script>
+</body>
+
+</html>

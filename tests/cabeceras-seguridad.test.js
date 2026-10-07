@@ -303,7 +303,9 @@ test("the slides catalog has its own header rule, and it differs from the genera
 });
 
 test("no path other than the slides catalog relaxes frame-ancestors or X-Frame-Options", () => {
-  reglas().filter((r) => r.source !== RUTA_SLIDES).forEach((r) => {
+  // El marco aislado de los decks con programa (_aislado) también lo enmarca el visor.
+  const RUTA_AISLADO = "/content/slides/_aislado(.*)";
+  reglas().filter((r) => r.source !== RUTA_SLIDES && r.source !== RUTA_AISLADO).forEach((r) => {
     const csp = valorDe(r, "Content-Security-Policy") || "";
     assert.doesNotMatch(
       csp.split(";").map((p) => p.trim()).find((p) => p.startsWith("frame-ancestors")) || "",

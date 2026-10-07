@@ -977,7 +977,7 @@
         // Mismo origen siempre en este visor; si algún día no lo fuera, no
         // pasa nada por no poder descargarlo a mano.
       }
-      el.marco.classList.remove("slides__marco--subida");
+      el.marco.classList.remove("slides__marco--subida", "slides__marco--llena");
       el.controles.hidden = false;
       el.catalogo.hidden = false;
       el.visor.hidden = true;
@@ -997,6 +997,9 @@
       // Un deck subido deja ver el cielo de la página detrás del marco: el
       // marco negro es de los decks del repositorio, que pintan su propio fondo.
       el.marco.classList.toggle("slides__marco--subida", presentacion.origen === "subida");
+      // Sólo los decks de la excepción (el QR) llenan el alto; el resto de
+      // los subidos va en 16:9 con los botones del visor, como los del repo.
+      el.marco.classList.toggle("slides__marco--llena", llenaElVisor(presentacion));
       el.controles.hidden = false;
       escribir(el.visorTitulo, presentacion.titulo);
       escribir(el.contador, "");
@@ -1034,8 +1037,9 @@
         indiceActual = indiceAcotado(deck.indice(), deck.total);
         totalActual = Number.isFinite(deck.total) ? deck.total : 0;
         deckConectado = true;
-        // El deck trae su propia barra: la del visor sobra.
-        el.controles.hidden = deck.controlesPropios === true;
+        // El deck trae su propia barra: la del visor sobra, pero sólo en los
+        // que llenan el visor. Los demás conservan ‹ ⛶ › abajo (2026-10-07).
+        el.controles.hidden = llenaElVisor(presentacionActual) && deck.controlesPropios === true;
       } else {
         indiceActual = 0;
         totalActual = 0;
@@ -1050,7 +1054,9 @@
       if (Number.isFinite(detalle.total)) totalActual = detalle.total;
       // Los decks subidos publican `slidesDeck` antes de descargar su HTML, así
       // que sólo en el primer cambio saben si traen botones propios.
-      if (typeof detalle.controlesPropios === "boolean") el.controles.hidden = detalle.controlesPropios;
+      if (typeof detalle.controlesPropios === "boolean") {
+        el.controles.hidden = llenaElVisor(presentacionActual) && detalle.controlesPropios;
+      }
       indiceActual = indiceAcotado(detalle.indice, totalActual);
       actualizarControles();
     }

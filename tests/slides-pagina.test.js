@@ -187,8 +187,18 @@ test("las láminas del archivo se cuentan en el navegador, parseando sin ejecuta
 
 test("el visor le da el marco transparente a los decks subidos y esconde sus botones si el deck trae los suyos", () => {
   assert.match(js, /classList\.toggle\("slides__marco--subida", presentacion\.origen === "subida"\)/);
-  assert.match(js, /el\.controles\.hidden = deck\.controlesPropios === true/);
-  assert.match(js, /detalle\.controlesPropios/);
+  assert.match(js, /classList\.toggle\("slides__marco--llena", llenaElVisor\(presentacion\)\)/);
+  assert.match(js, /el\.controles\.hidden = llenaElVisor\(presentacionActual\) && deck\.controlesPropios === true/);
+  assert.match(js, /el\.controles\.hidden = llenaElVisor\(presentacionActual\) && detalle\.controlesPropios/);
+});
+
+test("sólo el QR de sesión llena el visor; el resto de los subidos y los del repo van en 16:9", () => {
+  const logica = require(path.join(ROOT, "src/app/features/slides/slides.logica.js"));
+  assert.deepEqual([...logica.SLUGS_QUE_LLENAN_EL_VISOR], ["taudux-qr-de-sesion"]);
+  assert.equal(logica.llenaElVisor({ origen: "subida", slug: "taudux-qr-de-sesion" }), true);
+  assert.equal(logica.llenaElVisor({ origen: "subida", slug: "ciencia-de-datos" }), false);
+  assert.equal(logica.llenaElVisor({ origen: "repo", slug: "taudux-qr-de-sesion" }), false);
+  assert.equal(logica.llenaElVisor(null), false);
 });
 
 test("no se arma HTML con texto de la base: todo entra por textContent", () => {

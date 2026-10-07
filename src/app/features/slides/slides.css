@@ -699,23 +699,23 @@
   }
 
   /*
-    Fuera de pantalla completa, un deck subido tampoco se encierra en 16:9:
-    el marco llena todo el ancho y todo el alto que deja la navbar. Un deck
-    subido está hecho para la ventana completa, y en 16:9 una ventana angosta
-    lo dejaba en una franja de 250 px. Si su lámina igual no cabe, el puente
-    la achica (escalaParaCaber en subida.logica.js).
+    Fuera de pantalla completa, los decks de la excepción (`llenaElVisor` en
+    slides.logica.js; hoy sólo el QR de sesión) no se encierran en 16:9: el
+    marco llena todo el ancho y todo el alto que deja la navbar. Si su lámina
+    igual no cabe, el puente la achica (escalaParaCaber en subida.logica.js).
+    El resto de los subidos va en 16:9, como los del repositorio (2026-10-07).
 
     Cuando el deck trae sus propios botones, los del visor se esconden
     (`hidden`) y su fila deja de ocupar lugar: el marco recupera esos 2.5rem
     y el gap de 1rem de .slides__visor.
   */
-  .slides__marco--subida:not(:fullscreen) {
+  .slides__marco--llena:not(:fullscreen) {
     inline-size: 100%;
     aspect-ratio: auto;
     block-size: calc(100dvh - var(--slides-reservado, 0px));
   }
 
-  .slides__visor:has(.slides__controles[hidden]) .slides__marco--subida:not(:fullscreen) {
+  .slides__visor:has(.slides__controles[hidden]) .slides__marco--llena:not(:fullscreen) {
     block-size: calc(100dvh - var(--slides-reservado, 0px) + 3.5rem);
   }
 

@@ -22,6 +22,13 @@
      fondo del archivo se ignora siempre: detrás va el cielo de la página) y
      conecta las `section.slide` y los botones que el deck traiga.
 
+  LOS DECKS CON PROGRAMA. Si el deck trae <script> (o handlers on*), nada de
+  lo anterior aplica: el HTML se descarga igual, aquí y con la sesión, pero se
+  corre dentro de un <iframe sandbox="allow-scripts ..."> SIN allow-same-origin
+  (/content/slides/_aislado/), de origen opaco, que no ve la sesión ni el
+  almacenamiento del sitio. Esta página sólo traduce el contrato del visor
+  (slidesDeck, slides:cambio, pantalla completa) a mensajes con ese marco.
+
   EL CIELO. Fuera de pantalla completa el marco del visor es transparente y se
   ve el cielo de la página, que está detrás del iframe. En pantalla completa el
   iframe lo cubre todo y esta página dibuja el suyo (subida.fondo.js), y lo
@@ -251,6 +258,59 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(ajustarActual);
   }
 
+  /* ---------- 4. Decks con programa: el marco aislado ---------- */
+
+  function abrirEnMarcoAislado(texto) {
+    const marco = document.createElement("iframe");
+    marco.className = "subida-aislado";
+    marco.title = "Presentación";
+    // Sin allow-same-origin: origen opaco. Es lo que hace seguro correr el
+    // JavaScript ajeno. Los enlaces del deck abren pestañas nuevas, también aisladas.
+    marco.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox");
+    marco.setAttribute("allow", "fullscreen 'none'");
+    marco.src = "/content/slides/_aislado/";
+
+    let total = 0;
+    let indice = 0;
+    // Lo mismo que antes hacía crearNavegacion, ahora a través de mensajes.
+    navegacion = {
+      get total() { return total; },
+      indice: () => indice,
+      ir: (n) => {
+        if (marco.contentWindow) marco.contentWindow.postMessage({ tipo: "slides:ir", indice: n }, "*");
+      },
+    };
+
+    window.addEventListener("message", (evento) => {
+      // El origen del marco es opaco ("null"): se valida QUIÉN lo mandó.
+      if (evento.source !== marco.contentWindow) return;
+      const datos = evento.data;
+      if (datos && datos.tipo === "slides:pantalla-completa") {
+        pedirPantallaCompleta();
+        return;
+      }
+      const estado = leerEstadoAislado(datos);
+      if (!estado) return;
+      total = estado.total;
+      indice = estado.indice;
+      controlesPropios = estado.controlesPropios;
+      document.dispatchEvent(new CustomEvent(EVENTO_DE_CAMBIO, {
+        detail: { indice, total, controlesPropios },
+      }));
+    });
+
+    // El HTML se entrega UNA vez, cuando la página del marco ya escucha.
+    marco.addEventListener("load", () => {
+      if (marco.dataset.entregado) return;
+      marco.dataset.entregado = "1";
+      marco.contentWindow.postMessage({ tipo: "slides:deck", html: String(texto) }, "*");
+      ocultarEstado();
+      marco.focus();
+    });
+    document.body.append(marco);
+    actualizarCielo();
+  }
+
   async function iniciar() {
     const slug = slugDelHash(window.location.hash);
     if (!slug) {
@@ -260,7 +320,13 @@
 
     try {
       const { titulo, texto } = await descargarDeck(slug);
-      const deck = prepararDeck(texto, new DOMParser());
+      const parser = new DOMParser();
+      if (deckTraePrograma(parser.parseFromString(String(texto), "text/html"))) {
+        document.title = `${titulo || "Presentación"} | Taudux`;
+        abrirEnMarcoAislado(texto);
+        return;
+      }
+      const deck = prepararDeck(texto, parser);
       if (deck.laminas === 0) {
         mostrarEstado("Este archivo no trae láminas (section.slide).");
         return;

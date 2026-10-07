@@ -104,6 +104,33 @@ function prepararDeck(texto, parser) {
   };
 }
 
+/*
+  ¿El deck trae programa propio? Sí si tiene algún <script> o algún atributo
+  on* (onclick, onload...). `documento` es el Document ya parseado y SIN sanear
+  (DOMParser no ejecuta nada). Si lo trae, el puente no lo monta en su propia
+  página: lo corre en el marco aislado (ver _aislado/); si no, sigue el camino
+  de siempre, saneado y montado aquí.
+*/
+function deckTraePrograma(documento) {
+  if (!documento || typeof documento.querySelectorAll !== "function") return false;
+  if (documento.querySelectorAll("script").length > 0) return true;
+  return Array.from(documento.querySelectorAll("*")).some((nodo) =>
+    Array.from(nodo.attributes || []).some((atributo) => String(atributo.name || "").toLowerCase().startsWith("on")));
+}
+
+/*
+  Valida un mensaje "slides:estado" del marco aislado y lo devuelve ya limpio,
+  o null si no tiene la forma esperada. El marco es de origen opaco y su
+  código es ajeno: nada de lo que mande se usa sin comprobar el tipo.
+*/
+function leerEstadoAislado(datos) {
+  if (!datos || datos.tipo !== "slides:estado") return null;
+  const { indice, total } = datos;
+  if (!Number.isInteger(indice) || !Number.isInteger(total)) return null;
+  if (total < 0 || total > 10000 || indice < 0 || (total > 0 && indice >= total)) return null;
+  return { indice, total, controlesPropios: datos.controlesPropios === true };
+}
+
 /* El slug del hash (#<slug>), o "" si no tiene la forma de un slug. */
 function slugDelHash(hash) {
   const crudo = typeof hash === "string" ? hash.trim().replace(/^#/, "").toLowerCase() : "";
@@ -270,6 +297,8 @@ if (typeof module === "object" && module.exports) {
     EVENTO_DE_CAMBIO,
     sanearDocumento,
     prepararDeck,
+    deckTraePrograma,
+    leerEstadoAislado,
     slugDelHash,
     crearNavegacion,
     ESCALA_MINIMA,

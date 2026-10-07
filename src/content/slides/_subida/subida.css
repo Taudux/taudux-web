@@ -109,3 +109,17 @@ section.slide::-webkit-scrollbar-button:vertical:end:decrement { display: none; 
     scrollbar-color: #1249a4 #0b0d10;
   }
 }
+
+/*
+  El marco aislado de los decks con programa (ver subida.js): cubre todo el
+  visor. Fondo transparente; el deck pinta el suyo. Sin color-scheme, igual
+  que el resto de la página.
+*/
+iframe.subida-aislado {
+  position: fixed;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+  background: transparent;
+}

@@ -529,6 +529,27 @@ function contarLaminas(documento) {
   return documento.querySelectorAll("section.slide").length;
 }
 
+/* ------------------------------------------------------------------ */
+/* Decks que llenan el visor                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+  Un deck subido se ve como los del repositorio: marco 16:9 y los botones
+  ‹ ⛶ › del visor abajo, aunque traiga los suyos. La excepción son los decks
+  de esta lista (hoy sólo el QR de sesión): llenan todo el alto que deja la
+  navbar y, si traen botones propios, los del visor se esconden. Decisión del
+  2026-10-07; si la lista crece, conviene una columna en slides_subidas.
+*/
+const SLUGS_QUE_LLENAN_EL_VISOR = Object.freeze(["taudux-qr-de-sesion"]);
+
+function llenaElVisor(presentacion) {
+  return Boolean(
+    presentacion &&
+      presentacion.origen === "subida" &&
+      SLUGS_QUE_LLENAN_EL_VISOR.includes(presentacion.slug)
+  );
+}
+
 if (typeof module === "object" && module.exports) {
   module.exports = Object.freeze({
     indiceAcotado,
@@ -557,5 +578,7 @@ if (typeof module === "object" && module.exports) {
     rectanguloDeRecorte,
     validarSubida,
     contarLaminas,
+    SLUGS_QUE_LLENAN_EL_VISOR,
+    llenaElVisor,
   });
 }

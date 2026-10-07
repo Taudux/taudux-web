@@ -563,11 +563,12 @@ test("el puente ajusta la lámina al cambiar, al redimensionar y al llegar las f
   assert.match(fuente, /document\.fonts\.ready/);
 });
 
-test("fuera de pantalla completa, el marco de un deck subido llena el alto en vez de 16:9", () => {
+test("fuera de pantalla completa, sólo el marco de los decks de la excepción llena el alto en vez de 16:9", () => {
   const css = fs.readFileSync(path.join(ROOT, "src/app/features/slides/slides.css"), "utf8");
-  const regla = css.match(/\.slides__marco--subida:not\(:fullscreen\) \{([^}]*)\}/);
-  assert.ok(regla, "falta la regla del marco de los decks subidos");
+  assert.doesNotMatch(css, /\.slides__marco--subida:not\(:fullscreen\) \{/, "un subido cualquiera va en 16:9");
+  const regla = css.match(/\.slides__marco--llena:not\(:fullscreen\) \{([^}]*)\}/);
+  assert.ok(regla, "falta la regla del marco de los decks que llenan el visor");
   assert.match(regla[1], /aspect-ratio: auto/);
   assert.match(regla[1], /block-size: calc\(100dvh - var\(--slides-reservado/);
-  assert.match(css, /\.slides__visor:has\(\.slides__controles\[hidden\]\) \.slides__marco--subida:not\(:fullscreen\)/);
+  assert.match(css, /\.slides__visor:has\(\.slides__controles\[hidden\]\) \.slides__marco--llena:not\(:fullscreen\)/);
 });
