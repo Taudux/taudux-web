@@ -143,7 +143,12 @@
     const fila = (Array.isArray(catalogo.data) ? catalogo.data : []).find((item) => item.slug === slug);
     if (!fila || !fila.archivo_path) throw new Error("no_encontrada");
 
-    const descarga = await cliente.storage.from(BUCKET).download(fila.archivo_path);
+    // Storage sirve el archivo con `cache-control: max-age=3600`: sin la
+    // versión en la URL, el navegador conservaría el HTML viejo hasta una hora
+    // después de reemplazarlo. `version_archivo` sube con cada reemplazo (0049)
+    // y `?v=` hace que sea otra URL (verificado el 2026-10-07: devuelve el
+    // archivo nuevo).
+    const descarga = await cliente.storage.from(BUCKET).download(`${fila.archivo_path}?v=${fila.version_archivo || 1}`);
     if (descarga.error || !descarga.data) throw new Error("descarga");
     return { titulo: fila.titulo, texto: await descarga.data.text() };
   }

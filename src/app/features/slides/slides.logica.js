@@ -440,11 +440,18 @@ function rectanguloDeRecorte(ancho, alto, relacion = PORTADA_ANCHO / PORTADA_ALT
   `contexto.esAdmin` decide si el autor y la visibilidad se piden;
   `contexto.slugsOcupados` son los slugs del catálogo que la persona ve;
   `contexto.categorias` son las que ya existen, para no duplicar su grafía.
+
+  `contexto.modo === "edicion"` valida el formulario de EDICIÓN de una
+  presentación ya subida: el archivo y la portada son opcionales (sin archivo
+  se conserva el actual) y el slug es `contexto.slugPropio`, que no cambia
+  aunque el título sí, así que ningún slug cuenta como ocupado. En modo subida
+  nada de esto aplica.
 */
 function validarSubida(datos, contexto = {}) {
   const errores = {};
   const entrada = datos && typeof datos === "object" ? datos : {};
   const esAdmin = Boolean(contexto.esAdmin);
+  const edicion = contexto.modo === "edicion";
   const ocupados = new Set(Array.isArray(contexto.slugsOcupados) ? contexto.slugsOcupados : []);
 
   const titulo = textoNormalizado(entrada.titulo);
@@ -453,7 +460,7 @@ function validarSubida(datos, contexto = {}) {
     errores.titulo = `El título no puede pasar de ${LIMITES_SUBIDA.titulo} caracteres.`;
   } else if (!slugDesdeTitulo(titulo)) {
     errores.titulo = "El título necesita al menos una letra o un número.";
-  } else if (ocupados.has(slugDesdeTitulo(titulo))) {
+  } else if (!edicion && ocupados.has(slugDesdeTitulo(titulo))) {
     errores.titulo = "Ya existe una presentación con ese título. Cámbialo un poco.";
   }
 
@@ -470,7 +477,7 @@ function validarSubida(datos, contexto = {}) {
 
   const archivo = entrada.archivo;
   if (!archivo || typeof archivo !== "object") {
-    errores.archivo = "Elige el archivo HTML de la presentación.";
+    if (!edicion) errores.archivo = "Elige el archivo HTML de la presentación.";
   } else if (!/\.html?$/i.test(String(archivo.name || ""))) {
     errores.archivo = "El archivo tiene que ser un .html.";
   } else if (!(archivo.size > 0)) {
@@ -494,7 +501,9 @@ function validarSubida(datos, contexto = {}) {
     autorId = textoNormalizado(entrada.autorId);
     if (!autorId) errores.autor = "Elige quién es el autor.";
     visibilidad = entrada.visibilidad;
-    if (!["publico", "admins"].includes(visibilidad)) {
+    // Al editar, una presentación «por revisar» puede seguir así.
+    const validas = edicion ? ["publico", "admins", "por_revisar"] : ["publico", "admins"];
+    if (!validas.includes(visibilidad)) {
       errores.visibilidad = "Elige la visibilidad.";
     }
   }
@@ -502,7 +511,14 @@ function validarSubida(datos, contexto = {}) {
   return {
     ok: Object.keys(errores).length === 0,
     errores,
-    valores: { titulo, descripcion, categoria, autorId, visibilidad, slug: slugDesdeTitulo(titulo) },
+    valores: {
+      titulo,
+      descripcion,
+      categoria,
+      autorId,
+      visibilidad,
+      slug: edicion ? textoNormalizado(contexto.slugPropio) : slugDesdeTitulo(titulo),
+    },
   };
 }
 

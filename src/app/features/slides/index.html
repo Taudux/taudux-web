@@ -139,6 +139,10 @@
         <input class="field" id="slidesFormPortada" name="portada" type="file"
           accept="image/jpeg,image/png,image/webp" aria-describedby="slidesFormPortadaAyuda slidesFormPortadaError">
         <p class="slides__campo-ayuda" id="slidesFormPortadaAyuda">JPG, PNG o WebP de hasta 2 MB. Se recorta a 16:10.</p>
+        <label class="slides__radio" id="slidesFormQuitarPortadaCampo" hidden>
+          <input type="checkbox" id="slidesFormQuitarPortada" name="quitarPortada">
+          <span>Quitar portada</span>
+        </label>
         <p class="slides__campo-error" id="slidesFormPortadaError" role="alert"></p>
       </div>
 
@@ -173,7 +177,21 @@
 
       <p class="slides__campo-ayuda" id="slidesFormNotaAutor" hidden>Se publicará cuando un administrador la revise.</p>
 
+      <p class="slides__aviso-revision" id="slidesFormAvisoRevision" role="status" hidden>Al guardar, volverá a revisión y dejará de verse en público hasta que un administrador la publique.</p>
+
       <p class="slides__form-error" id="slidesFormError" role="alert"></p>
+
+      <div class="slides__borrar" id="slidesFormBorrarZona" hidden>
+        <button type="button" class="slides__borrar-boton" id="slidesFormBorrar">Borrar presentación</button>
+        <div class="slides__borrar-confirmar" id="slidesFormBorrarConfirmar" role="group"
+          aria-labelledby="slidesFormBorrarPregunta" hidden>
+          <p id="slidesFormBorrarPregunta">¿Seguro? Esto no se puede deshacer.</p>
+          <div class="slides__borrar-acciones">
+            <button type="button" class="slides__borrar-boton slides__borrar-boton--lleno" id="slidesFormBorrarSi">Sí, borrar</button>
+            <button type="button" class="button button--outline" id="slidesFormBorrarNo">Cancelar</button>
+          </div>
+        </div>
+      </div>
 
       <div class="slides__form-acciones">
         <button type="button" class="button button--outline" id="slidesFormCancelar">Cancelar</button>

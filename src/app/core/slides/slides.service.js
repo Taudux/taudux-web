@@ -121,6 +121,13 @@ function entradaDeSubida(fila) {
     visibilidad: fila.visibilidad,
     archivo_path: fila.archivo_path,
     portada_path: fila.portada_path || "",
+    // Versión del HTML (0049): sube al reemplazarlo y va en la URL de descarga.
+    version: fila.version_archivo || 1,
+    // `es_mio` y `autor_id` (0049) sólo deciden qué botones mostrar y qué
+    // preseleccionar en el formulario: la RLS es la que manda. `autor_id` llega
+    // únicamente al administrador y al propio autor.
+    es_mio: fila.es_mio === true,
+    autor_id: fila.autor_id || null,
     portada_url: "",
     url: `${RUTA_PUENTE_SLIDES}#${fila.slug}`,
   };
@@ -441,6 +448,286 @@ async function publicarSlide(id) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Editar y borrar (0049)                                              */
+/* ------------------------------------------------------------------ */
+
+const MENSAJE_SIN_PERMISO_DE_EDICION =
+  "No se pudo guardar: no tienes permiso para editar esta presentación.";
+const MENSAJE_SIN_PERMISO_DE_BORRADO =
+  "No se pudo borrar: no tienes permiso para borrar esta presentación.";
+
+function esErrorDePermiso(error) {
+  if (!error) return false;
+  const texto = String(error.message || "").toLowerCase();
+  return error.code === "42501"
+    || String(error.statusCode) === "403"
+    || texto.includes("row-level security")
+    || texto.includes("not authorized");
+}
+
+function mensajeDeErrorDeEdicion(error) {
+  if (!error) return "No se pudieron guardar los cambios.";
+  if (esErrorDePermiso(error)) return MENSAJE_SIN_PERMISO_DE_EDICION;
+  if (error.code === "P0001") {
+    return String(error.message || "").includes("cambiar el autor")
+      ? "Sólo un administrador puede cambiar el autor de una presentación."
+      : "Esa persona ya no está marcada como autora de Slides.";
+  }
+  if (error.code === "23514") return "Alguno de los datos no es válido. Revisa el formulario.";
+  return "No se pudieron guardar los cambios. Inténtalo de nuevo.";
+}
+
+/*
+  Guarda los cambios de una presentación subida. Sólo el administrador y el
+  autor de la fila pueden (la RLS de 0049 lo exige igual que esto).
+
+  `datos`: { id, slug, autorIdActual, archivoPathActual, portadaPathActual,
+  visibilidadActual, versionActual, titulo, descripcion, categoria,
+  categoriasExistentes, archivo?, totalLaminas?, portada?, quitarPortada?,
+  autorId?, visibilidad? }. Sin `archivo` se conserva el HTML actual; sin
+  `portada` y sin `quitarPortada`, la portada actual. `autorId` y
+  `visibilidad` sólo cuentan para un administrador: un autor nunca los manda y
+  la base deja su edición en «por revisar» pase lo que pase.
+
+  El slug no cambia (es la dirección), así que las rutas del bucket tampoco,
+  salvo cuando el administrador cambia de autor: ahí los archivos se MUEVEN a
+  la carpeta del autor nuevo antes de actualizar la fila, y vuelven a su lugar
+  si la fila no se pudo actualizar.
+
+  Reemplazar un archivo es un `upsert`, así que si la fila falla después, el
+  archivo viejo ya no se puede recuperar; por eso la fila se actualiza justo
+  después de subir y no al final de nada más.
+*/
+async function editarSlide(datos) {
+  const inicio = reporteroSlides.iniciarTiempo();
+  const cliente = clienteDeSlides();
+  if (!cliente) return { ok: false, mensaje: "No se pudo conectar. Inténtalo más tarde." };
+
+  const permisos = await cargarPermisosDeSlides();
+  if (!permisos.usuarioId) return { ok: false, mensaje: "Inicia sesión para editar una presentación." };
+  if (!permisos.admin && !permisos.autor) return { ok: false, mensaje: MENSAJE_SIN_PERMISO_DE_EDICION };
+
+  const entrada = datos && typeof datos === "object" ? datos : {};
+  if (!entrada.id || !entrada.slug || !entrada.archivoPathActual) {
+    return { ok: false, mensaje: "No se pudo identificar la presentación a editar." };
+  }
+
+  const validacion = validarSubida(entrada, {
+    esAdmin: permisos.admin,
+    categorias: entrada.categoriasExistentes,
+    modo: "edicion",
+    slugPropio: entrada.slug,
+  });
+  if (!validacion.ok) return { ok: false, mensaje: Object.values(validacion.errores)[0] };
+
+  const reemplazaArchivo = Boolean(entrada.archivo);
+  if (reemplazaArchivo && (!Number.isInteger(entrada.totalLaminas) || entrada.totalLaminas < 1)) {
+    return { ok: false, mensaje: "El archivo no trae láminas (section.slide)." };
+  }
+
+  const { slug, titulo, descripcion, categoria } = validacion.valores;
+  const autorActual = entrada.autorIdActual || (permisos.admin ? "" : permisos.usuarioId);
+  if (!autorActual) return { ok: false, mensaje: "No se pudo identificar al autor de la presentación." };
+
+  const autorFinal = permisos.admin ? validacion.valores.autorId : autorActual;
+  const cambiaAutor = permisos.admin && autorFinal !== autorActual;
+
+  const archivoActual = entrada.archivoPathActual;
+  const portadaActual = entrada.portadaPathActual || null;
+  const archivoNuevo = `${autorFinal}/${slug}/index.html`;
+  const portadaNueva = `${autorFinal}/${slug}/portada.webp`;
+  const quitaPortada = Boolean(entrada.quitarPortada) && !entrada.portada;
+  const reemplazaPortada = Boolean(entrada.portada);
+  const conservaPortada = Boolean(portadaActual) && !quitaPortada && !reemplazaPortada;
+
+  let portadaFinal = null;
+  if (reemplazaPortada) portadaFinal = portadaNueva;
+  else if (conservaPortada) portadaFinal = cambiaAutor ? portadaNueva : portadaActual;
+
+  const almacen = cliente.storage.from(BUCKET_SLIDES);
+  const movidos = [];
+  const creados = [];
+
+  async function deshacer() {
+    for (const [desde, hacia] of movidos.slice().reverse()) {
+      try {
+        await almacen.move(hacia, desde);
+      } catch {
+        // Queda en la carpeta nueva; un administrador lo ve en Storage.
+      }
+    }
+    if (creados.length > 0) {
+      try {
+        await almacen.remove(creados);
+      } catch {
+        // Un objeto sin fila: no hay nada más que hacer desde acá.
+      }
+    }
+  }
+
+  async function actualizarFila(valores) {
+    return cliente
+      .from("slides_subidas")
+      .update(valores)
+      .eq("id", entrada.id)
+      .select("id, visibilidad");
+  }
+
+  try {
+    // La RLS de Storage no deja a un autor reemplazar el archivo de una
+    // presentación PÚBLICA (sería saltarse la revisión): primero la fila pasa
+    // a «por revisar». La base haría lo mismo en la edición de abajo.
+    if (!permisos.admin && entrada.visibilidadActual === "publico" && (reemplazaArchivo || reemplazaPortada)) {
+      const previo = await actualizarFila({ visibilidad: "por_revisar" });
+      if (previo.error) {
+        reporteroSlides.reportarFallo("editar_revision", previo.error, inicio, previo.error.code || "update");
+        return { ok: false, mensaje: mensajeDeErrorDeEdicion(previo.error) };
+      }
+      if (!Array.isArray(previo.data) || previo.data.length === 0) {
+        return { ok: false, mensaje: MENSAJE_SIN_PERMISO_DE_EDICION };
+      }
+    }
+
+    if (cambiaAutor) {
+      const archivo = await almacen.move(archivoActual, archivoNuevo);
+      if (archivo.error) {
+        reporteroSlides.reportarFallo("mover_archivo", archivo.error, inicio, "storage");
+        return { ok: false, mensaje: mensajeDeErrorDeEdicion(archivo.error) };
+      }
+      movidos.push([archivoActual, archivoNuevo]);
+
+      if (conservaPortada) {
+        const portada = await almacen.move(portadaActual, portadaNueva);
+        if (portada.error) {
+          reporteroSlides.reportarFallo("mover_portada", portada.error, inicio, "storage");
+          await deshacer();
+          return { ok: false, mensaje: mensajeDeErrorDeEdicion(portada.error) };
+        }
+        movidos.push([portadaActual, portadaNueva]);
+      }
+    }
+
+    if (reemplazaArchivo) {
+      const archivo = await almacen.upload(archivoNuevo, entrada.archivo, {
+        contentType: "text/html",
+        upsert: true,
+      });
+      if (archivo.error) {
+        reporteroSlides.reportarFallo("subir_archivo", archivo.error, inicio, "storage");
+        await deshacer();
+        return { ok: false, mensaje: mensajeDeErrorDeEdicion(archivo.error) };
+      }
+    }
+
+    if (reemplazaPortada) {
+      const portada = await almacen.upload(portadaNueva, entrada.portada, {
+        contentType: "image/webp",
+        upsert: true,
+      });
+      if (portada.error) {
+        reporteroSlides.reportarFallo("subir_portada", portada.error, inicio, "storage");
+        await deshacer();
+        return { ok: false, mensaje: mensajeDeErrorDeEdicion(portada.error) };
+      }
+      // Si no había portada en esa carpeta, es un objeto nuevo y sin fila.
+      if (!portadaActual || cambiaAutor) creados.push(portadaNueva);
+    }
+
+    const valores = { titulo, descripcion, categoria, portada_path: portadaFinal };
+    if (reemplazaArchivo) {
+      valores.total_laminas = entrada.totalLaminas;
+      const version = Number.isInteger(entrada.versionActual) && entrada.versionActual > 0
+        ? entrada.versionActual
+        : 1;
+      valores.version_archivo = version + 1;
+    }
+    if (permisos.admin) {
+      valores.visibilidad = validacion.valores.visibilidad;
+      if (cambiaAutor) {
+        valores.autor_id = autorFinal;
+        valores.archivo_path = archivoNuevo;
+      }
+    }
+
+    const { data, error } = await actualizarFila(valores);
+    if (error) {
+      reporteroSlides.reportarFallo("editar_fila", error, inicio, error.code || "update");
+      await deshacer();
+      return { ok: false, mensaje: mensajeDeErrorDeEdicion(error) };
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      await deshacer();
+      return { ok: false, mensaje: MENSAJE_SIN_PERMISO_DE_EDICION };
+    }
+
+    // Con la fila ya actualizada, lo que quedó sin dueño se retira. Si no se
+    // puede, sólo sobra un archivo: la edición ya se guardó.
+    const sobrantes = [];
+    if (portadaActual && (quitaPortada || (reemplazaPortada && cambiaAutor))) sobrantes.push(portadaActual);
+    if (sobrantes.length > 0) {
+      try {
+        await almacen.remove(sobrantes);
+      } catch {
+        // Ver arriba.
+      }
+    }
+
+    return { ok: true, slug, visibilidad: data[0].visibilidad };
+  } catch (error) {
+    reporteroSlides.reportarFallo("editar_slide", error, inicio, "excepcion");
+    await deshacer();
+    return { ok: false, mensaje: "No se pudieron guardar los cambios. Inténtalo de nuevo." };
+  }
+}
+
+/*
+  Borra una presentación para siempre: primero la fila y después sus archivos.
+  Ese orden no es casual: la policy de Storage deja a un autor borrar un
+  archivo sólo cuando ya no está registrado en la tabla. Si los archivos no se
+  pueden retirar, la presentación ya no existe igual (sólo sobran objetos que
+  un administrador ve en Storage), así que no se reporta como fallo.
+*/
+async function borrarSlide({ id, archivoPath, portadaPath } = {}) {
+  const inicio = reporteroSlides.iniciarTiempo();
+  const cliente = clienteDeSlides();
+  if (!cliente) return { ok: false, mensaje: "No se pudo conectar. Inténtalo más tarde." };
+  if (!id) return { ok: false, mensaje: "No se pudo identificar la presentación a borrar." };
+
+  try {
+    const { data, error } = await cliente
+      .from("slides_subidas")
+      .delete()
+      .eq("id", id)
+      .select("id");
+    if (error) {
+      reporteroSlides.reportarFallo("borrar_fila", error, inicio, error.code || "delete");
+      return {
+        ok: false,
+        mensaje: esErrorDePermiso(error)
+          ? MENSAJE_SIN_PERMISO_DE_BORRADO
+          : "No se pudo borrar la presentación. Inténtalo de nuevo.",
+      };
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      return { ok: false, mensaje: MENSAJE_SIN_PERMISO_DE_BORRADO };
+    }
+
+    const rutas = [archivoPath, portadaPath].filter(Boolean);
+    if (rutas.length > 0) {
+      try {
+        await cliente.storage.from(BUCKET_SLIDES).remove(rutas);
+      } catch (errorDeArchivos) {
+        console.warn("slides: la fila se borró pero no sus archivos —", errorDeArchivos);
+      }
+    }
+    return { ok: true };
+  } catch (error) {
+    reporteroSlides.reportarFallo("borrar_slide", error, inicio, "excepcion");
+    return { ok: false, mensaje: "No se pudo borrar la presentación. Inténtalo de nuevo." };
+  }
+}
+
 /*
   Las portadas subidas viven en un bucket privado: se leen con una URL firmada
   de una hora. Una sola llamada para todas. Devuelve un Map ruta -> URL; si
@@ -481,6 +768,8 @@ if (typeof module === "object" && module.exports) {
     cargarCategoriasDeSlides,
     subirSlide,
     publicarSlide,
+    editarSlide,
+    borrarSlide,
     firmarPortadasDeSlides,
   });
 }

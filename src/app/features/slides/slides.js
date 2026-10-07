@@ -23,6 +23,13 @@
   RLS. El administrador elige autor y visibilidad; un autor sube siempre a su
   nombre y «por revisar».
 
+  EDITAR (0049). Cada tarjeta de una presentación SUBIDA lleva un lápiz en la
+  esquina de la portada para el administrador (en todas) y para su autor (sólo
+  en las suyas). Abre el mismo formulario en modo edición: archivo opcional,
+  «Quitar portada» y «Borrar presentación», que pide una confirmación dentro
+  del propio diálogo. Un autor no elige autor ni visibilidad, y toda edición suya
+  vuelve la presentación a «por revisar» (lo fuerza la base, no esta página).
+
   Cada presentación es un deck: un único HTML con todas sus diapositivas como
   `<section class="slide">`, que corre dentro de un <iframe> del mismo origen y
   expone `window.slidesDeck` — `{ total, indice(), ir(n) }` — más un evento
@@ -135,17 +142,31 @@
       error: porId("slidesFormError"),
       cancelar: porId("slidesFormCancelar"),
       enviar: porId("slidesFormEnviar"),
+      dialogoTitulo: porId("slidesDialogoTitulo"),
+      quitarPortadaCampo: porId("slidesFormQuitarPortadaCampo"),
+      quitarPortada: porId("slidesFormQuitarPortada"),
+      avisoRevision: porId("slidesFormAvisoRevision"),
+      borrarZona: porId("slidesFormBorrarZona"),
+      borrar: porId("slidesFormBorrar"),
+      borrarConfirmar: porId("slidesFormBorrarConfirmar"),
+      borrarSi: porId("slidesFormBorrarSi"),
+      borrarNo: porId("slidesFormBorrarNo"),
     };
     const hayFormulario = Object.values(form).every(Boolean)
       && typeof subirSlide === "function"
       && typeof cargarPermisosDeSlides === "function";
+    // Editar y borrar necesitan además sus funciones del servicio: sin ellas
+    // la página sigue subiendo, sólo que sin el lápiz.
+    const hayEdicion = hayFormulario
+      && typeof editarSlide === "function"
+      && typeof borrarSlide === "function";
 
     // El catálogo cargado (entradas ya normalizadas y válidas) y qué se está
     // mostrando ahora mismo. `totalActual` e `indiceActual` los manda el
     // propio deck (por `slidesDeck` al conectar y por el evento
     // `slides:cambio` después); mientras no haya deck conectado quedan en 0.
     let catalogo = [];
-    let permisos = { admin: false, autor: false };
+    let permisos = { admin: false, autor: false, usuarioId: null };
     let categoriaActiva = "";
     let urlsDePortada = new Map();
     let presentacionActual = null;
@@ -155,6 +176,8 @@
     let conectada = false;
     let laminasDetectadas = 0;
     let subiendo = false;
+    // La presentación que se está editando, o null si el formulario sube una nueva.
+    let edicionActual = null;
 
     el.reintentar.addEventListener("click", reintentarCarga);
     el.anterior.addEventListener("click", () => irA(indiceActual - 1));
@@ -208,6 +231,7 @@
       permisos = {
         admin: Boolean(resultadoPermisos && resultadoPermisos.admin),
         autor: Boolean(resultadoPermisos && resultadoPermisos.autor),
+        usuarioId: (resultadoPermisos && resultadoPermisos.usuarioId) || null,
       };
       el.subir.hidden = !(hayFormulario && (permisos.admin || permisos.autor));
 
@@ -387,7 +411,37 @@
         celda.append(publicar);
       }
 
+      // El lápiz va como HERMANO de la tarjeta (un <button> no anida otro) y
+      // se posiciona sobre la esquina de la portada. Sólo en lo subido: lo del
+      // repositorio no se edita desde acá. El administrador lo ve en todas y el
+      // autor sólo en las suyas; la RLS decide de verdad.
+      if (hayEdicion && presentacion.origen === "subida" && (permisos.admin || presentacion.es_mio)) {
+        celda.append(crearBotonEditar(presentacion));
+      }
+
       return celda;
+    }
+
+    function crearBotonEditar(presentacion) {
+      const editar = document.createElement("button");
+      editar.type = "button";
+      editar.className = "slides__editar";
+      editar.setAttribute("aria-label", `Editar ${presentacion.titulo}`);
+      editar.title = "Editar";
+
+      const ns = "http://www.w3.org/2000/svg";
+      const icono = document.createElementNS(ns, "svg");
+      icono.setAttribute("viewBox", "0 0 24 24");
+      icono.setAttribute("aria-hidden", "true");
+      icono.setAttribute("focusable", "false");
+      icono.setAttribute("class", "slides__editar-icono");
+      const trazo = document.createElementNS(ns, "path");
+      trazo.setAttribute("d", "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z");
+      icono.append(trazo);
+      editar.append(icono);
+
+      editar.addEventListener("click", () => abrirFormulario(presentacion));
+      return editar;
     }
 
     // La portada: la imagen si hay, y si no (o si no carga) un degradado de
@@ -453,10 +507,14 @@
     /* ---------- Subir una presentación ---------- */
 
     function conectarFormulario() {
-      el.subir.addEventListener("click", abrirFormulario);
+      el.subir.addEventListener("click", () => abrirFormulario());
       form.cancelar.addEventListener("click", () => form.dialogo.close());
       form.formulario.addEventListener("submit", enviarFormulario);
       form.archivo.addEventListener("change", leerArchivoElegido);
+      form.descripcion.addEventListener("input", ajustarAltoDeDescripcion);
+      form.borrar.addEventListener("click", pedirConfirmacionDeBorrado);
+      form.borrarNo.addEventListener("click", cancelarBorrado);
+      form.borrarSi.addEventListener("click", borrarPresentacion);
       // Esc o el fondo cierran el diálogo, salvo en mitad de una subida.
       form.dialogo.addEventListener("cancel", (evento) => {
         if (subiendo) evento.preventDefault();
@@ -473,24 +531,159 @@
       form.error.textContent = "";
     }
 
-    async function abrirFormulario() {
+    // La descripción crece con su texto en vez de scrollear (ver
+    // #slidesFormDescripcion en slides.css). Donde `field-sizing: content` ya
+    // lo hace el CSS no hay nada que hacer; en el resto (Firefox, Safari) el
+    // alto se copia del contenido.
+    function ajustarAltoDeDescripcion() {
+      if (typeof CSS !== "undefined" && CSS.supports && CSS.supports("field-sizing", "content")) return;
+      form.descripcion.style.height = "";
+      form.descripcion.style.height = `${form.descripcion.scrollHeight}px`;
+    }
+
+    // Abre el formulario: sin argumento sube una presentación nueva; con una
+    // presentación del catálogo la edita. Cada apertura deja TODO como si
+    // fuera la primera, para que editar y luego subir no arrastre nada.
+    async function abrirFormulario(presentacion = null) {
+      const editando = Boolean(presentacion && presentacion.origen === "subida");
+      edicionActual = editando ? presentacion : null;
+
+      quitarOpcionPorRevisar();
       form.formulario.reset();
       limpiarErrores();
       laminasDetectadas = 0;
-      escribir(form.archivoAyuda, "Un solo .html de hasta 15 MB, con sus láminas en section.slide.");
+
+      escribir(form.dialogoTitulo, editando ? "Editar presentación" : "Subir presentación");
+      escribir(form.enviar, textoDeEnviar());
+      escribir(form.archivoAyuda, textoDeAyudaDelArchivo());
+      form.archivo.required = !editando;
 
       form.autorCampo.hidden = !permisos.admin;
       form.visibilidadCampo.hidden = !permisos.admin;
       form.notaAutor.hidden = permisos.admin;
       form.autor.required = permisos.admin;
 
+      // Lo propio de editar: la portada sólo se puede quitar si hay una, el
+      // borrado arranca sin confirmar y quien no es administrador sabe de
+      // antemano que lo público vuelve a revisión.
+      form.quitarPortadaCampo.hidden = !(editando && presentacion.portada_path);
+      form.avisoRevision.hidden = !(editando && !permisos.admin && presentacion.visibilidad === "publico");
+      form.borrarZona.hidden = !editando;
+      cancelarBorrado();
+
+      if (editando) rellenarFormulario(presentacion);
+
       form.dialogo.showModal();
+      // Ya visible: recién ahora el campo tiene alto que medir.
+      ajustarAltoDeDescripcion();
       form.titulo.focus();
 
       // Las sugerencias y la lista de autores llegan después de abrir: el
       // formulario ya se puede llenar mientras tanto.
       cargarSugerencias();
-      if (permisos.admin) cargarAutores();
+      if (permisos.admin) cargarAutores(editando ? presentacion : null);
+    }
+
+    function textoDeEnviar() {
+      return edicionActual ? "Guardar cambios" : "Subir";
+    }
+
+    function textoDeAyudaDelArchivo() {
+      return edicionActual
+        ? "Déjalo vacío para conservar el archivo actual."
+        : "Un solo .html de hasta 15 MB, con sus láminas en section.slide.";
+    }
+
+    function rellenarFormulario(presentacion) {
+      form.titulo.value = presentacion.titulo || "";
+      form.descripcion.value = presentacion.descripcion || "";
+      form.categoria.value = presentacion.categoria || "";
+      if (!permisos.admin) return;
+
+      // Mientras llega la lista de autores, el actual ya está elegido.
+      if (presentacion.autor_id) {
+        form.autor.replaceChildren(
+          new Option("Elige al autor", ""),
+          new Option(presentacion.autor || "Autor actual", presentacion.autor_id)
+        );
+        form.autor.value = presentacion.autor_id;
+      }
+
+      // Una presentación «por revisar» puede seguir así: es una tercera
+      // opción que sólo existe mientras se edita una así.
+      if (presentacion.visibilidad === "por_revisar") agregarOpcionPorRevisar();
+      const radio = form.formulario.querySelector(`input[name="visibilidad"][value="${presentacion.visibilidad}"]`);
+      if (radio) radio.checked = true;
+    }
+
+    function agregarOpcionPorRevisar() {
+      const etiqueta = document.createElement("label");
+      etiqueta.className = "slides__radio";
+      etiqueta.dataset.opcionPorRevisar = "true";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "visibilidad";
+      radio.value = "por_revisar";
+      const texto = document.createElement("span");
+      texto.textContent = "Por revisar";
+      etiqueta.append(radio, texto);
+      form.visibilidadCampo.insertBefore(etiqueta, campoError("Visibilidad"));
+    }
+
+    function quitarOpcionPorRevisar() {
+      form.visibilidadCampo.querySelectorAll("[data-opcion-por-revisar]").forEach((nodo) => nodo.remove());
+    }
+
+    /* ---------- Borrar (con confirmación dentro del diálogo) ---------- */
+
+    function pedirConfirmacionDeBorrado() {
+      form.borrar.hidden = true;
+      form.borrarConfirmar.hidden = false;
+      form.borrarNo.focus();
+    }
+
+    function cancelarBorrado() {
+      form.borrarConfirmar.hidden = true;
+      form.borrar.hidden = false;
+    }
+
+    async function borrarPresentacion() {
+      const presentacion = edicionActual;
+      if (!presentacion || subiendo) return;
+      subiendo = true;
+      form.error.textContent = "";
+      alternarOcupado(true);
+      form.borrarSi.textContent = "Borrando…";
+
+      try {
+        const resultado = await borrarSlide({
+          id: presentacion.id,
+          archivoPath: presentacion.archivo_path,
+          portadaPath: presentacion.portada_path,
+        });
+        if (!resultado.ok) {
+          form.error.textContent = resultado.mensaje;
+          cancelarBorrado();
+          return;
+        }
+
+        form.dialogo.close();
+        if (typeof mostrarToast === "function") mostrarToast("Presentación borrada.", "success");
+        await cargarCatalogo();
+      } finally {
+        subiendo = false;
+        form.borrarSi.textContent = "Sí, borrar";
+        alternarOcupado(false);
+      }
+    }
+
+    // Mientras algo se guarda o se borra, nada del formulario se puede tocar.
+    function alternarOcupado(ocupado) {
+      form.enviar.disabled = ocupado;
+      form.cancelar.disabled = ocupado;
+      form.borrar.disabled = ocupado;
+      form.borrarSi.disabled = ocupado;
+      form.borrarNo.disabled = ocupado;
     }
 
     // Las categorías ya usadas: las del catálogo que se ve (incluye las del
@@ -513,20 +706,27 @@
       return listarCategorias(catalogo);
     }
 
-    async function cargarAutores() {
-      const seleccionado = form.autor.value;
+    // Con `actual` (la presentación que se edita) preselecciona a su autor
+    // cuando llega la lista; si ya no está marcado y por eso no viene en ella,
+    // lo deja como opción para que guardar sin tocarlo no lo cambie.
+    async function cargarAutores(actual = null) {
+      const seleccionado = (actual && actual.autor_id) || form.autor.value;
       form.autor.replaceChildren(new Option("Elige al autor", ""));
       const resultado = await cargarAutoresDeSlides();
       if (!resultado.ok) {
         campoError("Autor").textContent = resultado.mensaje;
         return;
       }
-      if (resultado.autores.length === 0) {
+      const hayActual = Boolean(actual && actual.autor_id);
+      if (resultado.autores.length === 0 && !hayActual) {
         campoError("Autor").textContent =
           "Todavía no hay autores marcados. Marca a alguien en Supabase antes de subir.";
         return;
       }
       resultado.autores.forEach((autor) => form.autor.append(new Option(autor.nombre, autor.id)));
+      if (hayActual && !resultado.autores.some((autor) => autor.id === actual.autor_id)) {
+        form.autor.append(new Option(actual.autor || "Autor actual", actual.autor_id));
+      }
       if (seleccionado) form.autor.value = seleccionado;
     }
 
@@ -538,7 +738,10 @@
       form.archivo.removeAttribute("aria-invalid");
 
       const archivo = form.archivo.files && form.archivo.files[0];
-      if (!archivo) return;
+      if (!archivo) {
+        escribir(form.archivoAyuda, textoDeAyudaDelArchivo());
+        return;
+      }
 
       try {
         const texto = await archivo.text();
@@ -551,7 +754,7 @@
       if (laminasDetectadas > 0) {
         escribir(form.archivoAyuda, `Se detectaron ${textoLaminas(laminasDetectadas)}.`);
       } else {
-        escribir(form.archivoAyuda, "Un solo .html de hasta 15 MB, con sus láminas en section.slide.");
+        escribir(form.archivoAyuda, textoDeAyudaDelArchivo());
         campoError("Archivo").textContent = "No se encontró ninguna lámina (section.slide) en ese archivo.";
         form.archivo.setAttribute("aria-invalid", "true");
       }
@@ -607,6 +810,7 @@
       if (subiendo) return;
       limpiarErrores();
 
+      const edicion = edicionActual;
       const archivo = form.archivo.files && form.archivo.files[0];
       const portadaElegida = form.portada.files && form.portada.files[0];
       const visibilidad = form.formulario.querySelector('input[name="visibilidad"]:checked');
@@ -625,6 +829,7 @@
           esAdmin: permisos.admin,
           categorias: categoriasConocidas(),
           slugsOcupados: catalogo.map((item) => item.slug),
+          ...(edicion ? { modo: "edicion", slugPropio: edicion.slug } : {}),
         }
       );
       if (!validacion.ok) {
@@ -632,7 +837,9 @@
         return;
       }
 
-      if (laminasDetectadas < 1) {
+      // Al editar el archivo es opcional: sólo se cuentan láminas si se eligió
+      // uno. Al subir, la validación ya garantizó que hay archivo.
+      if (archivo && laminasDetectadas < 1) {
         // Todavía no terminó de leerse, o de verdad no trae láminas.
         await leerArchivoElegido();
         if (laminasDetectadas < 1) {
@@ -642,9 +849,8 @@
       }
 
       subiendo = true;
-      form.enviar.disabled = true;
-      form.enviar.textContent = "Subiendo…";
-      form.cancelar.disabled = true;
+      alternarOcupado(true);
+      form.enviar.textContent = edicion ? "Guardando…" : "Subiendo…";
 
       try {
         let portada = null;
@@ -656,17 +862,39 @@
           }
         }
 
-        const resultado = await subirSlide({
-          titulo: form.titulo.value,
-          descripcion: form.descripcion.value,
-          categoria: form.categoria.value,
-          categoriasExistentes: categoriasConocidas(),
-          archivo,
-          portada,
-          totalLaminas: laminasDetectadas,
-          autorId: form.autor.value,
-          visibilidad: visibilidad ? visibilidad.value : "",
-        });
+        const resultado = edicion
+          ? await editarSlide({
+            id: edicion.id,
+            slug: edicion.slug,
+            autorIdActual: edicion.autor_id,
+            archivoPathActual: edicion.archivo_path,
+            portadaPathActual: edicion.portada_path,
+            visibilidadActual: edicion.visibilidad,
+            versionActual: edicion.version,
+            titulo: form.titulo.value,
+            descripcion: form.descripcion.value,
+            categoria: form.categoria.value,
+            categoriasExistentes: categoriasConocidas(),
+            archivo: archivo || undefined,
+            totalLaminas: archivo ? laminasDetectadas : undefined,
+            portada: portada || undefined,
+            quitarPortada: form.quitarPortada.checked,
+            // Sólo un administrador decide autor y visibilidad: para el
+            // resto ni se mandan (la base los ignoraría de todos modos).
+            autorId: permisos.admin ? form.autor.value : undefined,
+            visibilidad: permisos.admin && visibilidad ? visibilidad.value : undefined,
+          })
+          : await subirSlide({
+            titulo: form.titulo.value,
+            descripcion: form.descripcion.value,
+            categoria: form.categoria.value,
+            categoriasExistentes: categoriasConocidas(),
+            archivo,
+            portada,
+            totalLaminas: laminasDetectadas,
+            autorId: form.autor.value,
+            visibilidad: visibilidad ? visibilidad.value : "",
+          });
 
         if (!resultado.ok) {
           form.error.textContent = resultado.mensaje;
@@ -675,19 +903,22 @@
 
         form.dialogo.close();
         if (typeof mostrarToast === "function") {
-          mostrarToast(
-            resultado.visibilidad === "por_revisar"
-              ? "Listo. Un administrador la revisará antes de publicarla."
-              : "Presentación subida.",
-            "success"
-          );
+          const aRevision = resultado.visibilidad === "por_revisar" && !permisos.admin;
+          let mensaje = "Presentación subida.";
+          if (edicion) {
+            mensaje = aRevision
+              ? "Cambios guardados. Un administrador la revisará antes de publicarla."
+              : "Cambios guardados.";
+          } else if (resultado.visibilidad === "por_revisar") {
+            mensaje = "Listo. Un administrador la revisará antes de publicarla.";
+          }
+          mostrarToast(mensaje, "success");
         }
         await cargarCatalogo();
       } finally {
         subiendo = false;
-        form.enviar.disabled = false;
-        form.enviar.textContent = "Subir";
-        form.cancelar.disabled = false;
+        form.enviar.textContent = textoDeEnviar();
+        alternarOcupado(false);
       }
     }
 

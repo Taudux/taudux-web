@@ -220,6 +220,8 @@
   }
 
   .slides__celda {
+    /* Ancla del lápiz de editar, que se posiciona sobre la portada. */
+    position: relative;
     display: grid;
     gap: 0.5rem;
     align-content: start;
@@ -362,6 +364,51 @@
     outline-offset: var(--focus-ring-offset);
   }
 
+  /*
+    El lápiz de editar: hermano de la tarjeta (un <button> no anida otro), en la
+    esquina superior derecha de la portada. Vidrio oscuro con el trazo cian,
+    siempre visible: en táctil no hay hover que lo descubra.
+  */
+  .slides__editar {
+    position: absolute;
+    inset-block-start: 0.5rem;
+    inset-inline-end: 0.5rem;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-pill);
+    background: rgba(8, 12, 20, 0.62);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: var(--color-accent);
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  .slides__editar:hover {
+    background: rgba(8, 12, 20, 0.85);
+    border-color: var(--color-accent);
+  }
+
+  .slides__editar:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .slides__editar-icono {
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   /* ---------- Formulario de subida ---------- */
 
   .slides__dialogo {
@@ -375,6 +422,50 @@
     background: var(--color-background);
     border: var(--border-subtle);
     border-radius: var(--radius-panel);
+  }
+
+  /* Cuando no cabe (ventana baja, celular), scrollea con la misma barra que la
+     página (ver html en styles.css): degradado de la marca, riel oscuro,
+     flechas cian. */
+  .slides__dialogo::-webkit-scrollbar { width: 8px; }
+  .slides__dialogo::-webkit-scrollbar-track { background: #0b0d10; }
+  .slides__dialogo::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, var(--color-accent-dark), var(--color-accent));
+    border-radius: 99px;
+  }
+  .slides__dialogo::-webkit-scrollbar-button:single-button:vertical {
+    display: block;
+    height: 0.75rem;
+    background: #0b0d10 no-repeat center / 8px 8px;
+  }
+  .slides__dialogo::-webkit-scrollbar-button:single-button:vertical:decrement {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 2 L7 6 H1 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .slides__dialogo::-webkit-scrollbar-button:single-button:vertical:increment {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1 2 H7 L4 6 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .slides__dialogo::-webkit-scrollbar-button:vertical:start:increment,
+  .slides__dialogo::-webkit-scrollbar-button:vertical:end:decrement { display: none; }
+
+  /* Firefox: mismos colores, sin degradado. Dentro de @supports porque en
+     Chrome un `scrollbar-color` anula los ::-webkit-scrollbar. */
+  @supports not selector(::-webkit-scrollbar) {
+    .slides__dialogo {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-accent-dark) #0b0d10;
+    }
+  }
+
+  /* La descripción crece con su texto en vez de scrollear dentro de un
+     formulario que ya scrollea. Acotado a este campo: `.field--textarea` lo
+     comparten otros formularios del sitio. Sin tope: el maxlength de 600 ya
+     le pone un alto finito. Donde no hay `field-sizing`, slides.js copia el
+     alto del contenido (ajustarAltoDeDescripcion). */
+  #slidesFormDescripcion {
+    field-sizing: content;
+    min-block-size: 120px;
+    resize: none;
+    overflow: hidden;
   }
 
   .slides__dialogo::backdrop {
@@ -452,6 +543,72 @@
 
   .slides__subir--form {
     padding-block: 0.65rem;
+  }
+
+  /* Aviso de que guardar vuelve la presentación a revisión. */
+  .slides__aviso-revision {
+    padding: 0.7rem 0.9rem;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  /* Borrar: acción destructiva, separada de las de guardar y con su
+     confirmación dentro del propio diálogo. */
+  .slides__borrar {
+    display: grid;
+    gap: 0.6rem;
+    padding-block-start: 0.25rem;
+    border-block-start: var(--border-subtle);
+  }
+
+  .slides__borrar-confirmar {
+    display: grid;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--color-error-text);
+  }
+
+  .slides__borrar-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .slides__borrar-boton {
+    justify-self: start;
+    padding: 0.5rem 1.2rem;
+    border: 1px solid var(--color-error);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-error-text);
+    font: 700 0.9rem var(--font-body);
+    cursor: pointer;
+  }
+
+  .slides__borrar-boton:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-error) 22%, transparent);
+  }
+
+  .slides__borrar-boton--lleno {
+    background: var(--color-error);
+    color: #fff;
+  }
+
+  .slides__borrar-boton--lleno:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-error) 85%, #000);
+  }
+
+  .slides__borrar-boton:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+
+  .slides__borrar-boton:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
   }
 
   /* ---------- Visor ---------- */
@@ -632,6 +789,7 @@
     .slides__portada,
     .slides__subir,
     .slides__filtro,
+    .slides__editar,
     .slides__control {
       transition: none;
     }
