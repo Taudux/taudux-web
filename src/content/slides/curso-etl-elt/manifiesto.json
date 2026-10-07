@@ -1,5 +1,10 @@
 {
   "titulo": "ETL y ELT · Los procesos que mueven los datos",
   "descripcion": "Presentación interactiva con ejercicios simulados: cuándo transformar antes de cargar, cuándo después, y cómo elegir entre los dos.",
-  "archivo": "index.html"
+  "archivo": "index.html",
+  "categoria": "Ingeniería de datos",
+  "autor": "Equipo Taudux",
+  "actualizado": "2026-09-30",
+  "total_laminas": 22,
+  "portada": "portada.webp"
 }

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Captura | Taudux</title>
+</head>
+
+<!-- El marco de CAPTURA: de aquí sale la portada automática de un deck subido
+     sin portada. La página de Slides lo abre como
+       <iframe sandbox="allow-scripts">
+     SIN `allow-same-origin`: origen opaco, sin sesión, sin localStorage ni
+     cookies de taudux.com. Corre SÓLO cuando quien sube guarda su deck, con su
+     propio archivo; nadie más lo dispara.
+
+     El arranque va EN LÍNEA a propósito (mismo motivo que _aislado): el marco no
+     pide ningún archivo al servidor, porque sin cookies esos pedidos fallan
+     detrás de la protección de las vistas previas de Vercel. Por eso la página
+     de Slides le manda UN mensaje con el HTML del deck y el texto de la
+     librería (modern-screenshot.js, que ella descarga afuera).
+
+     `sandbox: { remove() {} }`: la librería crea un iframe auxiliar del mismo
+     origen para averiguar los estilos por defecto de cada etiqueta. En un
+     marco de origen opaco ese iframe es de otro origen y lanza SecurityError.
+     Con este sustituto no se crea ningún auxiliar, los estilos por defecto
+     quedan vacíos y la librería copia todas las propiedades calculadas
+     (verificado en Chrome el 2026-10-07).
+
+     `connect-src https:` abierto en la CSP de este marco (regla
+     `/content/slides/_captura(.*)` de vercel.json, la ÚLTIMA de `headers`): la
+     librería baja con fetch las fuentes y las imágenes del deck para
+     incrustarlas en la captura. El marco no tiene nada que robar ni sesión con
+     la que hacerlo. -->
+
+<body>
+  <script>
+    /*
+      `event.origin` de un origen opaco es "null" y no sirve para validar; lo
+      que se comprueba es QUIÉN mandó el mensaje: `event.source === window.parent`.
+      La librería y el código de captura se anexan al HTML del deck porque
+      document.open() borra el documento y sus listeners. La etiqueta de cierre
+      de script que aparezca dentro de lo recibido se escapa para que no cierre
+      su etiqueta antes de tiempo (por eso este comentario no la escribe
+      literal: dentro de un script inline también la cerraría).
+    */
+    (function () {
+      /* Corre DENTRO del deck, ya escrito: se inyecta como texto. */
+      function capturar(ancho, alto) {
+        const avisar = (datos) => parent.postMessage(Object.assign({ tipo: "slides:captura" }, datos), "*");
+        (async function () {
+          try {
+            await new Promise((r) => (document.readyState === "complete" ? r() : addEventListener("load", r)));
+            if (document.fonts) await document.fonts.ready;
+            await new Promise((r) => setTimeout(r, 1500));
+            const laminas = document.querySelectorAll(".slide");
+            if (laminas.length && !document.querySelector(".slide.active, .slide.is-active")) {
+              laminas[0].classList.add("active", "is-active");
+            }
+            // Fundidos y animaciones al final: un marco fuera de pantalla
+            // puede no dibujarse, y entonces una transición no avanza y la
+            // foto encuentra la lámina en opacidad 0 (pasó el 2026-10-07).
+            // Las infinitas no tienen final y lanzan: se dejan como estén.
+            if (typeof document.getAnimations === "function") {
+              document.getAnimations().forEach((animacion) => {
+                try {
+                  animacion.finish();
+                } catch {
+                  // Animación infinita: no tiene estado final.
+                }
+              });
+            }
+            void getComputedStyle(document.body).opacity;
+            const imagen = await modernScreenshot.domToBlob(document.documentElement, {
+              width: ancho,
+              height: alto,
+              type: "image/png",
+              sandbox: { remove() {} },
+            });
+            if (!imagen) throw new Error("sin_imagen");
+            avisar({ imagen });
+          } catch (error) {
+            avisar({ error: String((error && error.message) || error) });
+          }
+        })();
+      }
+
+      let recibido = false;
+      window.addEventListener("message", (evento) => {
+        if (recibido) return;
+        if (evento.source !== window.parent) return;
+        const datos = evento.data;
+        if (!datos || datos.tipo !== "slides:capturar") return;
+        if (typeof datos.html !== "string" || typeof datos.libreria !== "string") return;
+        if (!(datos.ancho > 0) || !(datos.alto > 0)) return;
+        recibido = true;
+        const libreria = datos.libreria.replace(/<\/script/gi, "<\\/script");
+        const codigo = "(" + capturar.toString() + ")(" + Number(datos.ancho) + "," + Number(datos.alto) + ");";
+        document.open();
+        document.write(datos.html + "<script>" + libreria + "<\/script><script>" + codigo + "<\/script>");
+        document.close();
+      });
+    })();
+  </script>
+</body>
+
+</html>

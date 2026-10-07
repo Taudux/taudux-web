@@ -76,6 +76,116 @@
     text-transform: uppercase;
   }
 
+  /* El título y, a su derecha, «Subir presentación». Con poco ancho el botón
+     baja en vez de salirse. */
+  .slides__titulo-fila {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.5rem;
+  }
+
+  /* El botón más llamativo de la página, a propósito: píldora con el degradado
+     de la marca, texto oscuro y resplandor cian. */
+  .slides__subir {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem 1.6rem;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(135deg, #00d7ff, #4f8cff);
+    color: #04121a;
+    font: 700 1rem var(--font-body);
+    cursor: pointer;
+    box-shadow: 0 0 22px color-mix(in srgb, #00d7ff 55%, transparent);
+    transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+  }
+
+  .slides__subir:hover {
+    box-shadow: 0 0 34px color-mix(in srgb, #00d7ff 80%, transparent);
+    transform: translateY(-1px);
+  }
+
+  .slides__subir:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .slides__subir:disabled {
+    opacity: 0.6;
+    cursor: progress;
+    transform: none;
+  }
+
+  .slides__subir-icono {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    flex: none;
+  }
+
+  /* ---------- Privadas ---------- */
+
+  .slides__privadas {
+    margin-block-end: 1.5rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-panel);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .slides__privadas-titulo {
+    padding: 0.9rem 1.25rem;
+    font: 700 0.95rem var(--font-display);
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    border-radius: var(--radius-panel);
+  }
+
+  .slides__privadas-titulo:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .slides__privadas .slides__grilla {
+    padding: 0.5rem 1.25rem 1.25rem;
+  }
+
+  /* ---------- Filtros por categoría ---------- */
+
+  .slides__filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-block-end: 1.25rem;
+  }
+
+  .slides__filtro {
+    padding: 0.45rem 1rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-muted);
+    font: 500 0.85rem var(--font-body);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+  }
+
+  .slides__filtro:hover {
+    border-color: var(--color-accent);
+    color: var(--color-text);
+  }
+
+  .slides__filtro[aria-pressed="true"] {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+    color: var(--color-text);
+  }
+
+  .slides__filtro:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
 
   /* Aviso de carga, error o catálogo vacío: mismo patrón que
      colaboradores__aviso, con el botón de reintentar oculto hasta el error. */
@@ -104,49 +214,401 @@
 
   .slides__grilla {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.75rem 1.25rem;
     list-style: none;
   }
 
   .slides__celda {
+    /* Ancla del lápiz de editar, que se posiciona sobre la portada. */
+    position: relative;
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
     min-inline-size: 0;
   }
 
+  /*
+    La tarjeta es minimalista: una portada 16:10 con esquinas redondeadas y,
+    debajo, categoría, título (dos líneas como máximo) y «autor · fecha». Sin
+    descripción visible: queda en el atributo title y en aria-describedby.
+  */
   .slides__tarjeta {
-    display: block;
+    display: grid;
+    gap: 0.45rem;
+    align-content: start;
     inline-size: 100%;
+    padding: 0;
     text-align: left;
-    background: rgba(255, 255, 255, 0.05);
-    border: var(--border-subtle);
-    border-radius: var(--radius-panel);
-    padding: 1.25rem;
+    background: none;
+    border: 0;
     color: var(--color-text);
     cursor: pointer;
-    transition: border-color var(--transition-fast), background var(--transition-fast);
-  }
-
-  .slides__tarjeta:hover {
-    border-color: var(--color-accent);
-    background: rgba(255, 255, 255, 0.08);
   }
 
   .slides__tarjeta:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
+    border-radius: 14px;
+  }
+
+  .slides__portada {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 10;
+    border-radius: 14px;
+    overflow: hidden;
+    isolation: isolate;
+    margin-block-end: 0.25rem;
+    border: var(--border-subtle);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  /* Al pasar el mouse (o al enfocar con teclado) la portada sube un poco y se
+     ilumina con un anillo cian. */
+  .slides__tarjeta:hover .slides__portada,
+  .slides__tarjeta:focus-visible .slides__portada {
+    transform: translateY(-4px);
+    border-color: var(--color-accent);
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 10px 28px color-mix(in srgb, var(--color-accent) 35%, transparent);
+  }
+
+  .slides__portada-imagen {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  /* Las iniciales de la categoría: la portada de respaldo. */
+  .slides__iniciales {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font: 700 clamp(2rem, 6vw, 3rem) var(--font-display);
+    letter-spacing: 3px;
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .slides__laminas,
+  .slides__estado {
+    position: absolute;
+    inset-block-start: 0.6rem;
+    z-index: 1;
+    padding: 0.2rem 0.65rem;
+    border-radius: var(--radius-pill);
+    background: rgba(2, 4, 8, 0.72);
+    backdrop-filter: blur(4px);
+    color: var(--color-text);
+    font: 500 0.75rem var(--font-body);
+  }
+
+  .slides__laminas {
+    inset-inline-start: 0.6rem;
+  }
+
+  .slides__estado {
+    inset-inline-end: 0.6rem;
+    color: var(--color-warning);
+  }
+
+  .slides__categoria {
+    font: 500 0.6875rem var(--font-mono);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    overflow-wrap: anywhere;
   }
 
   .slides__tarjeta-titulo {
-    font: 700 1.05rem var(--font-display);
-    margin-block-end: 0.4rem;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    font: 700 1.05rem/1.3 var(--font-display);
     overflow-wrap: anywhere;
   }
 
-  .slides__tarjeta-descripcion {
-    font-size: 0.85rem;
+  .slides__meta {
+    font-size: 0.8rem;
+    color: var(--color-text-subtle);
+  }
+
+  .slides__publicar {
+    justify-self: start;
+    padding: 0.4rem 1.1rem;
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-accent);
+    font: 700 0.85rem var(--font-body);
+    cursor: pointer;
+  }
+
+  .slides__publicar:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+
+  .slides__publicar:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+
+  .slides__publicar:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /*
+    El lápiz de editar: hermano de la tarjeta (un <button> no anida otro), en la
+    esquina superior derecha de la portada. Vidrio oscuro con el trazo cian,
+    siempre visible: en táctil no hay hover que lo descubra.
+  */
+  .slides__editar {
+    position: absolute;
+    inset-block-start: 0.5rem;
+    inset-inline-end: 0.5rem;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-pill);
+    background: rgba(8, 12, 20, 0.62);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: var(--color-accent);
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  .slides__editar:hover {
+    background: rgba(8, 12, 20, 0.85);
+    border-color: var(--color-accent);
+  }
+
+  .slides__editar:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .slides__editar-icono {
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ---------- Formulario de subida ---------- */
+
+  .slides__dialogo {
+    /* El reset global pone margin: 0, que anula el centrado nativo del <dialog>. */
+    margin: auto;
+    inline-size: min(34rem, calc(100vw - 2rem));
+    max-block-size: calc(100dvh - 2rem);
+    padding: 0;
+    overflow-y: auto;
+    color: var(--color-text);
+    background: var(--color-background);
+    border: var(--border-subtle);
+    border-radius: var(--radius-panel);
+  }
+
+  /* Cuando no cabe (ventana baja, celular), scrollea con la misma barra que la
+     página (ver html en styles.css): degradado de la marca, riel oscuro,
+     flechas cian. */
+  .slides__dialogo::-webkit-scrollbar { width: 8px; }
+  .slides__dialogo::-webkit-scrollbar-track { background: #0b0d10; }
+  .slides__dialogo::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, var(--color-accent-dark), var(--color-accent));
+    border-radius: 99px;
+  }
+  .slides__dialogo::-webkit-scrollbar-button:single-button:vertical {
+    display: block;
+    height: 0.75rem;
+    background: #0b0d10 no-repeat center / 8px 8px;
+  }
+  .slides__dialogo::-webkit-scrollbar-button:single-button:vertical:decrement {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 2 L7 6 H1 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .slides__dialogo::-webkit-scrollbar-button:single-button:vertical:increment {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1 2 H7 L4 6 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .slides__dialogo::-webkit-scrollbar-button:vertical:start:increment,
+  .slides__dialogo::-webkit-scrollbar-button:vertical:end:decrement { display: none; }
+
+  /* Firefox: mismos colores, sin degradado. Dentro de @supports porque en
+     Chrome un `scrollbar-color` anula los ::-webkit-scrollbar. */
+  @supports not selector(::-webkit-scrollbar) {
+    .slides__dialogo {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-accent-dark) #0b0d10;
+    }
+  }
+
+  /* La descripción crece con su texto en vez de scrollear dentro de un
+     formulario que ya scrollea. Acotado a este campo: `.field--textarea` lo
+     comparten otros formularios del sitio. Sin tope: el maxlength de 600 ya
+     le pone un alto finito. Donde no hay `field-sizing`, slides.js copia el
+     alto del contenido (ajustarAltoDeDescripcion). */
+  #slidesFormDescripcion {
+    field-sizing: content;
+    min-block-size: 120px;
+    resize: none;
+    overflow: hidden;
+  }
+
+  .slides__dialogo::backdrop {
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(3px);
+  }
+
+  .slides__form {
+    display: grid;
+    gap: 1rem;
+    padding: 1.75rem;
+  }
+
+  .slides__dialogo-titulo {
+    font: 700 1.35rem var(--font-display);
+  }
+
+  .slides__campo {
+    display: grid;
+    gap: 0.4rem;
+    min-inline-size: 0;
+    border: 0;
+    padding: 0;
+  }
+
+  .slides__campo label,
+  .slides__campo legend {
+    font-size: 0.9rem;
     color: var(--color-text-muted);
-    line-height: 1.5;
-    overflow-wrap: anywhere;
+  }
+
+  .slides__opcional {
+    color: var(--color-text-subtle);
+  }
+
+  .slides__campo-ayuda {
+    font-size: 0.8rem;
+    color: var(--color-text-subtle);
+    line-height: 1.4;
+  }
+
+  .slides__campo-error,
+  .slides__form-error {
+    font-size: 0.85rem;
+    color: var(--color-error-text);
+  }
+
+  .slides__campo-error:empty,
+  .slides__form-error:empty {
+    display: none;
+  }
+
+  .slides__visibilidad {
+    gap: 0.5rem;
+  }
+
+  .slides__radio {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .slides__radio input {
+    accent-color: var(--color-accent);
+  }
+
+  .slides__form-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+
+  .slides__subir--form {
+    padding-block: 0.65rem;
+  }
+
+  /* Aviso de que guardar vuelve la presentación a revisión. */
+  .slides__aviso-revision {
+    padding: 0.7rem 0.9rem;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  /* Borrar: acción destructiva, separada de las de guardar y con su
+     confirmación dentro del propio diálogo. */
+  .slides__borrar {
+    display: grid;
+    gap: 0.6rem;
+    padding-block-start: 0.25rem;
+    border-block-start: var(--border-subtle);
+  }
+
+  .slides__borrar-confirmar {
+    display: grid;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--color-error-text);
+  }
+
+  .slides__borrar-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .slides__borrar-boton {
+    justify-self: start;
+    padding: 0.5rem 1.2rem;
+    border: 1px solid var(--color-error);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-error-text);
+    font: 700 0.9rem var(--font-body);
+    cursor: pointer;
+  }
+
+  .slides__borrar-boton:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-error) 22%, transparent);
+  }
+
+  .slides__borrar-boton--lleno {
+    background: var(--color-error);
+    color: #fff;
+  }
+
+  .slides__borrar-boton--lleno:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-error) 85%, #000);
+  }
+
+  .slides__borrar-boton:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+
+  .slides__borrar-boton:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
   }
 
   /* ---------- Visor ---------- */
@@ -225,6 +687,49 @@
     block-size: min(100vh, calc(100vw * 9 / 16));
   }
 
+  /*
+    Un deck SUBIDO pasa por la página puente, que no pinta fondo propio fuera
+    de pantalla completa: el marco se vuelve transparente y detrás se ve el
+    cielo de esta página. En pantalla completa el puente dibuja su propio
+    cielo y el iframe llena toda la ventana, sin las bandas negras del 16:9
+    (un deck subido se diseña para cualquier proporción).
+  */
+  .slides__marco--subida {
+    background: transparent;
+  }
+
+  /*
+    Fuera de pantalla completa, los decks de la excepción (`llenaElVisor` en
+    slides.logica.js; hoy sólo el QR de sesión) no se encierran en 16:9: el
+    marco llena todo el ancho y todo el alto que deja la navbar. Si su lámina
+    igual no cabe, el puente la achica (escalaParaCaber en subida.logica.js).
+    El resto de los subidos va en 16:9, como los del repositorio (2026-10-07).
+
+    Cuando el deck trae sus propios botones, los del visor se esconden
+    (`hidden`) y su fila deja de ocupar lugar: el marco recupera esos 2.5rem
+    y el gap de 1rem de .slides__visor.
+  */
+  .slides__marco--llena:not(:fullscreen) {
+    inline-size: 100%;
+    aspect-ratio: auto;
+    block-size: calc(100dvh - var(--slides-reservado, 0px));
+  }
+
+  .slides__visor:has(.slides__controles[hidden]) .slides__marco--llena:not(:fullscreen) {
+    block-size: calc(100dvh - var(--slides-reservado, 0px) + 3.5rem);
+  }
+
+  .slides__marco--subida:fullscreen,
+  .slides__marco--subida:-webkit-full-screen {
+    background: #020408;
+  }
+
+  .slides__marco--subida:fullscreen .slides__iframe,
+  .slides__marco--subida:-webkit-full-screen .slides__iframe {
+    inline-size: 100vw;
+    block-size: 100vh;
+  }
+
   .slides__controles {
     display: flex;
     align-items: center;
@@ -281,9 +786,20 @@
 
 
   @media (prefers-reduced-motion: reduce) {
-    .slides__tarjeta,
+    .slides__portada,
+    .slides__subir,
+    .slides__filtro,
+    .slides__editar,
     .slides__control {
       transition: none;
+    }
+
+    /* Sin movimiento: el anillo cian sigue marcando la tarjeta, pero la
+       portada ya no sube. */
+    .slides__tarjeta:hover .slides__portada,
+    .slides__tarjeta:focus-visible .slides__portada,
+    .slides__subir:hover {
+      transform: none;
     }
   }
 }

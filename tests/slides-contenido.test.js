@@ -61,6 +61,9 @@ test("ninguna subcarpeta de /content/slides queda huérfana, sin listar en el í
     .readdirSync(DIRECTORIO_SLIDES, { withFileTypes: true })
     .filter((entrada) => entrada.isDirectory())
     .map((entrada) => entrada.name)
+    // `_subida` es la página puente de los decks SUBIDOS (ver subida.js), no
+    // una presentación: el guion bajo marca lo que no va en el índice.
+    .filter((nombre) => !nombre.startsWith("_"))
     .filter((nombre) => fs.readdirSync(path.join(DIRECTORIO_SLIDES, nombre)).some((archivo) => archivo.endsWith(".html")));
 
   subcarpetas.forEach((nombre) => {
@@ -124,5 +127,75 @@ test("cada <script src> de un deck es del propio sitio o de cdn.jsdelivr.net, y 
       const rutaLocal = path.join(ROOT, "src", src.replace(/^\//, ""));
       assert.ok(fs.existsSync(rutaLocal), `${relativo}: el script local "${src}" no existe`);
     });
+  });
+});
+
+/*
+  Los campos de la tarjeta (categoría, autor, fecha y número de láminas) que
+  cada manifiesto del repositorio declara. Sin ellos la presentación no entra
+  en los filtros por categoría ni muestra «N láminas» ni «autor · fecha».
+  `portada` es opcional: sin ella la tarjeta usa el degradado de la categoría.
+*/
+function manifiestoDe(slug) {
+  return JSON.parse(fs.readFileSync(path.join(DIRECTORIO_SLIDES, slug, "manifiesto.json"), "utf8"));
+}
+
+test("cada manifiesto del repositorio declara categoría, autor, fecha y láminas válidas", () => {
+  resultadoIndice.indice.forEach((slug) => {
+    const manifiesto = manifiestoDe(slug);
+    const { presentacion } = normalizarPresentacion(slug, manifiesto);
+
+    assert.ok(presentacion.categoria, `${slug}: falta "categoria"`);
+    assert.ok(presentacion.autor, `${slug}: falta "autor"`);
+    assert.match(presentacion.actualizado, /^\d{4}-\d{2}-\d{2}$/, `${slug}: "actualizado" no es AAAA-MM-DD`);
+    assert.ok(presentacion.total_laminas > 0, `${slug}: falta "total_laminas"`);
+  });
+});
+
+test("las categorías de los decks del repositorio son las acordadas", () => {
+  const categorias = Object.fromEntries(
+    resultadoIndice.indice.map((slug) => [slug, manifiestoDe(slug).categoria])
+  );
+  assert.deepEqual(categorias, {
+    "curso-sql": "Bases de datos",
+    "visualizacion-de-datos": "Análisis de datos",
+    "curso-etl-elt": "Ingeniería de datos",
+    "infocracia-y-epistemologia-digital": "Humanidades digitales",
+  });
+});
+
+test("total_laminas de cada deck coincide con las láminas reales de su archivo", () => {
+  resultadoIndice.indice.forEach((slug) => {
+    const carpeta = path.join(DIRECTORIO_SLIDES, slug);
+    const declarado = manifiestoDe(slug).total_laminas;
+
+    // Los decks cuyas láminas están en el HTML se cuentan igual que lo hace
+    // su deck.js: querySelectorAll('.slide'), es decir, elementos con esa clase.
+    const html = fs.readFileSync(path.join(carpeta, "index.html"), "utf8");
+    const enHtml = (html.match(/class="([^"]* )?slide( [^"]*)?"/g) || []).length;
+    if (enHtml > 0) {
+      assert.equal(declarado, enHtml, `${slug}: declara ${declarado} láminas y su HTML trae ${enHtml}`);
+      return;
+    }
+
+    // Infocracia arma sus láminas desde un arreglo en deck.js: una entrada
+    // por cada `id:` de primer nivel.
+    const deck = fs.readFileSync(path.join(carpeta, "deck.js"), "utf8");
+    const enDeck = (deck.match(/^ {2}\{ id: "/gm) || []).length;
+    assert.ok(enDeck > 0, `${slug}: no se pudieron contar sus láminas`);
+    assert.equal(declarado, enDeck, `${slug}: declara ${declarado} láminas y su deck.js trae ${enDeck}`);
+  });
+});
+
+test("una portada declarada existe en la carpeta y es WebP", () => {
+  resultadoIndice.indice.forEach((slug) => {
+    const { portada } = manifiestoDe(slug);
+    if (portada === undefined) return;
+
+    const ruta = path.join(DIRECTORIO_SLIDES, slug, portada);
+    assert.ok(fs.existsSync(ruta), `${slug}: falta la portada "${portada}"`);
+    const cabecera = fs.readFileSync(ruta).subarray(0, 12);
+    assert.equal(cabecera.subarray(0, 4).toString("latin1"), "RIFF", `${slug}: la portada no es RIFF/WebP`);
+    assert.equal(cabecera.subarray(8, 12).toString("latin1"), "WEBP", `${slug}: la portada no es WebP`);
   });
 });

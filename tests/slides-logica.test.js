@@ -155,6 +155,11 @@ test("normalizarPresentacion acepta un manifiesto bien formado y recorta espacio
     titulo: "Visualización de datos · Taller",
     descripcion: "Elegir, leer y explorar gráficas.",
     archivo: "index.html",
+    categoria: "",
+    actualizado: "",
+    total_laminas: 0,
+    autor: "",
+    portada: "",
   });
 });
 

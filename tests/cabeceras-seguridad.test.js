@@ -303,7 +303,11 @@ test("the slides catalog has its own header rule, and it differs from the genera
 });
 
 test("no path other than the slides catalog relaxes frame-ancestors or X-Frame-Options", () => {
-  reglas().filter((r) => r.source !== RUTA_SLIDES).forEach((r) => {
+  // El marco aislado de los decks con programa (_aislado) también lo enmarca el visor.
+  const RUTA_AISLADO = "/content/slides/_aislado(.*)";
+  // El marco de captura de portadas (_captura) también lo enmarca la página de Slides.
+  const RUTA_CAPTURA = "/content/slides/_captura(.*)";
+  reglas().filter((r) => r.source !== RUTA_SLIDES && r.source !== RUTA_AISLADO && r.source !== RUTA_CAPTURA).forEach((r) => {
     const csp = valorDe(r, "Content-Security-Policy") || "";
     assert.doesNotMatch(
       csp.split(";").map((p) => p.trim()).find((p) => p.startsWith("frame-ancestors")) || "",
@@ -421,6 +425,17 @@ test("no page introduces inline scripts or on* handlers", () => {
       /<\w+[^>]*\son(?:click|load|error|change|submit|input|focus|blur|mouseover|keyup|keydown)\s*=/i,
       `${relativo} trae un handler inline: rompe el script-src estricto`
     );
+
+    // Única excepción: el marco aislado de Slides (`_aislado/`). Su origen es
+    // opaco y su CSP propia (la última regla de vercel.json) permite scripts
+    // inline: ahí corre el JavaScript de los decks subidos. Su arranque va en
+    // línea para no pedir archivos al servidor, porque sin cookies esos pedidos
+    // fallan detrás de la protección de Vercel. Ver tests/slides-aislado.test.js.
+    // Misma excepción para el marco de captura de portadas (`_captura/`):
+    // origen opaco, CSP propia y arranque en línea por la misma razón.
+    // Ver tests/slides-captura.test.js.
+    const rel = relativo.split(path.sep).join("/");
+    if (rel === "src/content/slides/_aislado/index.html" || rel === "src/content/slides/_captura/index.html") continue;
 
     // Un `<script>` sin `src=` antes del `>` de apertura es un script inline.
     assert.doesNotMatch(

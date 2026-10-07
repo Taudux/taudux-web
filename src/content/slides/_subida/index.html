@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Presentación | Taudux</title>
+  <link rel="stylesheet" href="/content/slides/_subida/subida.css">
+</head>
+
+<!-- La página puente de los decks subidos: el visor de /slides la abre en su
+     <iframe> con el slug en el hash. Descarga el HTML del deck, le quita todo
+     lo ejecutable y lo monta acá (ver subida.js). Corre bajo la CSP de
+     /content/slides: nada de scripts inline. Sin `color-scheme`, a propósito
+     (ver subida.css). -->
+
+<body>
+  <div id="subidaCielo" aria-hidden="true"></div>
+  <div id="particles-fondo" aria-hidden="true"></div>
+  <p id="subidaEstado" role="status">Cargando presentación…</p>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/app/core/supabase/supabase-client.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2.12.0/tsparticles.bundle.min.js"></script>
+  <script src="/app/features/slides/slides.logica.js"></script>
+  <script src="/content/slides/_subida/subida.logica.js"></script>
+  <script src="/content/slides/_subida/subida.fondo.js"></script>
+  <script src="/content/slides/_subida/subida.js"></script>
+</body>
+
+</html>

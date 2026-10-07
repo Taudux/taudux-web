@@ -24,6 +24,9 @@ const HOME_JS = read("src/app/features/home/home.js");
 const SLIDES_FONDO = read("src/app/features/slides/slides.fondo.js");
 // Y una cuarta, en el Generador de QR (qr.fondo.js), por la misma razón.
 const QR_FONDO = read("src/app/features/qr/qr.fondo.js");
+// Y una quinta, en la página puente de los decks subidos: el cielo que dibuja
+// en pantalla completa (ver subida.fondo.js).
+const SUBIDA_FONDO = read("src/content/slides/_subida/subida.fondo.js");
 
 const sinComentariosCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const sinComentariosHtml = (html) => html.replace(/<!--[\s\S]*?-->/g, "");
@@ -437,6 +440,7 @@ test("the starfield options are the same literal the home uses", () => {
   // debe fallar acá y no dejar que el cielo se vea distinto en una página.
   assert.equal(opcionesDelFondo(SLIDES_FONDO, "slides.fondo.js"), delHogar);
   assert.equal(opcionesDelFondo(QR_FONDO, "qr.fondo.js"), delHogar);
+  assert.equal(opcionesDelFondo(SUBIDA_FONDO, "subida.fondo.js"), delHogar);
 });
 
 test("the starfield loader is a no-op without the library", () => {

@@ -1,0 +1,125 @@
+/*
+  Página puente de los decks subidos (ver subida.js).
+
+  NO declara `color-scheme`, a propósito: la página de Slides que la contiene
+  tampoco lo hace, y un color-scheme distinto entre el documento del iframe y
+  su contenedor hace que Chrome pinte un fondo opaco detrás del iframe.
+*/
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+body {
+  min-block-size: 100vh;
+  font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  color: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Carga, error o «sin láminas». */
+#subidaEstado {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  color: #ccc;
+  pointer-events: none;
+}
+
+#subidaEstado[hidden] {
+  display: none;
+}
+
+/*
+  El cielo de pantalla completa: el mismo degradado del fondo de la página de
+  Slides (slides.css, body.slides-page::before) y, encima, las partículas
+  (subida.fondo.js). Fuera de pantalla completa no existen: el marco del visor
+  es transparente y se ve el cielo de la página.
+
+  z-index negativo, y no 0: así quedan DETRÁS del contenido del deck sin
+  importar si éste es posicionado o no.
+*/
+#subidaCielo,
+#particles-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: none;
+  pointer-events: none;
+}
+
+#subidaCielo {
+  background:
+    radial-gradient(ellipse 40% 55% at 22% 60%, rgba(0, 180, 220, 0.14), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 72% 50%, rgba(24, 82, 210, 0.14), transparent 70%),
+    linear-gradient(180deg, #020408 0%, #050a11 62%, #06131b 100%);
+}
+
+body.en-pantalla-completa #subidaCielo,
+body.en-pantalla-completa #particles-fondo {
+  display: block;
+}
+
+#particles-fondo canvas {
+  opacity: 0.88;
+}
+
+/*
+  La barra de scroll de la lámina es la misma del sitio (html::-webkit-scrollbar
+  en src/styles.css): riel oscuro, degradado del azul del logo al cian y
+  flechas cian. Sin esto, el `overflow: auto` del deck pinta la barra blanca
+  del sistema. Esta página no carga styles.css, así que los colores van
+  copiados: #1249a4 es --color-accent-dark y #00e1ff, --color-accent.
+  `section.slide` y no `.slide`: le gana en especificidad al CSS del deck.
+*/
+section.slide::-webkit-scrollbar { width: 8px; }
+section.slide::-webkit-scrollbar-track { background: #0b0d10; }
+section.slide::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #1249a4, #00e1ff);
+  border-radius: 99px;
+}
+section.slide::-webkit-scrollbar-button:single-button:vertical {
+  display: block;
+  height: 0.75rem;
+  background: #0b0d10 no-repeat center / 8px 8px;
+}
+section.slide::-webkit-scrollbar-button:single-button:vertical:decrement {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 2 L7 6 H1 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+}
+section.slide::-webkit-scrollbar-button:single-button:vertical:increment {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1 2 H7 L4 6 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+}
+section.slide::-webkit-scrollbar-button:vertical:start:increment,
+section.slide::-webkit-scrollbar-button:vertical:end:decrement { display: none; }
+
+/* Firefox: mismos colores, sin degradado. Dentro de @supports porque en
+   Chrome un `scrollbar-color` anula los ::-webkit-scrollbar. */
+@supports not selector(::-webkit-scrollbar) {
+  section.slide {
+    scrollbar-width: thin;
+    scrollbar-color: #1249a4 #0b0d10;
+  }
+}
+
+/*
+  El marco aislado de los decks con programa (ver subida.js): cubre todo el
+  visor. Fondo transparente; el deck pinta el suyo. Sin color-scheme, igual
+  que el resto de la página.
+*/
+iframe.subida-aislado {
+  position: fixed;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+  background: transparent;
+}

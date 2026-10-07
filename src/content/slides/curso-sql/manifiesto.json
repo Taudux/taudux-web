@@ -1,5 +1,10 @@
 {
   "titulo": "Curso SQL — De básico a intermedio",
   "descripcion": "Del concepto de base de datos hasta las subconsultas, con problemas y ejercicios para practicar en PostgreSQL desde el navegador.",
-  "archivo": "index.html"
+  "archivo": "index.html",
+  "categoria": "Bases de datos",
+  "autor": "Equipo Taudux",
+  "actualizado": "2026-09-25",
+  "total_laminas": 112,
+  "portada": "portada.webp"
 }

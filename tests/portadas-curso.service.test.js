@@ -62,9 +62,20 @@ const FORM_HTML_SOURCE = fs.readFileSync(FORM_HTML_PATH, "utf8");
 // `assets/vendor/` queda fuera: es código de terceros servido tal cual (hoy,
 // plotly.min.js, que trae sus propios `.storage` minificados). El guard vigila
 // que NUESTRO código de navegador no toque Storage directo.
+//
+// Slides (0048) es la excepción acordada: sube y descarga del bucket PRIVADO
+// `slides` desde el navegador, con la sesión de la persona, y es la RLS de
+// storage.objects la que decide quién (ver supabase/tests/0048_slides_
+// subidas.test.sql). Las portadas de cursos siguen sin ninguna política de
+// cliente: el guard de abajo las sigue vigilando en todo lo demás.
+const EXCEPCIONES_DE_STORAGE_DIRECTO = new Set([
+  "app/core/slides/slides.service.js",
+  "content/slides/_subida/subida.js",
+]);
 const BROWSER_SOURCE = fs.readdirSync("src", { recursive: true })
   .filter((file) => /\.(?:html|js)$/.test(file))
   .filter((file) => !file.split(path.sep).join("/").startsWith("assets/vendor/"))
+  .filter((file) => !EXCEPCIONES_DE_STORAGE_DIRECTO.has(file.split(path.sep).join("/")))
   .map((file) => fs.readFileSync(path.join("src", file), "utf8")).join("\n");
 const validation = import(pathToFileURL(path.resolve(VALIDATION_PATH)).href);
 const endpoint = import(pathToFileURL(path.resolve(FUNCTION_PATH)).href);
