@@ -14,8 +14,14 @@
      SIN `allow-same-origin`: el documento tiene un origen opaco y su código no
      puede leer la sesión, el localStorage ni las cookies de taudux.com. Aquí
      no hay nada que robar: esta página sólo espera UN mensaje del puente con
-     el HTML del deck (la descarga con la sesión ocurre afuera, en el puente) y
-     se reemplaza por él (aislado.js).
+     el HTML del deck y el código del adaptador (los dos los descarga el
+     puente, afuera, con la sesión) y se reemplaza por ellos.
+
+     El arranque va EN LÍNEA a propósito: el marco no pide ningún archivo al
+     servidor. Con origen opaco, sus pedidos son de otro sitio y no llevan
+     cookies; en una vista previa de Vercel protegida, pedir aislado.js
+     terminaba en la pantalla de inicio de sesión de Vercel y el marco quedaba
+     en blanco (2026-10-07).
 
      CSP propia en vercel.json (regla `/content/slides/_aislado(.*)`, la
      ÚLTIMA de `headers`: para una misma cabecera gana la última regla que
@@ -23,7 +29,33 @@
      puede mandar nada a ningún lado), imágenes y medios sólo por https. -->
 
 <body>
-  <script src="/content/slides/_aislado/aislado.js"></script>
+  <script>
+    /*
+      `event.origin` de un origen opaco es "null" y no sirve para validar; lo
+      que se comprueba es QUIÉN mandó el mensaje: `event.source === window.parent`.
+      El adaptador se anexa al HTML escrito porque document.open() borra el
+      documento y sus listeners; lo que sigue a </html> el navegador lo
+      interpreta dentro del body. La etiqueta de cierre de script que
+      aparezca dentro del adaptador se escapa con una barra invertida, para
+      que no cierre su etiqueta antes de tiempo (por eso este comentario no
+      la escribe literal: dentro de un script inline también la cerraría).
+    */
+    (function () {
+      let recibido = false;
+      window.addEventListener("message", (evento) => {
+        if (recibido) return;
+        if (evento.source !== window.parent) return;
+        const datos = evento.data;
+        if (!datos || datos.tipo !== "slides:deck") return;
+        if (typeof datos.html !== "string" || typeof datos.adaptador !== "string") return;
+        recibido = true;
+        const adaptador = datos.adaptador.replace(/<\/script/gi, "<\\/script");
+        document.open();
+        document.write(datos.html + "<script>" + adaptador + "<\/script>");
+        document.close();
+      });
+    })();
+  </script>
 </body>
 
 </html>

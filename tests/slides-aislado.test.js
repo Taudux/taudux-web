@@ -112,16 +112,21 @@ test("el puente abre el marco SIN allow-same-origin, valida el origen del mensaj
   assert.match(js, /\?v=\$\{fila\.version_archivo/);
 });
 
-test("el marco aislado existe, valida event.source === window.parent y anexa el adaptador", () => {
+test("el marco aislado no pide archivos: arranca en línea, valida event.source y anexa el adaptador que recibe", () => {
   const html = leer(AISLADO, "index.html");
-  assert.match(html, /\/content\/slides\/_aislado\/aislado\.js/);
-  assert.doesNotMatch(sinComentarios(html), /<script(?![^>]*\ssrc=)[^>]*>/i, "sin scripts inline");
-  const js = leer(AISLADO, "aislado.js");
-  assert.match(js, /evento\.source !== window\.parent/);
-  assert.match(js, /slides:deck/);
-  assert.match(js, /document\.write\(/);
-  assert.match(js, /adaptador\.logica\.js/);
-  assert.match(js, /adaptador\.js/);
+  // Con origen opaco sus pedidos no llevan cookies: detrás de la protección
+  // de Vercel, un <script src> terminaba en la pantalla de inicio de sesión.
+  assert.doesNotMatch(html, /\ssrc=/i, "el marco no carga nada del servidor");
+  assert.ok(!fs.existsSync(path.join(AISLADO, "aislado.js")), "el arranque vive en index.html");
+  assert.match(html, /evento\.source !== window\.parent/);
+  assert.match(html, /slides:deck/);
+  assert.match(html, /typeof datos\.adaptador !== "string"/);
+  assert.equal((html.match(/<\/script/gi) || []).length, 1, "un cierre literal dentro del script inline lo cortaría");
+  assert.match(html, /document\.write\(datos\.html \+ "<script>" \+ adaptador/);
+  const fuentePuente = leer(PUENTE, "subida.js");
+  assert.match(fuentePuente, /_aislado\/adaptador\.logica\.js/);
+  assert.match(fuentePuente, /_aislado\/adaptador\.js/);
+  assert.match(fuentePuente, /tipo: "slides:deck", html: String\(texto\), adaptador/);
   const ad = leer(AISLADO, "adaptador.js");
   assert.match(ad, /evento\.source !== padre/);
   assert.match(ad, /requestFullscreen = /);

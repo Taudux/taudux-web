@@ -1,5 +1,5 @@
 /*
-  Adaptador que se anexa al deck dentro del marco aislado (ver aislado.js).
+  Adaptador que se anexa al deck dentro del marco aislado (ver index.html).
   Corre en el MISMO documento que el JavaScript del deck, con origen opaco.
 
   Hace tres cosas, sin tocar la lógica del deck:
@@ -14,7 +14,8 @@
 
   Hacia el padre se escribe con "*" porque un origen opaco no tiene otro
   destino posible; quien recibe valida `event.source`. Las funciones puras
-  están en adaptador.logica.js, cargado antes.
+  están en adaptador.logica.js. El puente descarga los dos archivos y los
+  manda al marco como texto, logica primero, en un mismo <script>.
 */
 (function () {
   const padre = window.parent;

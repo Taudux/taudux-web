@@ -260,7 +260,24 @@
 
   /* ---------- 4. Decks con programa: el marco aislado ---------- */
 
-  function abrirEnMarcoAislado(texto) {
+  // El código del adaptador lo descarga el puente (mismo origen, con
+  // cookies) y se lo entrega al marco como texto: el marco aislado no pide
+  // nada al servidor (ver _aislado/index.html).
+  const ARCHIVOS_DEL_ADAPTADOR = Object.freeze([
+    "/content/slides/_aislado/adaptador.logica.js",
+    "/content/slides/_aislado/adaptador.js",
+  ]);
+
+  async function leerAdaptador() {
+    const partes = await Promise.all(ARCHIVOS_DEL_ADAPTADOR.map(async (ruta) => {
+      const respuesta = await fetch(ruta);
+      if (!respuesta.ok) throw new Error("adaptador_no_disponible");
+      return respuesta.text();
+    }));
+    return partes.join("\n;\n");
+  }
+
+  function abrirEnMarcoAislado(texto, adaptador) {
     const marco = document.createElement("iframe");
     marco.className = "subida-aislado";
     marco.title = "Presentación";
@@ -303,7 +320,7 @@
     marco.addEventListener("load", () => {
       if (marco.dataset.entregado) return;
       marco.dataset.entregado = "1";
-      marco.contentWindow.postMessage({ tipo: "slides:deck", html: String(texto) }, "*");
+      marco.contentWindow.postMessage({ tipo: "slides:deck", html: String(texto), adaptador }, "*");
       ocultarEstado();
       marco.focus();
     });
@@ -323,7 +340,7 @@
       const parser = new DOMParser();
       if (deckTraePrograma(parser.parseFromString(String(texto), "text/html"))) {
         document.title = `${titulo || "Presentación"} | Taudux`;
-        abrirEnMarcoAislado(texto);
+        abrirEnMarcoAislado(texto, await leerAdaptador());
         return;
       }
       const deck = prepararDeck(texto, parser);

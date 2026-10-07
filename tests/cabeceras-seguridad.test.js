@@ -424,6 +424,13 @@ test("no page introduces inline scripts or on* handlers", () => {
       `${relativo} trae un handler inline: rompe el script-src estricto`
     );
 
+    // Única excepción: el marco aislado de Slides (`_aislado/`). Su origen es
+    // opaco y su CSP propia (la última regla de vercel.json) permite scripts
+    // inline: ahí corre el JavaScript de los decks subidos. Su arranque va en
+    // línea para no pedir archivos al servidor, porque sin cookies esos pedidos
+    // fallan detrás de la protección de Vercel. Ver tests/slides-aislado.test.js.
+    if (relativo.split(path.sep).join("/") === "src/content/slides/_aislado/index.html") continue;
+
     // Un `<script>` sin `src=` antes del `>` de apertura es un script inline.
     assert.doesNotMatch(
       html,
