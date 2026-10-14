@@ -38,9 +38,15 @@
     bio: "Elige una ficha del roster para ver su perfil y especialidades.",
   };
 
-  // Arrastre y zoom del panal (sólo escritorio con mouse).
+  // Arrastre del panal (mouse en escritorio, dedo en móvil) y zoom con la
+  // rueda (sólo escritorio).
   const CLASE_MARCO_ARRASTRANDO = "colaboradores__marco--arrastrando";
   const UMBRAL_ARRASTRE = 5; // px: menos que eso sigue siendo un clic
+  const UMBRAL_ARRASTRE_TACTIL = 8; // px: un dedo tiembla más que un mouse
+  // En móvil el panal no pasa de esta fracción de la ventana: el marco no
+  // scrollea la página (touch-action: none) y tiene que quedar página fuera de
+  // él donde apoyar el dedo.
+  const ALTO_MAXIMO_MOVIL = 0.62;
   const VENTANA_DE_VELOCIDAD = 80; // ms de muestras para la velocidad al soltar
   const VELOCIDAD_MAXIMA = 4; // px/ms: tope para que un tirón no lance el panal lejos
   const ZOOM_MIN = 0.5;
@@ -133,7 +139,7 @@
     let medidaDelPanal = "";
 
     /*
-      La VISTA del panal en escritorio: cuánto se arrastró (panX, panY, en px
+      La VISTA del panal: cuánto se arrastró (panX, panY, en px
       desde el centro del marco) y el zoom. `base` guarda el centro de cada
       círculo respecto del centro del marco con zoom 1 y sin arrastre: sólo
       cambia al cambiar la medida, mientras que la vista cambia a cada gesto.
@@ -175,6 +181,9 @@
     // giro del teléfono, la vista que reaparece tras el perfil). Sin
     // ResizeObserver (los tests, navegadores viejos) se acomoda al montar y ya.
     if (typeof ResizeObserver === "function") new ResizeObserver(() => acomodarPanal()).observe(el.marco);
+    // En móvil el tope del panal depende del ALTO de la ventana, que el
+    // observador del marco no ve.
+    window.addEventListener("resize", () => acomodarPanal());
 
     el.marco.addEventListener("pointerdown", empezarArrastre);
     el.marco.addEventListener("pointermove", moverArrastre);
@@ -490,8 +499,12 @@
       if (!(ancho > 0) || celdas.length === 0) return;
 
       const movil = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
+      const necesario = Math.ceil(posicionesDelPanal(celdas.length, ancho, ancho).altoNecesario);
+      // clientHeight y no innerHeight: no cambia cuando la barra del navegador
+      // se esconde al scrollear, así que el panal no se reacomoda a medio gesto.
+      const tope = Math.floor((document.documentElement.clientHeight || 0) * ALTO_MAXIMO_MOVIL);
       const alto = movil
-        ? Math.ceil(posicionesDelPanal(celdas.length, ancho, ancho).altoNecesario)
+        ? (tope > 0 ? Math.min(necesario, tope) : necesario)
         : el.grilla.clientHeight;
       if (!(alto > 0)) return;
 
@@ -511,19 +524,12 @@
       areaAlto = alto;
       esMovil = movil;
 
-      // En móvil no hay arrastre ni zoom: la vista vuelve al reposo. En
-      // escritorio, un cambio de medida puede dejar el pan fuera de los
-      // límites nuevos, así que se recorta.
-      if (movil) {
-        cancelarGestos();
-        vista.panX = 0;
-        vista.panY = 0;
-        vista.zoom = 1;
-      } else {
-        const l = limitesDelPan();
-        vista.panX = recortar(vista.panX, l.minX, l.maxX);
-        vista.panY = recortar(vista.panY, l.minY, l.maxY);
-      }
+      // En móvil no hay zoom: vuelve a 1. Un cambio de medida puede dejar el
+      // pan fuera de los límites nuevos, así que se recorta.
+      if (movil) vista.zoom = 1;
+      const l = limitesDelPan();
+      vista.panX = recortar(vista.panX, l.minX, l.maxX);
+      vista.panY = recortar(vista.panY, l.minY, l.maxY);
       pintarPanal();
     }
 
@@ -575,7 +581,7 @@
     function pintarPanal() {
       if (celdas.length === 0 || base.length !== celdas.length || !(areaAncho > 0)) return;
       const z = esMovil ? 1 : vista.zoom;
-      const pan = esMovil ? { x: 0, y: 0 } : panVisible();
+      const pan = panVisible();
       const diametro = diametroBase * z;
       celdas.forEach((celda, indice) => {
         const dx = base[indice].x * z + pan.x;
@@ -680,8 +686,11 @@
     }
 
     function empezarArrastre(evento) {
-      if (esMovil || fichas.length === 0) return;
-      if (evento.button !== 0 || evento.pointerType !== "mouse") return;
+      if (fichas.length === 0) return;
+      // Mouse sólo con el botón izquierdo; dedo y lápiz siempre. Un segundo
+      // dedo no arranca otro arrastre.
+      if (evento.pointerType === "mouse" ? evento.button !== 0 : !esMovil) return;
+      if (arrastre) return;
       // El enlace «Editar» es un clic de verdad, no un agarre.
       if (evento.target.closest?.(".colaboradores__editar")) return;
 
@@ -689,6 +698,7 @@
       tragarClic = false;
       arrastre = {
         id: evento.pointerId,
+        umbral: evento.pointerType === "mouse" ? UMBRAL_ARRASTRE : UMBRAL_ARRASTRE_TACTIL,
         x0: evento.clientX,
         y0: evento.clientY,
         panX0: vista.panX,
@@ -703,7 +713,7 @@
 
       if (!arrastre.activo) {
         // Menos de 5px sigue siendo un clic con la mano temblando.
-        if (Math.hypot(evento.clientX - arrastre.x0, evento.clientY - arrastre.y0) < UMBRAL_ARRASTRE) return;
+        if (Math.hypot(evento.clientX - arrastre.x0, evento.clientY - arrastre.y0) < arrastre.umbral) return;
         arrastre.activo = true;
         // La captura se pide hasta aquí: capturar al apretar desviaría el clic
         // de la ficha hacia el marco.
@@ -798,7 +808,7 @@
       enfocar al apretar no debe mover nada bajo el cursor.
     */
     function traerAlCentro(indice, boton) {
-      if (esMovil || arrastre || !(areaAncho > 0) || !base[indice]) return;
+      if (arrastre || !(areaAncho > 0) || !base[indice]) return;
       // Enfocar un elemento fuera de un contenedor `overflow: hidden` lo
       // desplaza; la geometría es nuestra, así que se deshace.
       el.marco.scrollLeft = 0;

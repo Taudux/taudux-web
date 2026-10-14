@@ -340,7 +340,8 @@
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.06);
-    /* El panal se arrastra con el mouse (colaboradores.js). En móvil no. */
+    /* El panal se arrastra con el mouse y, en móvil, con el dedo
+       (colaboradores.js). */
     cursor: grab;
   }
 
@@ -689,9 +690,14 @@
       min-block-size: 0;
     }
 
+    /* El dedo que se apoya en el marco arrastra el panal en vez de mover la
+       página; fuera de él la página scrollea como siempre. Para que nunca
+       quede atrapada, colaboradores.js topa el alto del panal a una parte de
+       la ventana. */
     .colaboradores__marco {
       flex: none;
       cursor: auto;
+      touch-action: none;
     }
 
     .colaboradores__resumen {

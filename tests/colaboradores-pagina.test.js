@@ -546,17 +546,37 @@ test("the company cell sits between the role and the sector, and starts hidden",
   assert.deepEqual([...orden].sort((a, b) => a - b), orden, "la empresa no está entre el puesto y el sector");
 });
 
-test("the frame is a grab surface on desktop and only on desktop", () => {
+test("the frame is a grab surface on desktop and takes the finger on mobile", () => {
   const css = sinComentariosCss(CSS);
   const marco = css.match(/\.colaboradores__marco\s*\{([^}]*)\}/);
   assert.match(marco[1], /cursor:\s*grab/);
+  assert.doesNotMatch(marco[1], /touch-action/, "en escritorio el marco no le quita el gesto a la página");
   assert.match(css, /\.colaboradores__marco--arrastrando\s*\{[^}]*cursor:\s*grabbing[^}]*user-select:\s*none/);
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.colaboradores__marco\s*\{[^}]*cursor:\s*auto/, "en móvil no se arrastra");
+  // En móvil el dedo arrastra el panal en vez de scrollear la página (pedido
+  // del 14 de octubre): sólo dentro del marco.
+  const movil = css.match(/@media \(max-width: 760px\)[\s\S]*?\.colaboradores__marco\s*\{([^}]*)\}/);
+  assert.ok(movil, "hay regla del marco en el bloque móvil");
+  assert.match(movil[1], /cursor:\s*auto/);
+  assert.match(movil[1], /touch-action:\s*none/);
 });
 
-test("the script drags with the mouse only, keeps clicks and stops its animation loop", () => {
+test("the script drags with the mouse's left button and, on mobile, with a finger or pen", () => {
   const js = sinComentariosJs(JS);
-  assert.match(js, /pointerType\s*!==\s*"mouse"/);
+  assert.match(js, /evento\.pointerType === "mouse" \? evento\.button !== 0 : !esMovil/);
+  // Un segundo dedo no arranca otro arrastre.
+  assert.match(js, /if \(arrastre\) return;/);
+  assert.match(js, /UMBRAL_ARRASTRE_TACTIL/);
+});
+
+test("on mobile the honeycomb is capped to part of the window, so the page can still scroll around it", () => {
+  const js = sinComentariosJs(JS);
+  const fraccion = Number(js.match(/const ALTO_MAXIMO_MOVIL = ([\d.]+);/)?.[1]);
+  assert.ok(fraccion > 0 && fraccion <= 0.7, `el tope deja página fuera del marco (${fraccion})`);
+  assert.match(js, /Math\.min\(necesario, tope\)/);
+});
+
+test("the script keeps clicks after a drag and stops its animation loop", () => {
+  const js = sinComentariosJs(JS);
   assert.match(js, /addEventListener\("wheel",\s*hacerZoom,\s*\{\s*passive:\s*false\s*\}\)/);
   assert.match(js, /addEventListener\("click"[\s\S]*?,\s*true\)/, "el clic tras arrastrar se traga en captura");
   // El rAF sólo se vuelve a pedir si algo sigue moviéndose.
