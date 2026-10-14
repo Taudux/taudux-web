@@ -41,9 +41,7 @@
 
     `prefijoIds` es la raíz de TODOS los ids del campo en el HTML: el control
     (`miFichaHabilidades`), sus nodos (`…Opciones`, `…Lista`, `…Estado`,
-    `…Ayuda`, `…Error`) y el prefijo de los id de cada opción del listbox, que
-    TIENE que ser distinto por instancia: con tres listbox en la misma página,
-    dos que generaran el mismo id escribirían el mismo aria-activedescendant.
+    `…Ayuda`, `…Error`).
 
     `nombreCatalogo` es el del catálogo estático que sugiere (catalogo.service.js);
     coincide con el campo en los tres, pero se nombra igual de explícito para
@@ -140,8 +138,8 @@
     `typeof` sobre una función no declarada da "undefined", no lanza.
 
     Los catálogos de etiquetas quedan AFUERA a propósito: son una sugerencia,
-    no una dependencia. Sin ellos los editores siguen vivos, sólo sin
-    autocompletar (ver cargarCatalogos).
+    no una dependencia de arranque. Sin ellos la ficha carga y se guarda, sólo
+    que los editores no tienen nada que ofrecer (ver cargarCatalogos).
   */
   function dependenciasFaltantes() {
     const disponibles = {
@@ -233,6 +231,9 @@
       aviso.hidden = true;
       aviso.setAttribute("aria-busy", "false");
       contenido.hidden = false;
+      // Con el panel oculto el textarea no mide nada: el alto de la bio se
+      // calcula recién ahora que se ve.
+      ajustarAltoBio();
     }
 
     /* ---------- Errores de campo ---------- */
@@ -298,6 +299,49 @@
 
     bioInput.addEventListener("input", actualizarContadorBio);
 
+    /*
+      La bio crece con lo que se escribe (2026-10-13), de 3 renglones (el
+      `rows` del HTML es el mínimo) a 12; pasando de ahí, scrollea por dentro.
+      Se pone `height: auto` ANTES de leer scrollHeight: si no, el textarea
+      nunca encogería al borrar. El renglón se mide del estilo calculado y no
+      se fija en el código, para que siga cierto si cambia la tipografía. Donde
+      no hay medidas (el panel oculto, o un DOM sin layout) no se toca nada:
+      un NaN en `height` dejaría el campo sin alto.
+    */
+    const RENGLONES_MAXIMOS_BIO = 12;
+    const RENGLON_DE_RESPALDO_BIO_PX = 24;
+
+    function topeAltoBio() {
+      const estilo = typeof getComputedStyle === "function" ? getComputedStyle(bioInput) : null;
+      const numero = (valor) => (Number.isFinite(Number.parseFloat(valor)) ? Number.parseFloat(valor) : 0);
+      const renglon = estilo && numero(estilo.lineHeight) > 0 ? numero(estilo.lineHeight) : RENGLON_DE_RESPALDO_BIO_PX;
+      const relleno = estilo ? numero(estilo.paddingTop) + numero(estilo.paddingBottom) : 0;
+      return renglon * RENGLONES_MAXIMOS_BIO + relleno;
+    }
+
+    function ajustarAltoBio() {
+      bioInput.style.height = "auto";
+      const alto = bioInput.scrollHeight;
+      if (!Number.isFinite(alto) || alto <= 0) return;
+      const tope = topeAltoBio();
+      bioInput.style.height = `${Math.min(alto, tope)}px`;
+      bioInput.style.overflowY = alto > tope ? "auto" : "hidden";
+    }
+
+    bioInput.addEventListener("input", ajustarAltoBio);
+
+    // Al cambiar el ancho cambia dónde se parten los renglones. Un cuadro por
+    // cambio de tamaño, no uno por evento.
+    let ajusteBioPendiente = false;
+    window.addEventListener("resize", () => {
+      if (ajusteBioPendiente || typeof requestAnimationFrame !== "function") return;
+      ajusteBioPendiente = true;
+      requestAnimationFrame(() => {
+        ajusteBioPendiente = false;
+        ajustarAltoBio();
+      });
+    });
+
     /* ---------- Valores ---------- */
 
     function llenarFormulario(ficha) {
@@ -309,6 +353,7 @@
       radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
       for (const [campo, editor] of Object.entries(editores)) editor.establecer(valores[campo]);
       actualizarContadorBio();
+      ajustarAltoBio();
       limpiarErrores();
       ocultarEstado();
     }
@@ -351,10 +396,10 @@
     let editores = {};
 
     /*
-      Los catálogos son sólo para sugerir: si el script no llegó o una carga
-      falla, ese editor queda sin catálogo y se degrada en silencio a texto
-      libre, sin aviso ni reintento (a quien edita su ficha no le toca
-      resolver eso). Los tres se piden a la vez y uno que falle no se lleva a
+      Desde 2026-10-13 el catálogo es lo único que se puede agregar: si el
+      script no llegó o una carga falla, ese editor queda sin catálogo y no
+      hay nada que agregar (las etiquetas ya guardadas se conservan), sin
+      aviso ni reintento (a quien edita su ficha no le toca resolver eso). Los tres se piden a la vez y uno que falle no se lleva a
       los otros: cada promesa resuelve su propio { ok }.
     */
     async function cargarCatalogos() {
@@ -411,8 +456,8 @@
           deshabilitado por este mismo await.
 
           Las sugerencias son decoración: llegan cuando lleguen y cada editor
-          se las pone solo. Si no llegan nunca, el campo sigue aceptando texto
-          libre, que es exactamente lo que ya pasa cuando el catálogo falla.
+          se las pone solo. Si no llegan nunca, el campo simplemente no ofrece
+          nada que agregar, que es lo mismo que pasa cuando el catálogo falla.
         */
         cargarCatalogos();
         const resultado = await obtenerMiFicha(sesion.user.id);
@@ -504,7 +549,6 @@
         lista: elementos[`${definicion.campo}Lista`],
         estado: elementos[`${definicion.campo}Estado`],
         ayuda: elementos[`${definicion.campo}Ayuda`],
-        prefijoIdOpcion: `${definicion.prefijoIds}Opcion`,
         textoAyuda: definicion.ayuda,
         textoAyudaLlena: definicion.ayudaLlena,
         nombrePlural: definicion.nombrePlural,

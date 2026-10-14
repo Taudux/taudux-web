@@ -83,8 +83,17 @@ test("scripts load in dependency order", () => {
     "/app/core/colaboradores/ficha.service.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.logica.js",
     "/app/core/etiquetas/catalogo.service.js",
+    // El cielo de estrellas de Colaboradores (2026-10-13): tsParticles antes
+    // del fondo que lo usa.
+    "https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js",
+    "https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js",
+    "/app/features/colaboradores/colaboradores.fondo.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.logica.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.js",
+    // El editor de foto: su lógica pura antes del cableado, y los dos antes de
+    // mi-ficha.js.
+    "/app/features/colaboradores/mi-ficha/mi-ficha.foto.logica.js",
+    "/app/features/colaboradores/mi-ficha/mi-ficha.foto.js",
     "/app/features/colaboradores/mi-ficha/mi-ficha.js",
   ];
   const posiciones = orden.map((src) => {
@@ -147,7 +156,9 @@ test("the scripts never write markup from data", () => {
   for (const fuente of [JS, LOGICA]) {
     assert.doesNotMatch(sinComentariosJs(fuente), /innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
   }
-  assert.doesNotMatch(sinComentariosJs(JS), /\.style\b/, "los estados cambian por atributo o clase, no con estilos en línea");
+  // La única excepción es el alto de la bio, que crece con el texto y no tiene
+  // clase posible (ajustarAltoBio).
+  assert.doesNotMatch(sinComentariosJs(JS), /\.style\b(?!\.(?:height|overflowY)\b)/, "los estados cambian por atributo o clase, no con estilos en línea");
 });
 
 test("the pure logic touches no DOM and exports through the module guard", () => {
@@ -413,10 +424,9 @@ for (const { campo, prefijoIds, etiquetaListbox } of CAMPOS_DE_ETIQUETAS) {
 }
 
 /*
-  Tres instancias del mismo widget no pueden compartir ids: el prefijo de los
-  id de cada opción sale de `prefijoIds`, y dos listbox abiertos que generaran
-  el mismo id escribirían el mismo aria-activedescendant — el lector de
-  pantalla anunciaría la opción equivocada.
+  Tres instancias del mismo widget no pueden compartir ids: cada nodo del campo
+  sale de `prefijoIds`; dos nodos con el mismo id harían que los `for`, los
+  `aria-describedby` y `aria-controls` apunten al campo equivocado.
 */
 test("the three tag fields use different ids for every node they own", () => {
   const ids = CAMPOS_DE_ETIQUETAS.flatMap(({ prefijoIds }) => (

@@ -141,6 +141,9 @@ class Nodo {
     this.checked = false;
     this.value = "";
     this._texto = "";
+    // Para los estilos en línea que la página escribe a propósito (el alto de
+    // la bio). `scrollHeight` no existe hasta que un test lo asigna.
+    this.style = {};
 
     const clases = new Set();
     this._clases = clases;
@@ -181,9 +184,17 @@ class Nodo {
 
   // Como en el navegador: leer junta el texto de los descendientes, escribir
   // reemplaza a los hijos.
+  // Los nodos que crea la página (texto suelto y <mark>, como el trozo en
+  // negritas de una opción) se pegan sin espacio: son partes de una palabra.
+  // Los del esqueleto estático se separan con un espacio, como antes.
   get textContent() {
     if (this.children.length === 0) return this._texto;
-    return this.children.map((hijo) => hijo.textContent).join(" ").replace(/\s+/g, " ").trim();
+    const pegado = (hijo) => hijo.tagName === "MARK" || hijo._dinamico === true;
+    return this.children
+      .map((hijo, indice) => (indice > 0 && !pegado(hijo) && !pegado(this.children[indice - 1]) ? " " : "") + hijo.textContent)
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim();
   }
   set textContent(valor) {
     this.children = [];
@@ -198,6 +209,19 @@ class Nodo {
 
   // No-ops: el arrastre de las herramientas los llama, pero no hay puntero
   // real que capturar en este DOM falso.
+  // Sin layout real: un rectángulo en cero, salvo que un test fije cómo
+  // medir con `documento.rectDe(nodo)`.
+  getBoundingClientRect() {
+    return this.documento.rectDe?.(this) ?? { left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  // Medidas de LAYOUT (sin transformaciones): las mismas cajas que fije
+  // `documento.rectDe`, que en estos tests ya están en coordenadas de la lista.
+  get offsetLeft() { return this.getBoundingClientRect().left; }
+  get offsetTop() { return this.getBoundingClientRect().top; }
+  get offsetWidth() { return this.getBoundingClientRect().width; }
+  get offsetHeight() { return this.getBoundingClientRect().height; }
+
   setPointerCapture() {}
   releasePointerCapture() {}
 
@@ -365,10 +389,17 @@ function abrirPagina({
   const alCargar = [];
   const documento = {
     activeElement: null,
-    createElement: (etiqueta) => new Nodo(documento, etiqueta),
+    createElement: (etiqueta) => {
+      const nodo = new Nodo(documento, etiqueta);
+      // `animate` sólo existe si un test lo pide (documento.animar): sin él,
+      // el nodo es como en un navegador sin Web Animations.
+      if (documento.animar) nodo.animate = (...argumentos) => documento.animar(nodo, ...argumentos);
+      return nodo;
+    },
     createTextNode: (texto) => {
       const nodo = new Nodo(documento, "#text");
       nodo._texto = String(texto);
+      nodo._dinamico = true;
       return nodo;
     },
     addEventListener: (tipo, manejador) => { if (tipo === "DOMContentLoaded") alCargar.push(manejador); },
@@ -399,11 +430,21 @@ function abrirPagina({
     // auth-ui.js la llama al cargar (agregarDestinoAEnlaces): sin destino.
     obtenerDestinoAuth: () => "",
   };
-  // Sin `catalogo`, cargarCatalogoDeEtiquetas no existe: el script del
-  // catálogo no llegó, y los tres editores se degradan solos a texto libre.
-  // Un arreglo suelto es el catálogo de herramientas y los otros dos quedan
-  // sin sugerencias, que es lo que le hace falta a casi toda la suite.
-  if (catalogo !== undefined) {
+  // Desde 2026-10-13 sólo se agrega lo que se elige del catálogo, así que casi
+  // toda la suite necesita uno. Sin `catalogo`, el falso entrega catálogos
+  // VIVOS y vacíos (los mismos arreglos que guarda cada editor, sin clonar):
+  // el ayudante `agregarEtiqueta` les mete el texto que el test va a elegir
+  // antes de teclearlo. Para fingir que el script del catálogo no llegó, un
+  // test pasa `sin: ["cargarCatalogoDeEtiquetas"]`.
+  // Con `catalogo` explícito, un arreglo suelto es el catálogo de herramientas
+  // y los otros dos quedan sin sugerencias; ese catálogo se clona y es el que
+  // el test pidió, sin añadidos.
+  const catalogosVivos = { herramientas: [], habilidades: [], idiomas: [] };
+  if (catalogo === undefined) {
+    globales.cargarCatalogoDeEtiquetas = async (nombre) => (catalogosVivos[nombre]
+      ? { ok: true, etiquetas: catalogosVivos[nombre] }
+      : { ok: false, mensaje: `El catálogo de ${nombre} está vacío.` });
+  } else {
     const porNombre = Array.isArray(catalogo) ? { herramientas: catalogo } : catalogo;
     globales.cargarCatalogoDeEtiquetas = async (nombre) => (porNombre[nombre]
       ? { ok: true, etiquetas: structuredClone(porNombre[nombre]) }
@@ -423,6 +464,9 @@ function abrirPagina({
     document: documento,
     console: { error: (...argumentos) => errores.push(argumentos) },
     addEventListener: (tipo) => oyentesDeVentana.push(tipo),
+    // Un renglón de 20px con 10px de relleno arriba y abajo: el tope de 12
+    // renglones de la bio es 12 × 20 + 20 = 260px.
+    getComputedStyle: () => ({ lineHeight: "20px", paddingTop: "10px", paddingBottom: "10px" }),
     // El resaltado de una etiqueta duplicada se apaga solo con un temporizador
     // real; unref() para que no deje colgado al proceso de los tests.
     setTimeout: (...argumentos) => { const id = setTimeout(...argumentos); id?.unref?.(); return id; },
@@ -459,6 +503,7 @@ function abrirPagina({
 
   return {
     documento,
+    contexto,
     raiz,
     porId,
     iniciada,
@@ -484,13 +529,22 @@ function abrirPagina({
       radio.disparar("input");
       radio.disparar("change");
     },
-    // Quien agrega una etiqueta a una de las tres listas: la escribe y
-    // confirma con Enter, como haría alguien de verdad con el combobox.
+    // Quien agrega una etiqueta a una de las tres listas, como haría alguien de
+    // verdad con el combobox ahora que sólo se agrega lo del catálogo y sólo con
+    // el mouse o el dedo: la escribe para que aparezcan las sugerencias y hace
+    // clic (mousedown, que es lo que escucha el editor) en la opción que es
+    // exactamente ese texto. Antes de teclear, el texto entra al catálogo vivo
+    // del campo (ver `catalogosVivos`); si el test fijó su propio catálogo o
+    // quitó el script, no hay nada que sumar y lo que pasa es lo que pasaría en
+    // la página: sin opción que tocar, no se agrega nada.
     agregarEtiqueta(campo, texto) {
       const control = porId(ID_DE[campo]);
+      const vivo = catalogosVivos[campo];
+      if (vivo && !vivo.includes(texto)) vivo.push(texto);
       control.value = texto;
       control.disparar("input");
-      control.disparar("keydown", { key: "Enter" });
+      const opcion = porId(`${ID_DE[campo]}Opciones`).children.find((candidata) => candidata.textContent === texto);
+      if (opcion) opcion.disparar("mousedown");
     },
     // Las etiquetas de un campo tal como quedaron pintadas en su lista.
     etiquetasEnPantalla(campo) {
@@ -1038,10 +1092,15 @@ function quitarHerramienta(pagina, indice) {
   return pagina.porId("miFichaHerramientasLista").children[indice].children[2];
 }
 
-// La opción resaltada del desplegable, si hay alguna.
-function opcionResaltada(pagina) {
-  return pagina.porId("miFichaHerramientasOpciones").children
-    .find((opcion) => opcion.classList.contains("mi-ficha__etiquetas-opcion--resaltada"));
+// Nada del desplegable queda "resaltado" por script: ni clase, ni aria-selected,
+// ni aria-activedescendant en el input. El único resaltado es el :hover del CSS.
+function assertSinResaltado(pagina, campo = "herramientas") {
+  const input = pagina.porId(ID_DE[campo]);
+  assert.equal(input.getAttribute("aria-activedescendant"), null, "el input no apunta a ninguna opción");
+  for (const opcion of pagina.porId(`${ID_DE[campo]}Opciones`).children) {
+    assert.equal(opcion.getAttribute("aria-selected"), null, "las opciones no llevan aria-selected");
+    assert.deepEqual([...opcion._clases], ["mi-ficha__etiquetas-opcion"], "las opciones no llevan clase de estado");
+  }
 }
 
 test("typing filters the catalog into the listbox, prefix matches first", async () => {
@@ -1059,42 +1118,61 @@ test("typing filters the catalog into the listbox, prefix matches first", async 
   assert.equal(pagina.porId("miFichaHerramientas").getAttribute("aria-expanded"), "false");
 });
 
-test("ArrowDown and ArrowUp move the highlighted suggestion, clamped at the edges", async () => {
+test("opening the list highlights nothing, and ArrowDown and ArrowUp do nothing", async () => {
   const pagina = await cargarPagina({ catalogo: ["Postgres", "Python", "PHP"] });
   const input = pagina.porId("miFichaHerramientas");
   pagina.escribir("herramientas", "p");
+  assertSinResaltado(pagina);
 
-  input.disparar("keydown", { key: "ArrowDown" });
-  assert.equal(opcionResaltada(pagina).textContent, "Postgres");
-  assert.equal(input.getAttribute("aria-activedescendant"), "miFichaHerramientasOpcion0");
-
-  input.disparar("keydown", { key: "ArrowDown" });
-  input.disparar("keydown", { key: "ArrowDown" });
-  assert.equal(opcionResaltada(pagina).textContent, "PHP");
-  // Tope superior: un cuarto ArrowDown no sale de la última.
-  input.disparar("keydown", { key: "ArrowDown" });
-  assert.equal(opcionResaltada(pagina).textContent, "PHP");
-
-  input.disparar("keydown", { key: "ArrowUp" });
-  input.disparar("keydown", { key: "ArrowUp" });
-  assert.equal(opcionResaltada(pagina).textContent, "Postgres");
-  // Tope inferior: sin dar la vuelta a la última.
-  input.disparar("keydown", { key: "ArrowUp" });
-  assert.equal(opcionResaltada(pagina).textContent, "Postgres");
+  for (const key of ["ArrowDown", "ArrowDown", "ArrowUp", "ArrowUp", "ArrowDown"]) {
+    input.disparar("keydown", { key });
+    assertSinResaltado(pagina);
+  }
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").children.length, 3, "la lista sigue intacta");
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
+  assert.equal(input.value, "p");
 });
 
-test("Enter without a highlighted option adds the typed text and clears the input", async () => {
-  const pagina = await cargarPagina();
+test("Enter adds nothing and leaves the typed text where it is, but never submits the form", async () => {
+  const pagina = await cargarPagina({ catalogo: ["Rust", "Ruby"] });
   pagina.escribir("herramientas", "Rust");
+  let cancelado = false;
 
-  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter" });
+  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter", preventDefault() { cancelado = true; } });
 
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Rust"]);
+  assert.equal(cancelado, true, "Enter se cancela: en un campo suelto enviaría el formulario");
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
+  assert.equal(pagina.porId("miFichaHerramientas").value, "Rust", "el texto no se agrega ni se borra");
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, false, "las sugerencias siguen a la vista");
+  assert.equal(pagina.porId("miFichaHerramientasError").hidden, true);
+  assertSinResaltado(pagina);
+});
+
+test("clicking a suggestion adds it, clears the input and closes the list", async () => {
+  const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python"] });
+  pagina.escribir("herramientas", "py");
+
+  const opcion = pagina.porId("miFichaHerramientasOpciones").children[0];
+  opcion.disparar("mousedown");
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Python"]);
   assert.equal(pagina.porId("miFichaHerramientas").value, "");
   assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true);
 });
 
-test("Enter with a highlighted suggestion confirms that suggestion, not the typed text", async () => {
+test("the typed part of each suggestion is wrapped in a mark and the text stays intact", async () => {
+  const pagina = await cargarPagina({ catalogo: ["PostgreSQL"] });
+  pagina.escribir("herramientas", "gres");
+
+  const opcion = pagina.porId("miFichaHerramientasOpciones").children[0];
+  const marca = opcion.children.find((hijo) => hijo.tagName === "MARK");
+
+  assert.ok(marca, "falta el <mark> con lo escrito");
+  assert.equal(marca.textContent, "greS", "conserva las mayúsculas del catálogo");
+  assert.equal(opcion.textContent, "PostgreSQL");
+});
+
+test("ArrowDown then Enter adds nothing: keyboard selection no longer exists", async () => {
   const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python"] });
   const input = pagina.porId("miFichaHerramientas");
   pagina.escribir("herramientas", "pos");
@@ -1102,16 +1180,20 @@ test("Enter with a highlighted suggestion confirms that suggestion, not the type
 
   input.disparar("keydown", { key: "Enter" });
 
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["PostgreSQL"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
+  assert.equal(input.value, "pos");
 });
 
-test("a comma confirms the entry, just like Enter", async () => {
-  const pagina = await cargarPagina();
+test("a comma confirms nothing", async () => {
+  const pagina = await cargarPagina({ catalogo: ["Go", "Golang"] });
+  const input = pagina.porId("miFichaHerramientas");
   pagina.escribir("herramientas", "Go");
+  input.disparar("keydown", { key: "ArrowDown" });
 
-  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "," });
+  input.disparar("keydown", { key: "," });
 
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Go"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
+  assert.equal(input.value, "Go");
 });
 
 test("Escape closes the listbox without touching the text or the tools", async () => {
@@ -1126,15 +1208,24 @@ test("Escape closes the listbox without touching the text or the tools", async (
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
 });
 
-test("adding a duplicate announces it, highlights the existing tag and does not grow the tools list", async () => {
-  const pagina = await cargarPagina();
+/*
+  Con sólo-catálogo, el duplicado ya no se puede provocar tecleando: lo ya
+  elegido no se ofrece como sugerencia (sugerenciasDeEtiqueta lo excluye, con
+  otras mayúsculas o acentos incluidos), y sin sugerencia no hay nada que
+  elegir. El aviso de duplicado queda como red de seguridad en el editor.
+*/
+test("a tag that is already in the list is not offered again, so the list never grows with a repeat", async () => {
+  const pagina = await cargarPagina({ catalogo: ["PostgreSQL", "Python"] });
   pagina.agregarEtiqueta("herramientas", "PostgreSQL");
-
-  pagina.agregarEtiqueta("herramientas", "  POSTGRESQL  ");
-
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["PostgreSQL"]);
-  assert.equal(pagina.texto("miFichaHerramientasEstado"), "PostgreSQL ya está en tus herramientas.");
-  assert.ok(manijaHerramienta(pagina, 0).parent.classList.contains("mi-ficha__etiquetas-item--duplicada"));
+
+  pagina.escribir("herramientas", "  POSTGRESQL  ");
+  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "ArrowDown" });
+  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter" });
+
+  assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true, "no hay sugerencia para lo ya elegido");
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["PostgreSQL"]);
+  assert.equal(pagina.texto("miFichaHerramientasEstado"), "");
 });
 
 test("the twelfth technology disables the input and the help says so; removing one re-enables it", async () => {
@@ -1171,7 +1262,7 @@ test("removing a tag moves focus to the handle at the same index, then the previ
   assertFocoEn(pagina, "miFichaHerramientas");
 });
 
-test("Backspace on an empty input removes the last tag and keeps focus on the input", async () => {
+test("Backspace on an empty input removes nothing: a tag only goes away with its remove button", async () => {
   const pagina = await cargarPagina();
   ["A", "B"].forEach((tecnologia) => pagina.agregarEtiqueta("herramientas", tecnologia));
   const input = pagina.porId("miFichaHerramientas");
@@ -1179,7 +1270,7 @@ test("Backspace on an empty input removes the last tag and keeps focus on the in
 
   input.disparar("keydown", { key: "Backspace" });
 
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "B"]);
   assertFocoEn(pagina, "miFichaHerramientas");
 });
 
@@ -1198,14 +1289,17 @@ test("keyboard reordering from the handle moves the tag and focus follows it", a
   assert.equal(pagina.activo(), manijaHerramienta(pagina, 2));
 });
 
-test("a missing technology catalog script degrades silently: no suggestions, but free text still works", async () => {
-  const pagina = await cargarPagina(); // sin `catalogo`: el script del catálogo no llegó.
+test("a missing technology catalog script degrades silently: no suggestions and nothing can be added", async () => {
+  // El script del catálogo no llegó.
+  const pagina = await cargarPagina({ sin: ["cargarCatalogoDeEtiquetas"] });
 
   pagina.escribir("herramientas", "cualquier cosa");
   assert.equal(pagina.porId("miFichaHerramientasOpciones").hidden, true, "sin catálogo no hay nada que sugerir");
 
+  pagina.porId("miFichaHerramientas").disparar("keydown", { key: "ArrowDown" });
   pagina.porId("miFichaHerramientas").disparar("keydown", { key: "Enter" });
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["cualquier cosa"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), []);
+  assert.equal(pagina.porId("miFichaHerramientas").value, "cualquier cosa");
   assert.equal(pagina.errores.length, 0, "la ausencia del catálogo no se avisa ni se reintenta");
 });
 
@@ -1420,32 +1514,23 @@ test("the per-field limits speak in the name of the field that broke them", asyn
 });
 
 /*
-  EL error más probable al instanciar la fábrica tres veces: el prefijo de los
-  id de opción. Las opciones nunca reciben foco —el resaltado se lleva con
-  aria-activedescendant en el input—, así que si dos instancias generaran el
-  mismo id, dos listbox abiertos escribirían el mismo y el lector de pantalla
-  anunciaría la opción de la OTRA lista.
-
-  Los ids distintos en el HTML no alcanzan para verlo: los de las opciones los
-  crea la fábrica en tiempo de ejecución, uno por sugerencia pintada.
+  Tres listbox abiertos a la vez no se pisan: cada uno pinta las sugerencias de
+  SU catálogo en SU desplegable, y ninguno deja rastro de resaltado por script
+  (sin aria-activedescendant, que con tres instancias era el riesgo de ids
+  repetidos).
 */
-test("two open listboxes point at option ids of their own, never at each other's", async () => {
+test("three open listboxes each show their own suggestions and none carries a script highlight", async () => {
   const pagina = await cargarPagina({
     catalogo: { herramientas: ["Python"], habilidades: ["Pair programming"], idiomas: ["Portugués"] },
   });
 
+  for (const campo of LISTAS_DE_ETIQUETAS) pagina.escribir(campo, "p");
+
+  const esperadas = { herramientas: ["Python"], habilidades: ["Pair programming"], idiomas: ["Portugués"] };
   for (const campo of LISTAS_DE_ETIQUETAS) {
-    pagina.escribir(campo, "p");
-    pagina.porId(ID_DE[campo]).disparar("keydown", { key: "ArrowDown" });
-  }
-
-  const activos = LISTAS_DE_ETIQUETAS.map((campo) => pagina.porId(ID_DE[campo]).getAttribute("aria-activedescendant"));
-  assert.deepEqual(activos, ["miFichaHerramientasOpcion0", "miFichaHabilidadesOpcion0", "miFichaIdiomasOpcion0"]);
-
-  // Y el id apuntado existe DENTRO del desplegable de su propio campo.
-  for (const [indice, campo] of LISTAS_DE_ETIQUETAS.entries()) {
     const opciones = pagina.porId(`${ID_DE[campo]}Opciones`).children;
-    assert.deepEqual(opciones.map((opcion) => opcion.attributes.id), [activos[indice]], campo);
+    assert.deepEqual(opciones.map((opcion) => opcion.textContent), esperadas[campo], campo);
+    assertSinResaltado(pagina, campo);
   }
 });
 
@@ -1525,4 +1610,145 @@ test("a company link the database would reject is caught before sending", async 
     assert.equal(pagina.texto("miFichaEmpresaEnlaceError"), "Usa un enlace https, por ejemplo https://tuempresa.com.", malo);
     assert.equal(pagina.guardarMiFicha.llamadas.length, 0, malo);
   }
+});
+
+/* ---------- La bio crece con lo que se escribe ---------- */
+
+test("the bio height follows its content, up to twelve lines, and scrolls inside past that", async () => {
+  const pagina = await cargarPagina();
+  const bio = pagina.porId("miFichaBio");
+
+  bio.scrollHeight = 100;
+  pagina.escribir("bio", "Una línea");
+  assert.equal(bio.style.height, "100px", "el alto es el del contenido");
+  assert.equal(bio.style.overflowY, "hidden");
+
+  bio.scrollHeight = 500;
+  pagina.escribir("bio", "Muchas líneas");
+  assert.equal(bio.style.height, "260px", "tope: 12 renglones de 20px más 20px de relleno");
+  assert.equal(bio.style.overflowY, "auto", "pasando el tope scrollea por dentro");
+
+  bio.scrollHeight = 80;
+  pagina.escribir("bio", "");
+  assert.equal(bio.style.height, "80px", "al borrar vuelve a encoger");
+  assert.equal(bio.style.overflowY, "hidden");
+});
+
+test("the bio starts at three rows and never gets a NaN height where nothing can be measured", async () => {
+  assert.match(HTML, /<textarea[^>]*\srows="3"/);
+  const pagina = await cargarPagina(); // el DOM falso no mide: scrollHeight undefined
+  pagina.escribir("bio", "Hola");
+  assert.equal(pagina.porId("miFichaBio").style.height, "auto");
+});
+
+test("loading a saved bio sizes the textarea once the form is visible", async () => {
+  const pagina = abrirPagina({ ficha: enSecuencia(exito(structuredClone(FICHA))) });
+  pagina.porId("miFichaBio").scrollHeight = 120;
+  await pagina.iniciada;
+
+  assert.equal(pagina.porId("miFichaBio").style.height, "120px");
+});
+
+/* ---------- Las etiquetas se deslizan al cambiar de lugar ---------- */
+
+// Un layout de juguete: la posición de cada etiqueta es su lugar actual en la
+// lista (100px por lugar), así que "antes" y "después" de un repintado dan
+// rectángulos distintos para las que se movieron, como en un navegador.
+function conLayoutDeEtiquetas(pagina) {
+  const animaciones = [];
+  pagina.documento.rectDe = (nodo) => {
+    // Sólo las etiquetas tienen layout; la lista queda en el origen.
+    if (!nodo.classList.contains("mi-ficha__etiquetas-item")) return undefined;
+    const lugar = nodo.parent ? nodo.parent.children.indexOf(nodo) : 0;
+    return { left: lugar * 100, top: 0, width: 80, height: 20 };
+  };
+  pagina.documento.animar = (nodo, fotogramas, opciones) => {
+    animaciones.push({ texto: nodo.children[1].textContent, fotogramas, opciones });
+  };
+  return animaciones;
+}
+
+async function paginaConEtiquetas() {
+  const pagina = await cargarPagina();
+  // El layout y `animate` se instalan antes de pintar: las etiquetas nacen con ellos.
+  const animaciones = conLayoutDeEtiquetas(pagina);
+  ["A", "B", "C"].forEach((texto) => pagina.agregarEtiqueta("herramientas", texto));
+  animaciones.length = 0;
+  return { pagina, animaciones };
+}
+
+test("moving a tag slides the tags that changed place, from where they were to where they are", async () => {
+  const { pagina, animaciones } = await paginaConEtiquetas();
+
+  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
+  assert.deepEqual(animaciones.map((a) => a.texto).sort(), ["A", "B"], "C no se movió y no se anima");
+  const deA = animaciones.find((a) => a.texto === "A");
+  assert.deepEqual(structuredClone(deA.fotogramas), [{ transform: "translate(-100px, 0px)" }, { transform: "none" }]);
+  assert.equal(deA.opciones.duration, 180);
+  const deB = animaciones.find((a) => a.texto === "B");
+  assert.deepEqual(structuredClone(deB.fotogramas), [{ transform: "translate(100px, 0px)" }, { transform: "none" }]);
+});
+
+test("removing a tag slides the ones that stay", async () => {
+  const { pagina, animaciones } = await paginaConEtiquetas();
+
+  quitarHerramienta(pagina, 0).disparar("click");
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "C"]);
+  assert.deepEqual(animaciones.map((a) => a.texto).sort(), ["B", "C"]);
+  assert.ok(animaciones.every((a) => a.fotogramas[0].transform === "translate(100px, 0px)"));
+});
+
+test("adding a tag animates nothing: the others did not move", async () => {
+  const { pagina, animaciones } = await paginaConEtiquetas();
+
+  pagina.agregarEtiqueta("herramientas", "D");
+
+  assert.equal(pagina.etiquetasEnPantalla("herramientas").length, 4);
+  assert.deepEqual(animaciones, []);
+});
+
+test("without Web Animations the list still repaints and nothing throws", async () => {
+  const pagina = await cargarPagina();
+  pagina.documento.rectDe = (nodo) => (nodo.classList.contains("mi-ficha__etiquetas-item")
+    ? { left: nodo.parent.children.indexOf(nodo) * 100, top: 0, width: 80, height: 20 }
+    : undefined);
+  ["A", "B", "C"].forEach((texto) => pagina.agregarEtiqueta("herramientas", texto));
+
+  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+  quitarHerramienta(pagina, 0).disparar("click");
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "C"]);
+});
+
+test("the dragged tag is lifted while it is dragged, keeps the lift when it changes place, and drops it on release", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+  const levantada = () => lista.children.filter((item) => item.classList.contains("mi-ficha__etiquetas-item--arrastrando"));
+
+  manijaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1 });
+  assert.deepEqual(levantada().map((item) => item.children[1].textContent), ["A"]);
+  assert.equal(lista.classList.contains("mi-ficha__etiquetas-lista--arrastrando"), true);
+
+  // El puntero cruza el centro del segundo lugar (x = 140).
+  lista.disparar("pointermove", { pointerId: 1, clientX: 150, clientY: 10 });
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
+  assert.deepEqual(levantada().map((item) => item.children[1].textContent), ["A"], "la clase sobrevive al repintado");
+
+  lista.disparar("pointerup", { pointerId: 1 });
+  assert.deepEqual(levantada(), []);
+  assert.equal(lista.classList.contains("mi-ficha__etiquetas-lista--arrastrando"), false);
+});
+
+test("prefers-reduced-motion switches the slide off", async () => {
+  const { pagina, animaciones } = await paginaConEtiquetas();
+  // El vm comparte `window` con el contexto: matchMedia se define ahí.
+  pagina.contexto.matchMedia = () => ({ matches: true });
+
+  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
+  assert.deepEqual(animaciones, []);
 });

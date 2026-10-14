@@ -19,7 +19,12 @@
   <link rel="stylesheet" href="/app/features/colaboradores/mi-ficha/mi-ficha.css">
 </head>
 
-<body>
+<body class="mi-ficha-page">
+  <!-- El mismo cielo de estrellas de Colaboradores: lo dibuja
+       colaboradores.fondo.js (se reutiliza, no se copia) y mi-ficha.css lo
+       posiciona. -->
+  <div id="particles-fondo" aria-hidden="true"></div>
+
   <nav class="navbar" aria-label="Navegación principal">
     <a href="/" class="navbar__brand">
       <img src="/assets/images/logo-horizontal2.png" alt="Taudux logo" class="navbar__logo">
@@ -64,6 +69,26 @@
           <!-- Sólo para errores del servidor: los de cada campo van junto al campo. -->
           <p class="mi-ficha__status" id="miFichaStatus" role="alert" tabindex="-1" hidden></p>
 
+          <!-- La foto (Fase I, 2026-10-13): sólo se edita y se previsualiza; nada se
+               sube ni se guarda todavía, y el aviso de abajo lo dice. El botón
+               "Subir foto" abre el diálogo #editorFoto (mi-ficha.foto.js). -->
+          <div class="mi-ficha__grupo mi-ficha__foto" id="miFichaFoto">
+            <p class="mi-ficha__etiqueta" id="miFichaFotoEtiqueta">Foto</p>
+            <div class="mi-ficha__foto-fila">
+              <div class="mi-ficha__foto-vista" id="miFichaFotoVista" role="img" aria-label="Vista previa de tu foto">
+                <span class="mi-ficha__foto-silueta mi-ficha__foto-silueta--cabeza" aria-hidden="true"></span>
+                <span class="mi-ficha__foto-silueta mi-ficha__foto-silueta--torso" aria-hidden="true"></span>
+                <img class="mi-ficha__foto-img" id="miFichaFotoImg" alt="" hidden>
+              </div>
+              <div class="mi-ficha__foto-acciones">
+                <button type="button" class="button button--outline" id="miFichaFotoSubir">Subir foto</button>
+                <button type="button" class="button button--outline" id="miFichaFotoCambiar" hidden>Cambiar</button>
+                <button type="button" class="button button--outline" id="miFichaFotoQuitar" hidden>Quitar</button>
+              </div>
+            </div>
+            <small class="mi-ficha__ayuda">Tu foto se verá redonda en tu ficha. Por ahora no se guarda: al recargar la página desaparece.</small>
+          </div>
+
           <div class="mi-ficha__grupo">
             <!-- Texto y no un campo: el nombre se edita en Mi cuenta. -->
             <p class="mi-ficha__etiqueta">Nombre</p>
@@ -105,7 +130,7 @@
           <div class="mi-ficha__grupo">
             <label class="mi-ficha__etiqueta" for="miFichaHabilidades">Habilidades</label>
             <div class="mi-ficha__etiquetas">
-              <input class="field" type="text" id="miFichaHabilidades" name="habilidades" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHabilidadesOpciones" autocomplete="off" aria-describedby="miFichaHabilidadesAyuda">
+              <input class="field" type="text" id="miFichaHabilidades" name="habilidades" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHabilidadesOpciones" autocomplete="off" placeholder="Escribe y elige de la lista" aria-describedby="miFichaHabilidadesAyuda">
               <ul class="mi-ficha__etiquetas-opciones" id="miFichaHabilidadesOpciones" role="listbox" aria-label="Sugerencias de habilidades" hidden></ul>
               <ul class="mi-ficha__etiquetas-lista" id="miFichaHabilidadesLista"></ul>
             </div>
@@ -117,7 +142,7 @@
           <div class="mi-ficha__grupo">
             <label class="mi-ficha__etiqueta" for="miFichaHerramientas">Herramientas</label>
             <div class="mi-ficha__etiquetas">
-              <input class="field" type="text" id="miFichaHerramientas" name="herramientas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHerramientasOpciones" autocomplete="off" aria-describedby="miFichaHerramientasAyuda">
+              <input class="field" type="text" id="miFichaHerramientas" name="herramientas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaHerramientasOpciones" autocomplete="off" placeholder="Escribe y elige de la lista" aria-describedby="miFichaHerramientasAyuda">
               <ul class="mi-ficha__etiquetas-opciones" id="miFichaHerramientasOpciones" role="listbox" aria-label="Sugerencias de herramientas" hidden></ul>
               <ul class="mi-ficha__etiquetas-lista" id="miFichaHerramientasLista"></ul>
             </div>
@@ -129,7 +154,7 @@
           <div class="mi-ficha__grupo">
             <label class="mi-ficha__etiqueta" for="miFichaIdiomas">Idiomas</label>
             <div class="mi-ficha__etiquetas">
-              <input class="field" type="text" id="miFichaIdiomas" name="idiomas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaIdiomasOpciones" autocomplete="off" aria-describedby="miFichaIdiomasAyuda">
+              <input class="field" type="text" id="miFichaIdiomas" name="idiomas" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="miFichaIdiomasOpciones" autocomplete="off" placeholder="Escribe y elige de la lista" aria-describedby="miFichaIdiomasAyuda">
               <ul class="mi-ficha__etiquetas-opciones" id="miFichaIdiomasOpciones" role="listbox" aria-label="Sugerencias de idiomas" hidden></ul>
               <ul class="mi-ficha__etiquetas-lista" id="miFichaIdiomasLista"></ul>
             </div>
@@ -193,7 +218,7 @@
                mi-ficha.js, con largoMiFicha() de mi-ficha.logica.js. -->
           <div class="mi-ficha__grupo">
             <label class="mi-ficha__etiqueta" for="miFichaBio">Bio</label>
-            <textarea class="field field--textarea" id="miFichaBio" name="bio" rows="6" aria-describedby="miFichaBioAyuda miFichaBioContador"></textarea>
+            <textarea class="field field--textarea" id="miFichaBio" name="bio" rows="3" aria-describedby="miFichaBioAyuda miFichaBioContador"></textarea>
             <p class="mi-ficha__contador" id="miFichaBioContador" aria-live="off">Te quedan 240 caracteres</p>
             <small class="mi-ficha__ayuda" id="miFichaBioAyuda">Preséntate en 10 a 240 caracteres. Puedes usar saltos de línea.</small>
             <p class="mi-ficha__error" id="miFichaBioError" hidden></p>
@@ -238,6 +263,73 @@
     </div>
   </main>
 
+  <!-- Editor de foto: un solo diálogo con dos pasos (elegir y encuadrar). Los
+       dos paneles se alternan con `hidden`; mi-ficha.foto.js lo maneja. Los
+       SVG llevan etiqueta de cierre explícita a propósito: el DOM falso de los
+       tests arma el árbol con un parser mínimo que no entiende `<path />`. -->
+  <dialog class="editor-foto" id="editorFoto" aria-labelledby="editorFotoTitulo">
+    <div class="editor-foto__cabecera">
+      <h2 class="editor-foto__titulo" id="editorFotoTitulo">Subir foto</h2>
+      <button type="button" class="editor-foto__cerrar" id="editorFotoCerrar" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    </div>
+
+    <p class="editor-foto__aviso" id="editorFotoAviso" role="status" aria-live="polite" hidden></p>
+
+    <div class="editor-foto__paso" id="editorFotoPasoElegir">
+      <div class="editor-foto__zona" id="editorFotoZona">
+        <p class="editor-foto__zona-texto">Arrastra tu foto aquí</p>
+        <p class="editor-foto__zona-o">o</p>
+        <label class="u-visually-hidden" for="editorFotoArchivo">Archivo de la foto</label>
+        <input type="file" id="editorFotoArchivo" accept="image/jpeg,image/png" hidden>
+        <button type="button" class="button button--outline" id="editorFotoElegir">Elegir archivo</button>
+      </div>
+      <p class="editor-foto__ayuda">JPG o PNG · hasta 20 MB · cualquier proporción</p>
+    </div>
+
+    <div class="editor-foto__paso editor-foto__paso--editar" id="editorFotoPasoEditar" hidden>
+      <div class="editor-foto__marco" id="editorFotoMarco">
+        <canvas class="editor-foto__lienzo" id="editorFotoLienzo" width="480" height="480" tabindex="0" aria-label="Encuadre de la foto: usa las flechas para mover y + o − para acercar"></canvas>
+        <span class="editor-foto__guia" aria-hidden="true"></span>
+      </div>
+
+      <div class="editor-foto__controles">
+        <div class="editor-foto__herramientas">
+          <button type="button" class="editor-foto__icono" id="editorFotoGirarIzq" aria-label="Girar a la izquierda">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6"></path><path d="M4.5 10A8 8 0 1 1 6 16.5"></path></svg>
+          </button>
+          <button type="button" class="editor-foto__icono" id="editorFotoGirarDer" aria-label="Girar a la derecha">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4v6h-6"></path><path d="M19.5 10A8 8 0 1 0 18 16.5"></path></svg>
+          </button>
+          <button type="button" class="editor-foto__icono" id="editorFotoVoltearH" aria-label="Voltear horizontal">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"></path><path d="M8 7L3 17h5z"></path><path d="M16 7l5 10h-5z"></path></svg>
+          </button>
+          <button type="button" class="editor-foto__icono" id="editorFotoVoltearV" aria-label="Voltear vertical">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"></path><path d="M7 8L17 3v5z"></path><path d="M7 16l10 5v-5z"></path></svg>
+          </button>
+        </div>
+
+        <div class="editor-foto__control">
+          <label class="editor-foto__rotulo" for="editorFotoZoom">Zoom</label>
+          <input type="range" id="editorFotoZoom" min="1" max="3" step="0.1" value="1">
+          <output class="editor-foto__valor" id="editorFotoZoomValor" for="editorFotoZoom">1.0</output>
+        </div>
+
+        <div class="editor-foto__control">
+          <label class="editor-foto__rotulo" for="editorFotoRotar">Rotar</label>
+          <input type="range" id="editorFotoRotar" min="-45" max="45" step="1" value="0">
+          <output class="editor-foto__valor" id="editorFotoRotarValor" for="editorFotoRotar">0°</output>
+        </div>
+
+        <div class="editor-foto__acciones">
+          <button type="button" class="button button--outline" id="editorFotoOtra">Elegir otra</button>
+          <button type="button" class="button button--glow" id="editorFotoGuardar">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/app/core/supabase/supabase-client.js"></script>
   <script src="/app/core/auth/auth.service.js"></script>
@@ -247,8 +339,13 @@
   <script src="/app/core/colaboradores/ficha.service.js"></script>
   <script src="/app/features/colaboradores/mi-ficha/mi-ficha.logica.js"></script>
   <script src="/app/core/etiquetas/catalogo.service.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles-engine@2/tsparticles.engine.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  <script src="/app/features/colaboradores/colaboradores.fondo.js"></script>
   <script src="/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.logica.js"></script>
   <script src="/app/features/colaboradores/mi-ficha/mi-ficha.etiquetas.js"></script>
+  <script src="/app/features/colaboradores/mi-ficha/mi-ficha.foto.logica.js"></script>
+  <script src="/app/features/colaboradores/mi-ficha/mi-ficha.foto.js"></script>
   <script src="/app/features/colaboradores/mi-ficha/mi-ficha.js"></script>
 </body>
 
