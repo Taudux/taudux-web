@@ -137,6 +137,25 @@
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
   }
 
+  /*
+    La foto, cuando la hay, ocupa el retrato entero y la silueta y la inicial
+    se apagan. Va después de ellas en el DOM, así que pinta encima aunque se
+    olvidara el display: none. object-fit: cover recorta sin deformar: la foto
+    sale cuadrada del editor y el retrato no lo es.
+  */
+  .colaboradores__retrato-foto {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .colaboradores__retrato--con-foto .colaboradores__inicial,
+  .colaboradores__retrato--con-foto .colaboradores__silueta {
+    display: none;
+  }
+
   /* Píldoras de contacto. Sólo existen las que enlacesDisponibles() devuelve. */
   .colaboradores__enlaces {
     display: flex;
@@ -460,6 +479,22 @@
     font: 900 clamp(1.1rem, 5vw, 2.125rem) var(--font-display);
     color: rgba(0, 225, 255, 0.16);
     pointer-events: none;
+  }
+
+  /* La foto de la ficha cubre el retrato; la franja del nombre, que viene
+     después en el DOM, queda encima. */
+  .colaboradores__ficha-foto {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .colaboradores__ficha--con-foto .colaboradores__ficha-cabeza,
+  .colaboradores__ficha--con-foto .colaboradores__ficha-torso,
+  .colaboradores__ficha--con-foto .colaboradores__ficha-inicial {
+    display: none;
   }
 
   .colaboradores__ficha-nombre {

@@ -1,13 +1,18 @@
 /*
-  Cableado del editor de foto de "Mi ficha" (Fase I, 2026-10-13): el diálogo de
-  dos pasos (elegir y encuadrar), el dibujo en canvas, la exportación y la
-  vista previa redonda.
+  Cableado del editor de foto de "Mi ficha" (2026-10-13): el diálogo de dos
+  pasos (elegir y encuadrar), el dibujo en canvas, la exportación y la vista
+  previa redonda.
 
-  FASE I: NADA SE SUBE NI SE GUARDA. El recorte queda en `fotoRecortada` (un
-  Blob WebP; la ENTRADA es sólo JPG o PNG) y se muestra con una URL de objeto; al recargar la página se
-  pierde, y la ayuda del formulario lo dice. La Fase II sube ese Blob; por eso
-  la variable existe aunque hoy sólo la lea esta página. No hay código de red
-  en este archivo a propósito.
+  LA FOTO SE PUBLICA EN EL ACTO. «Guardar cambios» exporta el recorte (un Blob
+  WebP; la ENTRADA es sólo JPG o PNG) y se lo entrega a `subir`, y «Quitar»
+  llama a `quitar`: las dos funciones las pone mi-ficha.js (que conoce la
+  sesión) y salen de core/colaboradores/ficha.service.js. Este archivo no tiene
+  código de red: sólo sabe qué hacer con lo que esas funciones contesten. Es
+  independiente de «Guardar ficha», que nunca toca la foto.
+
+  `crearEditorDeFoto` devuelve `{ fijar }`: mi-ficha.js lo llama al cargar la
+  ficha con la foto que ya estaba guardada, para que la vista previa la
+  muestre tras recargar.
 
   La validación y la geometría (qué cubre el recorte, cuánto puede moverse la
   foto, de qué tamaño sale el archivo) están en mi-ficha.foto.logica.js, que se
@@ -19,9 +24,9 @@
   encuadrado exactamente como se vio.
 */
 
-(function () {
+function crearEditorDeFoto({ subir, quitar }) {
   const dialogo = document.getElementById("editorFoto");
-  if (!dialogo || typeof estadoInicialDeFoto !== "function") return;
+  if (!dialogo || typeof estadoInicialDeFoto !== "function") return null;
 
   const porId = (id) => document.getElementById(id);
   const titulo = porId("editorFotoTitulo");
@@ -36,6 +41,9 @@
   const rotar = porId("editorFotoRotar");
   const rotarValor = porId("editorFotoRotarValor");
 
+  const botonGuardar = porId("editorFotoGuardar");
+  const errorDeFoto = porId("miFichaFotoError");
+
   const vista = porId("miFichaFotoVista");
   const vistaImg = porId("miFichaFotoImg");
   const botonSubir = porId("miFichaFotoSubir");
@@ -47,10 +55,16 @@
   const CLASE_VISTA_CON_FOTO = "mi-ficha__foto-vista--con-foto";
   const TITULO_ELEGIR = "Subir foto";
   const TITULO_EDITAR = "Editar foto";
+  const TEXTO_GUARDAR = botonGuardar.textContent;
+  const TEXTO_GUARDANDO = "Guardando…";
+  const MENSAJE_SUBIR = "No se pudo guardar tu foto. Intenta de nuevo.";
+  const MENSAJE_QUITAR = "No se pudo quitar tu foto. Intenta de nuevo.";
 
-  // Lo que la Fase II va a subir. Null mientras no haya foto.
-  let fotoRecortada = null;
-  let urlDeVista = null;
+  // La foto publicada: su ruta en el bucket. Null mientras no haya foto.
+  let rutaGuardada = null;
+  // Una subida o un borrado en curso: el segundo clic no dispara otra petición.
+  let guardando = false;
+  let quitando = false;
 
   // La imagen abierta en el editor y su encuadre.
   let imagen = null;
@@ -368,7 +382,7 @@
   if (typeof ResizeObserver === "function") new ResizeObserver(alCambiarDeTamano).observe(lienzo);
   else window.addEventListener("resize", alCambiarDeTamano);
 
-  /* ---------- Guardar: exportar y mostrar ---------- */
+  /* ---------- Guardar: exportar y publicar ---------- */
 
   function exportar() {
     const lado = ladoDeSalidaDeFoto(ladoDeRecorteEnPixelesFuente(estado, anchoOriginal, altoOriginal));
@@ -379,48 +393,110 @@
     return new Promise((resolver) => fuera.toBlob(resolver, "image/webp", CALIDAD_WEBP_DE_FOTO));
   }
 
-  function mostrarFoto(blob) {
-    if (urlDeVista) URL.revokeObjectURL(urlDeVista);
-    fotoRecortada = blob;
-    urlDeVista = URL.createObjectURL(blob);
-    vistaImg.src = urlDeVista;
-    actualizarGrupo();
+  // El error de subir lo muestra el propio diálogo (mostrarAviso); éste es
+  // para lo que pasa fuera de él: quitar la foto, o una subida cuyo diálogo ya
+  // se cerró.
+  function mostrarErrorDeFoto(mensaje) {
+    errorDeFoto.textContent = mensaje;
+    errorDeFoto.hidden = mensaje === "";
   }
 
-  function quitarFoto() {
-    if (urlDeVista) URL.revokeObjectURL(urlDeVista);
-    urlDeVista = null;
-    fotoRecortada = null;
-    vistaImg.removeAttribute("src");
-    actualizarGrupo();
-    botonSubir.focus();
-  }
-
-  // «Subir foto» cuando no hay; «Cambiar» y «Quitar» cuando sí.
+  // «Subir foto» cuando no hay; «Cambiar» y «Quitar» cuando sí. Mientras se
+  // quita, los tres se apagan.
   function actualizarGrupo() {
-    const hayFoto = fotoRecortada !== null;
-    vistaImg.hidden = !hayFoto;
-    vista.classList.toggle(CLASE_VISTA_CON_FOTO, hayFoto);
+    const hayFoto = rutaGuardada !== null;
+    const hayImagen = vistaImg.getAttribute("src") !== null;
+    vistaImg.hidden = !hayImagen;
+    vista.classList.toggle(CLASE_VISTA_CON_FOTO, hayImagen);
     botonSubir.hidden = hayFoto;
     botonCambiar.hidden = !hayFoto;
     botonQuitar.hidden = !hayFoto;
+    for (const boton of [botonSubir, botonCambiar, botonQuitar]) boton.disabled = quitando;
   }
 
-  porId("editorFotoGuardar").addEventListener("click", async () => {
-    if (!imagen) return;
+  /*
+    Fija la foto publicada: `ruta` es la del bucket y `url` la pública con la
+    que se pinta. Sin ruta, no hay foto. Con ruta pero sin url (no se pudo
+    armar) la foto existe y se puede quitar, aunque la vista previa no pueda
+    mostrarla. El `src` sólo se escribe si cambió.
+  */
+  function fijar({ ruta = null, url = null } = {}) {
+    rutaGuardada = typeof ruta === "string" && ruta !== "" ? ruta : null;
+    const imagenNueva = rutaGuardada !== null && typeof url === "string" && url !== "" ? url : null;
+    if (imagenNueva === null) {
+      if (vistaImg.getAttribute("src") !== null) vistaImg.removeAttribute("src");
+    } else if (vistaImg.getAttribute("src") !== imagenNueva) {
+      vistaImg.setAttribute("src", imagenNueva);
+    }
+    actualizarGrupo();
+  }
+
+  botonGuardar.addEventListener("click", async () => {
+    if (!imagen || guardando) return;
+    guardando = true;
     const turno = turnoDeLectura;
-    const blob = await exportar();
-    // Si mientras tanto se cerró el diálogo no hay nada que guardar.
-    if (turno !== turnoDeLectura) return;
-    if (!blob) { mostrarAviso(MENSAJES_DE_FOTO.exportar); return; }
-    mostrarFoto(blob);
-    dialogo.close();
-    botonCambiar.focus();
+    botonGuardar.disabled = true;
+    botonGuardar.textContent = TEXTO_GUARDANDO;
+    mostrarAviso("");
+    let mensaje = MENSAJE_SUBIR;
+    try {
+      const blob = await exportar();
+      // Si mientras tanto se cerró el diálogo no hay nada que guardar.
+      if (turno !== turnoDeLectura) return;
+      if (!blob) { mostrarAviso(MENSAJES_DE_FOTO.exportar); return; }
+
+      const resultado = await subir(blob);
+      if (resultado && resultado.ok && resultado.data) {
+        fijar({ ruta: resultado.data.foto_path, url: resultado.data.url });
+        mostrarErrorDeFoto("");
+        // La foto ya está publicada. Si el diálogo se cerró mientras subía,
+        // no hay nada que cerrar ni a dónde devolver el foco.
+        if (turno === turnoDeLectura) {
+          dialogo.close();
+          botonCambiar.focus();
+        }
+        return;
+      }
+      if (resultado && resultado.mensaje) mensaje = resultado.mensaje;
+    } catch (error) {
+      console.error("[mi-ficha.foto]", error);
+    } finally {
+      guardando = false;
+      botonGuardar.disabled = false;
+      botonGuardar.textContent = TEXTO_GUARDAR;
+    }
+    // Sólo se llega acá si algo falló. En el diálogo abierto, el aviso queda
+    // ahí y el diálogo sigue abierto para reintentar.
+    if (turno === turnoDeLectura) mostrarAviso(mensaje);
+    else mostrarErrorDeFoto(mensaje);
+  });
+
+  botonQuitar.addEventListener("click", async () => {
+    if (quitando || rutaGuardada === null) return;
+    quitando = true;
+    mostrarErrorDeFoto("");
+    actualizarGrupo();
+    let resultado = null;
+    try {
+      resultado = await quitar(rutaGuardada);
+    } catch (error) {
+      console.error("[mi-ficha.foto]", error);
+    }
+    quitando = false;
+    if (resultado && resultado.ok) {
+      fijar();
+      botonSubir.focus();
+      return;
+    }
+    // La foto sigue publicada: no se toca la vista previa.
+    mostrarErrorDeFoto((resultado && resultado.mensaje) || MENSAJE_QUITAR);
+    actualizarGrupo();
+    botonQuitar.focus();
   });
 
   botonSubir.addEventListener("click", abrirEditor);
   botonCambiar.addEventListener("click", abrirEditor);
-  botonQuitar.addEventListener("click", quitarFoto);
 
   actualizarGrupo();
-})();
+  return Object.freeze({ fijar });
+}

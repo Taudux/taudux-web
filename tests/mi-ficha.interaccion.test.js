@@ -24,6 +24,8 @@ const LOGICA = leer(`${CARPETA}/mi-ficha.logica.js`);
 const LOGICA_ETIQUETAS = leer(`${CARPETA}/mi-ficha.etiquetas.logica.js`);
 const ETIQUETAS = leer(`${CARPETA}/mi-ficha.etiquetas.js`);
 const PAGINA = leer(`${CARPETA}/mi-ficha.js`);
+const LOGICA_FOTO = leer(`${CARPETA}/mi-ficha.foto.logica.js`);
+const FOTO = leer(`${CARPETA}/mi-ficha.foto.js`);
 const AUTH_UI = leer("src/app/features/auth/auth-ui.js");
 
 // El lado "esperado" de cada comparación sale de la misma lógica que corre en
@@ -68,6 +70,19 @@ const FICHA = Object.freeze({
 });
 
 const exito = (data) => ({ ok: true, data });
+
+// La foto: rutas y URLs de mentira, con la forma de las de verdad.
+const URL_BASE_FOTOS = "https://fotos.example/colaboradores-fotos";
+const RUTA_FOTO_GUARDADA = "u-1/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.webp";
+const RUTA_FOTO_NUEVA = "u-1/9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b.webp";
+const URL_FOTO_GUARDADA = `${URL_BASE_FOTOS}/${RUTA_FOTO_GUARDADA}`;
+const URL_FOTO_NUEVA = `${URL_BASE_FOTOS}/${RUTA_FOTO_NUEVA}`;
+const BLOB_EXPORTADO = Object.freeze({ type: "image/webp", size: 4321 });
+
+// El contexto 2D del canvas: acepta todo lo que el editor dibuja y no pinta nada.
+function contextoDeDibujo() {
+  return new Proxy({}, { get: (_, nombre) => (nombre.startsWith("image") ? undefined : () => {}), set: () => true });
+}
 const FALLO_AL_CARGAR = Object.freeze({ ok: false, mensaje: "No se pudo cargar tu ficha. Intenta de nuevo." });
 const FALLO_AL_GUARDAR = Object.freeze({ ok: false, mensaje: "Revisa tu ficha: algún dato no tiene el formato esperado." });
 
@@ -374,6 +389,8 @@ function montarEsqueleto(documento, html) {
                   llegó), como en la mayoría de las páginas de verdad.
     catalogoColgado  un cargarCatalogoDeEtiquetas() que nunca resuelve: el
                   asset estático colgado. Pisa a `catalogo`.
+    subirFoto     el subirFotoDeMiFicha() falso (por defecto, siempre sube bien).
+    quitarFoto    el quitarFotoDeMiFicha() falso (por defecto, siempre quita bien).
     sin           nombres de funciones globales que NO se inyectan (un script
                   que no llegó).
 */
@@ -384,6 +401,8 @@ function abrirPagina({
   guardar,
   catalogo,
   catalogoColgado = false,
+  subirFoto,
+  quitarFoto,
   sin = [],
 } = {}) {
   const alCargar = [];
@@ -391,6 +410,11 @@ function abrirPagina({
     activeElement: null,
     createElement: (etiqueta) => {
       const nodo = new Nodo(documento, etiqueta);
+      // El canvas con el que el editor de foto exporta el recorte.
+      if (etiqueta === "canvas") {
+        nodo.getContext = () => contextoDeDibujo();
+        nodo.toBlob = (alTerminar) => alTerminar(structuredClone(BLOB_EXPORTADO));
+      }
       // `animate` sólo existe si un test lo pide (documento.animar): sin él,
       // el nodo es como en un navegador sin Web Animations.
       if (documento.animar) nodo.animate = (...argumentos) => documento.animar(nodo, ...argumentos);
@@ -412,6 +436,21 @@ function abrirPagina({
   const ids = new Map();
   recorrer(raiz, (nodo) => { if (nodo.attributes.id) ids.set(nodo.attributes.id, nodo); });
 
+  // El editor de foto bloquea el scroll de la página con una clase en <html>.
+  documento.documentElement = new Nodo(documento, "html");
+
+  // Un <dialog> mínimo: `close` emite el evento del mismo nombre, que es lo
+  // que el editor de foto escucha para devolver el scroll a la página.
+  const dialogoDeFoto = ids.get("editorFoto");
+  dialogoDeFoto.open = false;
+  dialogoDeFoto.showModal = () => { dialogoDeFoto.open = true; };
+  dialogoDeFoto.close = () => {
+    if (!dialogoDeFoto.open) return;
+    dialogoDeFoto.open = false;
+    dialogoDeFoto.disparar("close");
+  };
+  ids.get("editorFotoLienzo").getContext = () => contextoDeDibujo();
+
   const requerirSesion = enSecuencia(sesion);
   const guardarMiFicha = guardar ?? (async (...argumentos) => {
     guardarMiFicha.llamadas.push(structuredClone(argumentos));
@@ -421,7 +460,15 @@ function abrirPagina({
   const toasts = [];
   const errores = [];
 
+  const subirFotoDeMiFicha = subirFoto ?? enSecuencia(exito({ foto_path: RUTA_FOTO_NUEVA, url: URL_FOTO_NUEVA }));
+  const quitarFotoDeMiFicha = quitarFoto ?? enSecuencia({ ok: true });
+
   const globales = {
+    subirFotoDeMiFicha,
+    quitarFotoDeMiFicha,
+    // Como el real: sólo arma la URL de una ruta; sin ruta, null.
+    urlDeFotoDeMiFicha: (ruta) => (typeof ruta === "string" && ruta !== "" ? `${URL_BASE_FOTOS}/${ruta}` : null),
+    createImageBitmap: async () => ({ width: 800, height: 600, close() {} }),
     requerirSesion,
     obtenerPerfil: perfil,
     obtenerMiFicha: ficha,
@@ -484,9 +531,11 @@ function abrirPagina({
   const GLOBAL_DEL_SCRIPT = [
     [LOGICA_ETIQUETAS, "agregarEtiqueta"],
     [ETIQUETAS, "crearEditorDeEtiquetas"],
+    [FOTO, "crearEditorDeFoto"],
   ];
 
   vm.runInContext(LOGICA, contexto);
+  vm.runInContext(LOGICA_FOTO, contexto);
   vm.runInContext(AUTH_UI, contexto);
   for (const [fuente, global] of GLOBAL_DEL_SCRIPT) {
     if (!sin.includes(global)) vm.runInContext(fuente, contexto);
@@ -512,6 +561,8 @@ function abrirPagina({
     obtenerPerfil: perfil,
     obtenerMiFicha: ficha,
     guardarMiFicha,
+    subirFotoDeMiFicha,
+    quitarFotoDeMiFicha,
     toasts,
     errores,
     texto: (id) => porId(id).textContent,
@@ -783,7 +834,8 @@ test("a missing script shows a page error instead of throwing, and asks nothing"
   // de mostrar el aviso de error con gracia.
   for (const faltante of [
     "guardarMiFicha", "obtenerPerfil", "requerirSesion", "mostrarToast",
-    "crearEditorDeEtiquetas",
+    "crearEditorDeEtiquetas", "crearEditorDeFoto",
+    "subirFotoDeMiFicha", "quitarFotoDeMiFicha", "urlDeFotoDeMiFicha",
   ]) {
     const pagina = await cargarPagina({ sin: [faltante] });
 
@@ -1954,4 +2006,245 @@ test("prefers-reduced-motion switches the slide off", async () => {
 
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "C"]);
   assert.deepEqual(animaciones, []);
+});
+
+/* ---------- La foto: se publica en el acto ---------- */
+
+const FICHA_CON_FOTO = Object.freeze({ ...FICHA, foto_path: RUTA_FOTO_GUARDADA });
+const esperarUnTurno = () => new Promise((resolver) => setImmediate(resolver));
+
+const paginaConFoto = (opciones = {}) => cargarPagina({ ficha: enSecuencia(exito(FICHA_CON_FOTO)), ...opciones });
+
+// Lo que se ve en el grupo de la foto.
+function estadoDeLaFoto(pagina) {
+  const img = pagina.porId("miFichaFotoImg");
+  return {
+    src: img.getAttribute("src"),
+    imgOculta: img.hidden,
+    conFoto: pagina.porId("miFichaFotoVista").classList.contains("mi-ficha__foto-vista--con-foto"),
+    subir: !pagina.porId("miFichaFotoSubir").hidden,
+    cambiar: !pagina.porId("miFichaFotoCambiar").hidden,
+    quitar: !pagina.porId("miFichaFotoQuitar").hidden,
+  };
+}
+const SIN_FOTO = Object.freeze({ src: null, imgOculta: true, conFoto: false, subir: true, cambiar: false, quitar: false });
+const CON_FOTO_GUARDADA = Object.freeze({
+  src: URL_FOTO_GUARDADA, imgOculta: false, conFoto: true, subir: false, cambiar: true, quitar: true,
+});
+
+// Quien abre el diálogo, elige un archivo y espera a que el editor lo decodifique.
+async function abrirYElegirFoto(pagina, boton) {
+  pagina.porId(boton).disparar("click");
+  const archivo = pagina.porId("editorFotoArchivo");
+  archivo.files = [{ type: "image/jpeg", size: 1000 }];
+  archivo.disparar("change");
+  await esperarUnTurno();
+}
+
+const guardarFoto = (pagina) => Promise.all(pagina.porId("editorFotoGuardar").disparar("click"));
+const quitarFotoDeLaPagina = (pagina) => Promise.all(pagina.porId("miFichaFotoQuitar").disparar("click"));
+
+test("the saved photo shows in the preview after loading, with Cambiar and Quitar", async () => {
+  const pagina = await paginaConFoto();
+
+  assert.deepEqual(estadoDeLaFoto(pagina), CON_FOTO_GUARDADA);
+});
+
+test("without a saved photo, or without a card at all, the group offers only Subir foto", async () => {
+  for (const ficha of [exito(FICHA), exito({ ...FICHA, foto_path: null }), exito(null)]) {
+    const pagina = await cargarPagina({ ficha: enSecuencia(ficha) });
+
+    assert.deepEqual(estadoDeLaFoto(pagina), SIN_FOTO);
+  }
+});
+
+test("Guardar cambios uploads the cropped WebP, shows the public URL, closes the dialog and focuses Cambiar", async () => {
+  const pagina = await paginaConFoto();
+  await abrirYElegirFoto(pagina, "miFichaFotoCambiar");
+  assert.equal(pagina.porId("editorFoto").open, true);
+
+  await guardarFoto(pagina);
+
+  assert.deepEqual(pagina.subirFotoDeMiFicha.llamadas, [["u-1", BLOB_EXPORTADO]]);
+  assert.deepEqual(estadoDeLaFoto(pagina), { ...CON_FOTO_GUARDADA, src: URL_FOTO_NUEVA });
+  assert.equal(pagina.porId("editorFoto").open, false);
+  assertFocoEn(pagina, "miFichaFotoCambiar");
+  assert.equal(pagina.porId("editorFotoGuardar").disabled, false);
+  assert.equal(pagina.porId("editorFotoGuardar").textContent, "Guardar cambios");
+});
+
+test("a first photo, from Subir foto, swaps the group to Cambiar and Quitar", async () => {
+  const pagina = await cargarPagina();
+  await abrirYElegirFoto(pagina, "miFichaFotoSubir");
+
+  await guardarFoto(pagina);
+
+  assert.deepEqual(estadoDeLaFoto(pagina), { ...CON_FOTO_GUARDADA, src: URL_FOTO_NUEVA });
+  assert.equal(pagina.subirFotoDeMiFicha.llamadas.length, 1);
+});
+
+test("while the photo uploads the button says Guardando… and is off, and a second click uploads nothing more", async () => {
+  const subida = diferido();
+  const subirFoto = enSecuencia(subida.promesa);
+  const pagina = await paginaConFoto({ subirFoto });
+  await abrirYElegirFoto(pagina, "miFichaFotoCambiar");
+
+  const primero = guardarFoto(pagina);
+  await esperarUnTurno();
+  const boton = pagina.porId("editorFotoGuardar");
+  assert.equal(boton.disabled, true);
+  assert.equal(boton.textContent, "Guardando…");
+  await guardarFoto(pagina);
+  assert.equal(subirFoto.llamadas.length, 1);
+
+  subida.resolver(exito({ foto_path: RUTA_FOTO_NUEVA, url: URL_FOTO_NUEVA }));
+  await primero;
+  assert.equal(boton.disabled, false);
+  assert.equal(boton.textContent, "Guardar cambios");
+  assert.equal(estadoDeLaFoto(pagina).src, URL_FOTO_NUEVA);
+});
+
+test("a failed upload keeps the dialog open with the message, the old photo untouched and the button back", async () => {
+  const subirFoto = enSecuencia({ ok: false, mensaje: "Guarda tu ficha primero; después podrás subir tu foto." });
+  const pagina = await paginaConFoto({ subirFoto });
+  await abrirYElegirFoto(pagina, "miFichaFotoCambiar");
+
+  await guardarFoto(pagina);
+
+  const aviso = pagina.porId("editorFotoAviso");
+  assert.equal(aviso.hidden, false);
+  assert.equal(aviso.textContent, "Guarda tu ficha primero; después podrás subir tu foto.");
+  assert.equal(pagina.porId("editorFoto").open, true);
+  assert.deepEqual(estadoDeLaFoto(pagina), CON_FOTO_GUARDADA);
+  const boton = pagina.porId("editorFotoGuardar");
+  assert.equal(boton.disabled, false);
+  assert.equal(boton.textContent, "Guardar cambios");
+
+  // Reintentar: el aviso viejo se limpia al empezar.
+  const reintento = enSecuencia(exito({ foto_path: RUTA_FOTO_NUEVA, url: URL_FOTO_NUEVA }));
+  pagina.contexto.subirFotoDeMiFicha = reintento;
+  await guardarFoto(pagina);
+  assert.equal(pagina.porId("editorFoto").open, false);
+  assert.equal(estadoDeLaFoto(pagina).src, URL_FOTO_NUEVA);
+});
+
+test("an upload that throws shows the generic message in the dialog and does not break the page", async () => {
+  const subirFoto = enSecuencia(new Error("red caída"));
+  const pagina = await paginaConFoto({ subirFoto });
+  await abrirYElegirFoto(pagina, "miFichaFotoCambiar");
+
+  await guardarFoto(pagina);
+
+  assert.equal(pagina.porId("editorFotoAviso").textContent, "No se pudo guardar tu foto. Intenta de nuevo.");
+  assert.equal(pagina.porId("editorFoto").open, true);
+  assert.deepEqual(estadoDeLaFoto(pagina), CON_FOTO_GUARDADA);
+  assert.equal(pagina.porId("editorFotoGuardar").disabled, false);
+});
+
+test("a failure after the dialog was closed is shown next to the photo, not lost", async () => {
+  const subida = diferido();
+  const pagina = await paginaConFoto({ subirFoto: enSecuencia(subida.promesa) });
+  await abrirYElegirFoto(pagina, "miFichaFotoCambiar");
+
+  const guardando = guardarFoto(pagina);
+  await esperarUnTurno();
+  pagina.porId("editorFoto").close();
+  subida.resolver({ ok: false, mensaje: "No se pudo guardar tu foto. Intenta de nuevo." });
+  await guardando;
+
+  const error = pagina.porId("miFichaFotoError");
+  assert.equal(error.hidden, false);
+  assert.equal(error.textContent, "No se pudo guardar tu foto. Intenta de nuevo.");
+  assert.deepEqual(estadoDeLaFoto(pagina), CON_FOTO_GUARDADA);
+});
+
+test("Quitar removes the photo through the service and goes back to Subir foto", async () => {
+  const pagina = await paginaConFoto();
+
+  await quitarFotoDeLaPagina(pagina);
+
+  assert.deepEqual(pagina.quitarFotoDeMiFicha.llamadas, [["u-1", RUTA_FOTO_GUARDADA]]);
+  assert.deepEqual(estadoDeLaFoto(pagina), SIN_FOTO);
+  assertFocoEn(pagina, "miFichaFotoSubir");
+  assert.equal(pagina.porId("miFichaFotoError").hidden, true);
+});
+
+test("a failed Quitar keeps the photo and shows the error next to it; a later success clears it", async () => {
+  const quitarFoto = enSecuencia(
+    { ok: false, mensaje: "No se pudo quitar tu foto. Intenta de nuevo." },
+    { ok: true },
+  );
+  const pagina = await paginaConFoto({ quitarFoto });
+
+  await quitarFotoDeLaPagina(pagina);
+
+  const error = pagina.porId("miFichaFotoError");
+  assert.equal(error.hidden, false);
+  assert.equal(error.textContent, "No se pudo quitar tu foto. Intenta de nuevo.");
+  assert.deepEqual(estadoDeLaFoto(pagina), CON_FOTO_GUARDADA);
+  for (const id of ["miFichaFotoSubir", "miFichaFotoCambiar", "miFichaFotoQuitar"]) {
+    assert.equal(pagina.porId(id).disabled, false, `${id} vuelve a estar disponible`);
+  }
+  assertFocoEn(pagina, "miFichaFotoQuitar");
+
+  await quitarFotoDeLaPagina(pagina);
+  assert.deepEqual(estadoDeLaFoto(pagina), SIN_FOTO);
+  assert.equal(error.hidden, true);
+  assert.equal(error.textContent, "");
+});
+
+test("a Quitar that throws is a failed Quitar: the photo stays", async () => {
+  const pagina = await paginaConFoto({ quitarFoto: enSecuencia(new Error("red caída")) });
+
+  await quitarFotoDeLaPagina(pagina);
+
+  assert.equal(pagina.porId("miFichaFotoError").textContent, "No se pudo quitar tu foto. Intenta de nuevo.");
+  assert.deepEqual(estadoDeLaFoto(pagina), CON_FOTO_GUARDADA);
+});
+
+test("while Quitar runs the three photo buttons are off and a second click removes nothing more", async () => {
+  const quitada = diferido();
+  const quitarFoto = enSecuencia(quitada.promesa);
+  const pagina = await paginaConFoto({ quitarFoto });
+
+  const primero = quitarFotoDeLaPagina(pagina);
+  for (const id of ["miFichaFotoSubir", "miFichaFotoCambiar", "miFichaFotoQuitar"]) {
+    assert.equal(pagina.porId(id).disabled, true, id);
+  }
+  await quitarFotoDeLaPagina(pagina);
+  assert.equal(quitarFoto.llamadas.length, 1);
+
+  quitada.resolver({ ok: true });
+  await primero;
+  assert.deepEqual(estadoDeLaFoto(pagina), SIN_FOTO);
+  assert.equal(pagina.porId("miFichaFotoSubir").disabled, false);
+});
+
+test("Guardar ficha never sends foto_path and leaves the shown photo alone", async () => {
+  const pagina = await paginaConFoto();
+
+  await pagina.enviar();
+
+  assert.equal(pagina.guardarMiFicha.llamadas.length, 1);
+  assert.equal(Object.hasOwn(pagina.guardarMiFicha.llamadas[0][1], "foto_path"), false);
+  assert.deepEqual(estadoDeLaFoto(pagina), CON_FOTO_GUARDADA);
+});
+
+test("Guardar ficha shows the photo the database returns with the saved card", async () => {
+  const guardar = enSecuencia(exito({ ...FICHA, foto_path: RUTA_FOTO_NUEVA }));
+  const pagina = await paginaConFoto({ guardar });
+
+  await pagina.enviar();
+
+  assert.deepEqual(estadoDeLaFoto(pagina), { ...CON_FOTO_GUARDADA, src: URL_FOTO_NUEVA });
+});
+
+test("a card saved for the first time, without photo, keeps the group on Subir foto", async () => {
+  const guardar = enSecuencia(exito({ ...FICHA, foto_path: null }));
+  const pagina = await cargarPagina({ guardar });
+  llenar(pagina, VALORES_VALIDOS);
+
+  await pagina.enviar();
+
+  assert.deepEqual(estadoDeLaFoto(pagina), SIN_FOTO);
 });

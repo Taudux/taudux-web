@@ -68,7 +68,14 @@ const FORM_HTML_SOURCE = fs.readFileSync(FORM_HTML_PATH, "utf8");
 // storage.objects la que decide quién (ver supabase/tests/0048_slides_
 // subidas.test.sql). Las portadas de cursos siguen sin ninguna política de
 // cliente: el guard de abajo las sigue vigilando en todo lo demás.
+//
+// Las fotos de colaboradores (0050) son la otra: el bucket PÚBLICO
+// `colaboradores-fotos`. ficha.service.js sube y retira la foto propia con la
+// sesión de la persona (la RLS de storage.objects decide, ver supabase/tests/
+// 0050_foto_colaborador.test.sql) y los dos servicios arman su URL pública.
 const EXCEPCIONES_DE_STORAGE_DIRECTO = new Set([
+  "app/core/colaboradores/colaboradores.service.js",
+  "app/core/colaboradores/ficha.service.js",
   "app/core/slides/slides.service.js",
   "content/slides/_subida/subida.js",
 ]);

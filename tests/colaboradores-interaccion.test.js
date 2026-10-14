@@ -1595,3 +1595,159 @@ test("an identity resolved while a shared profile is open still lands the link i
   assertRosterConSeleccion(pagina, yo);
   assert.deepEqual(fichasConEditar(pagina), [yo]);
 });
+
+/* ---------- La foto (0050) ---------- */
+
+const URL_FOTO = "https://fotos.example/colaboradores-fotos/u/uno.webp";
+const URL_FOTO_OTRA = "https://fotos.example/colaboradores-fotos/u/dos.webp";
+const CLASE_FICHA_CON_FOTO = "colaboradores__ficha--con-foto";
+const CLASE_RETRATO_CON_FOTO = "colaboradores__retrato--con-foto";
+
+// Qué muestra un retrato: su foto, y si el retrato está en modo foto.
+function retratoDe(pagina, retrato, foto) {
+  const imagen = pagina.porId(foto);
+  const mostrada = {
+    oculta: imagen.hidden,
+    conFoto: pagina.porId(retrato).classList.contains(CLASE_RETRATO_CON_FOTO),
+  };
+  return imagen.hidden ? mostrada : { src: imagen.getAttribute("src"), ...mostrada };
+}
+// Sin foto sólo importa que no se vea: la imagen oculta puede conservar el
+// `src` anterior, y por eso aquí no se compara.
+const SIN_FOTO_EN_RETRATO = Object.freeze({ oculta: true, conFoto: false });
+const con = (url) => ({ src: url, oculta: false, conFoto: true });
+const previa = (pagina) => retratoDe(pagina, "previaRetrato", "previaFoto");
+const perfilDeFoto = (pagina) => retratoDe(pagina, "perfilRetrato", "perfilFoto");
+const imagenesDe = (ficha) => ficha.children.filter((hijo) => hijo.tagName === "IMG");
+
+test("a tile with a photo gets an img after the silhouette and before the name, and the with-photo state", async () => {
+  const pagina = await cargarPagina({ retoques: { 1: { foto: URL_FOTO } } });
+  const fichas = pagina.fichas();
+
+  const [imagen, ...otras] = imagenesDe(fichas[1]);
+  assert.equal(otras.length, 0);
+  assert.equal(imagen.className, "colaboradores__ficha-foto");
+  assert.equal(imagen.getAttribute("src"), URL_FOTO);
+  assert.equal(imagen.getAttribute("alt"), "", "decorativa: el aria-label del botón ya nombra a la persona");
+  assert.equal(imagen.getAttribute("loading"), "lazy");
+  assert.equal(imagen.getAttribute("decoding"), "async");
+  assert.ok(fichas[1].classList.contains(CLASE_FICHA_CON_FOTO));
+
+  const clases = fichas[1].children.map((hijo) => hijo.className);
+  assert.deepEqual(clases, [
+    "colaboradores__ficha-cabeza",
+    "colaboradores__ficha-torso",
+    "colaboradores__ficha-inicial",
+    "colaboradores__ficha-foto",
+    "colaboradores__ficha-nombre",
+  ]);
+});
+
+test("tiles without a photo are exactly as before: silhouette, initial, name, no img", async () => {
+  for (const foto of [undefined, null, ""]) {
+    const pagina = await cargarPagina({ retoques: { 0: { foto } } });
+    const ficha = pagina.fichas()[0];
+
+    assert.equal(imagenesDe(ficha).length, 0, `foto = ${JSON.stringify(foto)}`);
+    assert.equal(ficha.classList.contains(CLASE_FICHA_CON_FOTO), false);
+    assert.deepEqual(ficha.children.map((hijo) => hijo.className), [
+      "colaboradores__ficha-cabeza",
+      "colaboradores__ficha-torso",
+      "colaboradores__ficha-inicial",
+      "colaboradores__ficha-nombre",
+    ]);
+  }
+});
+
+test("the preview shows the hovered person's photo and goes back to the silhouette without one", async () => {
+  const pagina = await cargarPagina({ retoques: { 1: { foto: URL_FOTO }, 2: { foto: URL_FOTO_OTRA } } });
+  const fichas = pagina.fichas();
+
+  assert.deepEqual(previa(pagina), SIN_FOTO_EN_RETRATO);
+
+  fichas[1].disparar("mouseenter");
+  assert.deepEqual(previa(pagina), con(URL_FOTO));
+  assert.equal(pagina.texto("previaNombre"), MUESTRA[1].nombre);
+
+  fichas[2].disparar("mouseenter");
+  assert.deepEqual(previa(pagina), con(URL_FOTO_OTRA));
+
+  fichas[0].disparar("mouseenter");
+  assert.deepEqual(previa(pagina), SIN_FOTO_EN_RETRATO);
+  assert.equal(pagina.texto("previaInicial"), "V", "la inicial sigue ahí para quien no tiene foto");
+
+  fichas[1].disparar("mouseenter");
+  fichas[1].disparar("mouseleave");
+  assert.deepEqual(previa(pagina), SIN_FOTO_EN_RETRATO);
+});
+
+test("the preview does not rewrite the src when the photo is the same", async () => {
+  const pagina = await cargarPagina({ retoques: { 1: { foto: URL_FOTO } } });
+  const imagen = pagina.porId("previaFoto");
+  let escrituras = 0;
+  const original = imagen.setAttribute.bind(imagen);
+  imagen.setAttribute = (nombre, valor) => { if (nombre === "src") escrituras += 1; original(nombre, valor); };
+  const fichas = pagina.fichas();
+
+  fichas[1].disparar("mouseenter");
+  fichas[1].disparar("mouseleave");
+  fichas[1].disparar("mouseenter");
+  fichas[1].disparar("focus");
+
+  assert.equal(escrituras, 1);
+  assert.deepEqual(previa(pagina), con(URL_FOTO));
+});
+
+test("a person with a photo but no profile card still shows the photo in the preview, with only the name", async () => {
+  const pagina = await cargarPagina({ retoques: { 1: { ...FICHA_EN_NULL, foto: URL_FOTO } } });
+
+  pagina.fichas()[1].disparar("mouseenter");
+
+  assert.deepEqual(previa(pagina), con(URL_FOTO));
+  assert.equal(pagina.porId("previaRol").hidden, true);
+});
+
+test("the profile shows the photo of that person and not the one of the previous profile", async () => {
+  const pagina = await cargarPagina({ retoques: { 1: { foto: URL_FOTO } } });
+  const fichas = pagina.fichas();
+
+  fichas[1].disparar("click");
+  assert.equal(pagina.porId("colaboradoresPerfil").hidden, false);
+  assert.deepEqual(perfilDeFoto(pagina), con(URL_FOTO));
+
+  pagina.irA(rutaDe(0));
+  assert.equal(pagina.porId("colaboradoresPerfil").hidden, false);
+  assert.deepEqual(perfilDeFoto(pagina), SIN_FOTO_EN_RETRATO);
+  assert.notEqual(pagina.texto("perfilInicial"), "", "sin foto, la inicial de siempre");
+});
+
+test("a photo the browser cannot load falls back to the silhouette everywhere", async () => {
+  const pagina = await cargarPagina({ retoques: { 1: { foto: URL_FOTO }, 2: { foto: URL_FOTO_OTRA } } });
+  const fichas = pagina.fichas();
+  fichas[1].disparar("mouseenter");
+  assert.deepEqual(previa(pagina), con(URL_FOTO));
+
+  imagenesDe(fichas[1])[0].disparar("error");
+
+  assert.equal(fichas[1].classList.contains(CLASE_FICHA_CON_FOTO), false);
+  assert.equal(imagenesDe(fichas[1])[0].hidden, true);
+  assert.deepEqual(previa(pagina), SIN_FOTO_EN_RETRATO);
+  assert.ok(fichas[2].classList.contains(CLASE_FICHA_CON_FOTO), "las demás no se tocan");
+
+  fichas[1].disparar("click");
+  assert.deepEqual(perfilDeFoto(pagina), SIN_FOTO_EN_RETRATO);
+});
+
+test("the preview and profile photos are decorative and start hidden in the markup", () => {
+  const html = leer("index.html").replace(/<!--[\s\S]*?-->/g, "");
+  for (const id of ["previaFoto", "perfilFoto"]) {
+    const marca = html.match(new RegExp(`<img\\b[^>]*\\sid="${id}"[^>]*>`));
+    assert.ok(marca, `falta #${id}`);
+    assert.match(marca[0], /\salt=""/);
+    assert.match(marca[0], /\shidden\b/);
+    assert.match(marca[0], /class="colaboradores__retrato-foto"/);
+  }
+  for (const id of ["previaRetrato", "perfilRetrato"]) {
+    assert.match(html, new RegExp(`<div\\b[^>]*\\sid="${id}"[^>]*\\saria-hidden="true"`));
+  }
+});

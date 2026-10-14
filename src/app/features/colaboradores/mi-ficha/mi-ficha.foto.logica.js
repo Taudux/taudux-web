@@ -1,5 +1,5 @@
 /*
-  Lógica pura del editor de foto de "Mi ficha" (Fase I, 2026-10-13): validar el
+  Lógica pura del editor de foto de "Mi ficha" (2026-10-13): validar el
   archivo, el estado del encuadre y la geometría del recorte. Sin DOM, sin
   canvas y sin red, como el resto de los .logica.js: el dibujo y los eventos
   viven en mi-ficha.foto.js, que depende de estas globales y por eso se carga

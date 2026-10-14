@@ -48,8 +48,9 @@
 
       <section class="colaboradores__roster" id="colaboradoresRoster" aria-labelledby="colaboradoresTitulo">
         <div class="colaboradores__previa">
-          <div class="colaboradores__retrato" aria-hidden="true">
+          <div class="colaboradores__retrato" id="previaRetrato" aria-hidden="true">
             <span class="colaboradores__inicial" id="previaInicial">?</span>
+            <img class="colaboradores__retrato-foto" id="previaFoto" alt="" hidden>
           </div>
           <div class="colaboradores__identidad" aria-live="polite" aria-atomic="true">
             <p class="colaboradores__nombre" id="previaNombre">¿Quién?</p>
@@ -90,10 +91,11 @@
         </div>
 
         <div class="colaboradores__figura">
-          <div class="colaboradores__retrato colaboradores__retrato--perfil" aria-hidden="true">
+          <div class="colaboradores__retrato colaboradores__retrato--perfil" id="perfilRetrato" aria-hidden="true">
             <span class="colaboradores__silueta colaboradores__silueta--cabeza"></span>
             <span class="colaboradores__silueta colaboradores__silueta--torso"></span>
             <span class="colaboradores__inicial" id="perfilInicial"></span>
+            <img class="colaboradores__retrato-foto" id="perfilFoto" alt="" hidden>
           </div>
           <ul class="colaboradores__enlaces" id="perfilEnlaces" hidden></ul>
         </div>

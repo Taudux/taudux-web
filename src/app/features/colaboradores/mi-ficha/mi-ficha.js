@@ -6,8 +6,9 @@
   etiquetas —instanciado tres veces: herramientas, habilidades e idiomas—, en
   mi-ficha.etiquetas.js
   (crearEditorDeEtiquetas), con su lógica pura de agregar/quitar/mover/sugerir en
-  mi-ficha.etiquetas.logica.js; la lectura y el guardado, en
-  core/colaboradores/ficha.service.js. Todos se
+  mi-ficha.etiquetas.logica.js; el editor de foto (crearEditorDeFoto), en
+  mi-ficha.foto.js, con su lógica pura en mi-ficha.foto.logica.js; la lectura,
+  el guardado y la foto, en core/colaboradores/ficha.service.js. Todos se
   cargan antes y dejan sus funciones en el ámbito global.
   establecerFormularioOcupado sale de features/auth/auth-ui.js.
 
@@ -17,6 +18,10 @@
   → formulario lleno, o vacío si todavía no hay ficha. Cualquier fallo de
   carga queda en el aviso con "Reintentar"; a quien no colabora se le dice,
   sin redirigirlo en silencio.
+
+  La foto se publica aparte de la ficha: crearEditorDeFoto recibe de acá las
+  funciones que suben y quitan (con el id de la sesión) y, al cargar la ficha,
+  la foto que ya estaba guardada. «Guardar ficha» nunca la manda.
 
   Los errores de cada campo van junto al campo, todos de una vez. La región
   role="alert" es sólo para los errores del servidor, y nunca se usa el canal
@@ -32,6 +37,7 @@
   const ERROR_DE_PAGINA = "No se pudo cargar la página. Recárgala para intentar de nuevo.";
   const SOLO_COLABORADORES = "Esta sección es sólo para colaboradores.";
   const SIN_NOMBRE = "Tu cuenta todavía no tiene nombre.";
+  const SIN_SESION_PARA_FOTO = "No se encontró tu sesión. Recarga la página e inicia sesión de nuevo para guardar tu foto.";
 
   /*
     Los tres campos que son listas de etiquetas. Una tabla y no tres bloques
@@ -147,6 +153,9 @@
       obtenerPerfil: typeof obtenerPerfil,
       obtenerMiFicha: typeof obtenerMiFicha,
       guardarMiFicha: typeof guardarMiFicha,
+      subirFotoDeMiFicha: typeof subirFotoDeMiFicha,
+      quitarFotoDeMiFicha: typeof quitarFotoDeMiFicha,
+      urlDeFotoDeMiFicha: typeof urlDeFotoDeMiFicha,
       establecerFormularioOcupado: typeof establecerFormularioOcupado,
       formularioEstaOcupado: typeof formularioEstaOcupado,
       mostrarToast: typeof mostrarToast,
@@ -156,6 +165,7 @@
       nombreVisibleMiFicha: typeof nombreVisibleMiFicha,
       rutaPerfilPublicoMiFicha: typeof rutaPerfilPublicoMiFicha,
       crearEditorDeEtiquetas: typeof crearEditorDeEtiquetas,
+      crearEditorDeFoto: typeof crearEditorDeFoto,
     };
     return Object.keys(disponibles).filter((nombre) => disponibles[nombre] !== "function");
   }
@@ -344,6 +354,18 @@
 
     /* ---------- Valores ---------- */
 
+    /*
+      La foto guardada va a la vista previa. Una ficha que no trae `foto_path`
+      (la que se arma del formulario cuando el guardado no devuelve fila) no
+      dice nada de la foto y no la toca; `null` (todavía no hay ficha) sí la
+      deja en blanco.
+    */
+    function mostrarFotoGuardada(ficha) {
+      if (ficha != null && !("foto_path" in ficha)) return;
+      const ruta = ficha?.foto_path ?? null;
+      foto?.fijar({ ruta, url: urlDeFotoDeMiFicha(ruta) });
+    }
+
     function llenarFormulario(ficha) {
       const valores = valoresFormularioMiFicha(ficha);
       for (const [campo, { controles }] of Object.entries(campos)) {
@@ -352,6 +374,7 @@
       }
       radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
       for (const [campo, editor] of Object.entries(editores)) editor.establecer(valores[campo]);
+      mostrarFotoGuardada(ficha);
       actualizarContadorBio();
       ajustarAltoBio();
       limpiarErrores();
@@ -394,6 +417,10 @@
       lanzaría antes de llegar al aviso.
     */
     let editores = {};
+
+    // El editor de foto (mi-ficha.foto.js). Null hasta que arranca, y null si
+    // su diálogo no está en el HTML: la ficha se edita igual, sin foto.
+    let foto = null;
 
     /*
       Desde 2026-10-13 el catálogo es lo único que se puede agregar: si el
@@ -556,6 +583,16 @@
         limpiarError: () => limpiarError(definicion.campo),
       }),
     ]));
+
+    // Las dos operaciones de la foto salen de acá porque acá vive la sesión.
+    foto = crearEditorDeFoto({
+      subir: async (blob) => (sesion?.user?.id
+        ? subirFotoDeMiFicha(sesion.user.id, blob)
+        : { ok: false, mensaje: SIN_SESION_PARA_FOTO }),
+      quitar: async (ruta) => (sesion?.user?.id
+        ? quitarFotoDeMiFicha(sesion.user.id, ruta)
+        : { ok: false, mensaje: SIN_SESION_PARA_FOTO }),
+    });
 
     // Devuelve la promesa del arranque: el navegador la ignora, los tests la
     // esperan.

@@ -69,9 +69,9 @@
           <!-- Sólo para errores del servidor: los de cada campo van junto al campo. -->
           <p class="mi-ficha__status" id="miFichaStatus" role="alert" tabindex="-1" hidden></p>
 
-          <!-- La foto (Fase I, 2026-10-13): sólo se edita y se previsualiza; nada se
-               sube ni se guarda todavía, y el aviso de abajo lo dice. El botón
-               "Subir foto" abre el diálogo #editorFoto (mi-ficha.foto.js). -->
+          <!-- La foto (2026-10-13): se publica en cuanto se guarda en el diálogo, sin
+               pasar por «Guardar ficha». El botón "Subir foto" abre el diálogo
+               #editorFoto (mi-ficha.foto.js). -->
           <div class="mi-ficha__grupo mi-ficha__foto" id="miFichaFoto">
             <p class="mi-ficha__etiqueta" id="miFichaFotoEtiqueta">Foto</p>
             <div class="mi-ficha__foto-fila">
@@ -86,7 +86,8 @@
                 <button type="button" class="button button--outline" id="miFichaFotoQuitar" hidden>Quitar</button>
               </div>
             </div>
-            <small class="mi-ficha__ayuda">Tu foto se verá redonda en tu ficha. Por ahora no se guarda: al recargar la página desaparece.</small>
+            <small class="mi-ficha__ayuda">Tu foto se publica en Colaboradores en cuanto la guardas.</small>
+            <p class="mi-ficha__error" id="miFichaFotoError" role="alert" hidden></p>
           </div>
 
           <div class="mi-ficha__grupo">

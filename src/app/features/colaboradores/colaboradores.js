@@ -15,6 +15,11 @@
   el roster, pero no abre perfil; su ficha sólo se elige y la vista previa
   muestra su nombre.
 
+  La foto (0050) es opcional: quien la tiene la muestra en su ficha, en la vista
+  previa y en el perfil, y quien no, conserva la silueta y la inicial de
+  siempre. Si el navegador no logra cargarla (el archivo se retiró y la ruta
+  quedó vieja) se vuelve a la silueta en vez de dejar un ícono de imagen rota.
+
   Todo el texto entra por textContent. Los nombres vienen de la base y las
   fichas las escribe a mano cada persona: nada de lo que venga de ahí se
   interpreta como markup.
@@ -32,6 +37,12 @@
     puesto: "Pasa el cursor o elige una ficha",
     bio: "Elige una ficha del roster para ver su perfil y especialidades.",
   };
+
+  const CLASE_FICHA_CON_FOTO = "colaboradores__ficha--con-foto";
+  const CLASE_RETRATO_CON_FOTO = "colaboradores__retrato--con-foto";
+
+  // URLs de foto que el navegador no pudo cargar: se tratan como "sin foto".
+  const fotosRotas = new Set();
 
   const AVISOS = {
     cargando: "Cargando colaboradores…",
@@ -54,12 +65,16 @@
       marco: porId("colaboradoresMarco"),
       grilla: porId("colaboradoresGrilla"),
       resumen: porId("colaboradoresResumen"),
+      previaRetrato: porId("previaRetrato"),
+      previaFoto: porId("previaFoto"),
       previaInicial: porId("previaInicial"),
       previaNombre: porId("previaNombre"),
       previaRol: porId("previaRol"),
       previaBio: porId("previaBio"),
       previaEnlaces: porId("previaEnlaces"),
       perfilNumero: porId("perfilNumero"),
+      perfilRetrato: porId("perfilRetrato"),
+      perfilFoto: porId("perfilFoto"),
       perfilInicial: porId("perfilInicial"),
       perfilEnlaces: porId("perfilEnlaces"),
       perfilNombre: porId("perfilNombre"),
@@ -286,8 +301,13 @@
         crearDecorado("colaboradores__ficha-cabeza"),
         crearDecorado("colaboradores__ficha-torso"),
         crearDecorado("colaboradores__ficha-inicial", inicialDe(persona)),
-        nombre,
       );
+      const foto = fotoDe(persona);
+      if (foto) {
+        boton.classList.add(CLASE_FICHA_CON_FOTO);
+        boton.append(crearFotoDeFicha(boton, foto));
+      }
+      boton.append(nombre);
 
       const resaltar = (origen) => () => { resaltado[origen] = indice; pintar(); };
       const soltar = (origen) => () => {
@@ -305,6 +325,25 @@
       boton.addEventListener("click", () => elegirFicha(indice));
 
       return boton;
+    }
+
+    // La foto va ANTES del nombre en el DOM: la franja del nombre se le monta
+    // encima. Decorativa (alt vacío): el aria-label del botón ya nombra a la
+    // persona.
+    function crearFotoDeFicha(boton, url) {
+      const imagen = document.createElement("img");
+      imagen.className = "colaboradores__ficha-foto";
+      imagen.setAttribute("alt", "");
+      imagen.setAttribute("loading", "lazy");
+      imagen.setAttribute("decoding", "async");
+      imagen.setAttribute("src", url);
+      imagen.addEventListener("error", () => {
+        fotosRotas.add(url);
+        imagen.hidden = true;
+        boton.classList.remove(CLASE_FICHA_CON_FOTO);
+        pintar();
+      });
+      return imagen;
     }
 
     // Siluetas, iniciales y el nombre corto repiten lo que ya dice el
@@ -460,6 +499,7 @@
 
       // Cada escritura se salta si el texto no cambió: las regiones aria-live
       // vuelven a anunciarse al reescribirlas, aunque sea con lo mismo.
+      pintarFoto(el.previaFoto, el.previaRetrato, fotoDe(persona));
       escribir(el.previaInicial, persona ? inicialDe(persona) : VACIA.inicial);
       escribir(el.previaNombre, persona ? persona.nombre : VACIA.nombre);
 
@@ -486,6 +526,7 @@
       const ficha = colaboradores[indice];
 
       escribir(el.perfilNumero, numeroDeFicha(indice));
+      pintarFoto(el.perfilFoto, el.perfilRetrato, fotoDe(ficha));
       escribir(el.perfilInicial, inicialDe(ficha));
       escribir(el.perfilNombre, ficha.nombre);
       escribir(el.perfilPuesto, ficha.puesto);
@@ -617,6 +658,24 @@
     const valor = typeof texto === "string" ? texto.trim() : "";
     celda.hidden = valor === "";
     escribir(nodo, valor);
+  }
+
+  // La URL de la foto de una persona, o null si no tiene o ya falló al cargar.
+  function fotoDe(persona) {
+    const url = persona?.foto;
+    return typeof url === "string" && url !== "" && !fotosRotas.has(url) ? url : null;
+  }
+
+  /*
+    Muestra u oculta la foto de un retrato. El `src` se escribe sólo si cambió
+    y NO se quita al ocultarla: una imagen oculta no se ve ni se anuncia, y
+    quitárselo haría que volver a pasar el cursor por la misma ficha reiniciara
+    la carga.
+  */
+  function pintarFoto(imagen, retrato, url) {
+    if (url && imagen.getAttribute("src") !== url) imagen.setAttribute("src", url);
+    imagen.hidden = !url;
+    retrato.classList.toggle(CLASE_RETRATO_CON_FOTO, Boolean(url));
   }
 
   function inicialDe(ficha) {

@@ -1,5 +1,5 @@
 /*
-  El editor de foto de "Mi ficha" (Fase I): la lógica pura de
+  El editor de foto de "Mi ficha": la lógica pura de
   mi-ficha.foto.logica.js (validación, estado del encuadre y geometría del
   recorte) y, leyendo el fuente, el marcado del diálogo en el index.html. El
   dibujo en canvas y los eventos de puntero viven en mi-ficha.foto.js y
@@ -304,11 +304,11 @@ test("the pure logic touches no DOM and exports through the module guard", () =>
   assert.match(FOTO_LOGICA, /if \(typeof module === "object" && module\.exports\) \{/);
 });
 
-test("the photo code has no network code: nothing is uploaded in this phase", () => {
+test("the photo wiring has no network code of its own: it only calls the functions mi-ficha.js hands it", () => {
   const sinComentarios = FOTO_JS
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
-  assert.doesNotMatch(sinComentarios, /\b(?:fetch|XMLHttpRequest|sendBeacon|supabase)\b|\.upload\(/);
+  assert.doesNotMatch(sinComentarios, /\b(?:fetch|XMLHttpRequest|sendBeacon|supabase|supabaseClient)\b|\.upload\(|\.storage\b/);
   assert.doesNotMatch(sinComentarios, /innerHTML|insertAdjacentHTML|outerHTML/);
 });
 
@@ -403,7 +403,7 @@ test("the photo copy is written in tuteo, never voseo", () => {
     "Cambiar",
     "Quitar",
     "JPG o PNG · hasta 20 MB · cualquier proporción",
-    "Tu foto se verá redonda en tu ficha. Por ahora no se guarda: al recargar la página desaparece.",
+    "Tu foto se publica en Colaboradores en cuanto la guardas.",
   ]) {
     assert.ok(texto.includes(tuteo), `falta «${tuteo}»`);
   }
@@ -437,4 +437,146 @@ test("the page loads the photo logic before its wiring, and both before mi-ficha
   };
   assert.ok(posicion("mi-ficha.foto.logica.js") < posicion("mi-ficha.foto.js"));
   assert.ok(posicion("mi-ficha.foto.js") < posicion("mi-ficha.js"));
+});
+
+/* ---------- La foto se publica en el acto (Fase II) ---------- */
+
+test("the photo group has an error line next to the buttons, announced as an alert and hidden until needed", () => {
+  const error = etiqueta("miFichaFotoError");
+  assert.match(error, /^<p\b/);
+  assert.equal(atributo(error, "role"), "alert");
+  assert.match(error, /\shidden\b/);
+  assert.ok(atributo(error, "class").split(/\s+/).includes("mi-ficha__error"));
+  // Dentro del grupo de la foto, no suelta al final del formulario.
+  const grupo = MARCADO.slice(MARCADO.indexOf('id="miFichaFoto"'), MARCADO.indexOf('id="miFichaNombre"'));
+  assert.ok(grupo.includes('id="miFichaFotoError"'));
+});
+
+test("the page no longer says the photo is not saved", () => {
+  const texto = MARCADO.replace(/<[^>]+>/g, " ");
+  assert.doesNotMatch(texto, /Por ahora no se guarda|al recargar la página desaparece/);
+  assert.doesNotMatch(HTML + FOTO_JS, /Fase I\b|FASE I\b/);
+});
+
+test("mi-ficha.foto.js exposes a factory that returns fijar, like the tag editor, and no longer keeps a local copy of the photo", () => {
+  assert.match(FOTO_JS, /^function crearEditorDeFoto\(\{ subir, quitar \}\) \{/m);
+  assert.match(FOTO_JS, /return Object\.freeze\(\{ fijar \}\);/);
+  assert.doesNotMatch(FOTO_JS.replace(/\/\*[\s\S]*?\*\//g, ""), /fotoRecortada|urlDeVista/);
+});
+
+test("Mi ficha does not need colaboradores.service.js: ficha.service.js builds the photo URL itself", () => {
+  const scripts = [...MARCADO.matchAll(/<script\b[^>]*\ssrc="([^"]+)"/g)].map(([, src]) => src);
+  assert.ok(scripts.includes("/app/core/colaboradores/ficha.service.js"));
+  assert.ok(!scripts.includes("/app/core/colaboradores/colaboradores.service.js"));
+  assert.match(read("src/app/core/colaboradores/ficha.service.js"), /^function urlDeFotoDeMiFicha\(ruta\)/m);
+});
+
+/* ---------- Migración 0050 ---------- */
+
+const MIGRACION = read("supabase/migrations/0050_foto_colaborador.sql");
+// Sin comentarios: las aserciones son sobre el SQL que se ejecuta, no sobre lo
+// que la cabecera explica (que menciona SELECT, UPDATE y otras palabras).
+const SQL_0050 = MIGRACION.replace(/--.*$/gm, "");
+const UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const RUTA_RE = `^${UUID_RE}/${UUID_RE}\\.webp$`;
+
+test("0050 adds a nullable foto_path column, idempotently", () => {
+  assert.match(SQL_0050, /alter table public\.fichas_colaborador\s+add column if not exists foto_path text;/);
+  assert.doesNotMatch(SQL_0050, /foto_path text\s+not null/);
+});
+
+test("0050 checks that foto_path is <uuid>/<uuid>.webp and that its folder is the card's own id", () => {
+  assert.match(SQL_0050, /drop constraint if exists fichas_colaborador_foto_path_valida/);
+  const check = SQL_0050.match(/add constraint fichas_colaborador_foto_path_valida check \(([\s\S]*?)\n  \);/);
+  assert.ok(check, "falta el CHECK");
+  assert.ok(check[1].includes(`foto_path ~ '${RUTA_RE}'`), "la regex del CHECK");
+  assert.match(check[1], /split_part\(foto_path, '\/', 1\) = id::text/);
+});
+
+test("0050 grants update on foto_path but not insert, and keeps the rest of the 0041 grant", () => {
+  const COLUMNAS_0041 = "puesto, sector, ubicacion, herramientas, habilidades, idiomas,\\s+empresa, empresa_enlace, modalidad_trabajo, anio_inicio, bio,\\s+linkedin, github, correo";
+  const insert = SQL_0050.match(/grant insert \(([^)]*)\)/);
+  const update = SQL_0050.match(/grant update \(([^)]*)\)/);
+  assert.ok(insert && update, "faltan los grants");
+  assert.match(insert[1], new RegExp(`^id, ${COLUMNAS_0041}$`));
+  assert.doesNotMatch(insert[1], /foto_path/);
+  assert.match(update[1], new RegExp(`^${COLUMNAS_0041}, foto_path$`));
+  assert.match(SQL_0050, /grant (?:insert|update) \([^)]*\)\s+on table public\.fichas_colaborador to authenticated;/);
+});
+
+test("0050 recreates listar_colaboradores() with foto_path at the end and the same security as before", () => {
+  assert.match(SQL_0050, /drop function if exists public\.listar_colaboradores\(\);/);
+  const retorno = SQL_0050.match(/returns table \(([\s\S]*?)\)\s+language sql/);
+  assert.ok(retorno, "falta el RETURNS TABLE");
+  const columnas = retorno[1].split(",").map((c) => c.trim().split(/\s+/)[0]);
+  assert.equal(columnas.at(-1), "foto_path");
+  assert.equal(columnas.at(-2), "correo");
+  assert.match(SQL_0050, /f\.correo,\s+f\.foto_path\s+from public\.perfiles p/);
+  assert.match(SQL_0050, /language sql\s+stable\s+security definer\s+set search_path = ''/);
+  assert.match(SQL_0050, /revoke all on function public\.listar_colaboradores\(\) from public;/);
+  assert.match(SQL_0050, /grant execute on function public\.listar_colaboradores\(\) to anon, authenticated;/);
+});
+
+test("0050 creates a public, 1 MB, webp-only bucket and re-applies those settings if it already exists", () => {
+  assert.match(SQL_0050, /insert into storage\.buckets \(id, name, public, file_size_limit, allowed_mime_types\)\s+values \(\s+'colaboradores-fotos',\s+'colaboradores-fotos',\s+true,\s+1048576,\s+array\['image\/webp'\]\s+\)/);
+  assert.match(SQL_0050, /on conflict \(id\) do update set\s+public = true,\s+file_size_limit = 1048576,\s+allowed_mime_types = array\['image\/webp'\];/);
+});
+
+test("0050 lets a marked collaborator insert and delete only in their own folder, with the exact route shape", () => {
+  for (const [politica, operacion, clausula] of [
+    ["colaboradores_fotos_insert", "insert", "with check"],
+    ["colaboradores_fotos_delete", "delete", "using"],
+  ]) {
+    assert.match(SQL_0050, new RegExp(`drop policy if exists ${politica} on storage\\.objects;`));
+    const cuerpo = SQL_0050.match(new RegExp(`create policy ${politica}\\s+on storage\\.objects for ${operacion} to authenticated\\s+${clausula} \\(([\\s\\S]*?)\\n  \\);`));
+    assert.ok(cuerpo, `falta la policy ${politica}`);
+    assert.match(cuerpo[1], /bucket_id = 'colaboradores-fotos'/);
+    assert.ok(cuerpo[1].includes(`name ~ '${RUTA_RE}'`), `${politica}: la regex de la ruta`);
+    assert.match(cuerpo[1], /split_part\(name, '\/', 1\) = auth\.uid\(\)::text/);
+    assert.match(cuerpo[1], /public\.es_colaborador\(\)/);
+  }
+});
+
+test("0050's only SELECT policy is for the caller's own folder: nobody lists the bucket, and DELETE can see the rows it deletes", () => {
+  const politicas = [...SQL_0050.matchAll(/create policy (\w+)\s+on storage\.objects for (\w+)/g)].map(([, nombre, operacion]) => [nombre, operacion]);
+  assert.deepEqual(politicas, [
+    ["colaboradores_fotos_insert", "insert"],
+    ["colaboradores_fotos_delete", "delete"],
+    ["colaboradores_fotos_select", "select"],
+  ]);
+  const seleccion = SQL_0050.match(/create policy colaboradores_fotos_select\s+on storage\.objects for select to authenticated\s+using \(([\s\S]*?)\n  \);/);
+  assert.ok(seleccion, "la policy de SELECT es sólo para authenticated");
+  assert.match(seleccion[1], /bucket_id = 'colaboradores-fotos'/);
+  assert.match(seleccion[1], /split_part\(name, '\/', 1\) = auth\.uid\(\)::text/);
+  // Ni UPDATE (cada foto es un objeto nuevo) ni nada para anon o para todos.
+  assert.doesNotMatch(SQL_0050, /for (update|all)\b/i);
+  assert.doesNotMatch(SQL_0050, /storage\.objects[^;]*to (anon|public)\b/);
+  // La razón de que exista queda escrita donde la va a leer quien la quiera quitar.
+  assert.match(MIGRACION, /borra CERO filas/);
+});
+
+test("0050 has a preflight with the usual message style and runs in one transaction", () => {
+  assert.match(SQL_0050, /^\s*begin;/m);
+  assert.match(SQL_0050, /commit;\s*$/);
+  for (const requisito of ["public.fichas_colaborador", "public.listar_colaboradores()", "public.es_colaborador()", "storage.buckets", "client_encoding UTF8"]) {
+    assert.match(MIGRACION, new RegExp(`0050 preflight failed: [^']*${requisito.replace(/[().]/g, "\\$&")}`), requisito);
+  }
+});
+
+test("0050 explains why a photo gets a new name every time and that the bucket is public", () => {
+  assert.match(MIGRACION, /max-age=3600/);
+  assert.match(MIGRACION, /CONSENTIMIENTO/);
+  assert.match(MIGRACION, /<user_id>\/<uuid>\.webp/);
+});
+
+test("the 0050 route regex, the CHECK and both services agree on the same shape", () => {
+  const re = new RegExp(RUTA_RE);
+  const buena = "5f1a7c2e-90b4-4d6e-b3a8-2e7d41c9f0a6/9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b.webp";
+  assert.ok(re.test(buena));
+  for (const archivo of ["src/app/core/colaboradores/colaboradores.service.js", "src/app/core/colaboradores/ficha.service.js"]) {
+    const fuente = read(archivo);
+    const patron = fuente.match(/const PATRON_RUTA_FOTO_\w+ = \/(.+)\/;/);
+    assert.ok(patron, `${archivo}: falta el patrón`);
+    assert.equal(patron[1].replace(/\\\//g, "/").replace(/\\\./g, "\\."), RUTA_RE, archivo);
+  }
 });
