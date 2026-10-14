@@ -1087,6 +1087,12 @@ function manijaHerramienta(pagina, indice) {
   return pagina.porId("miFichaHerramientasLista").children[indice].children[0];
 }
 
+// El <li> entero de la etiqueta en el índice dado: desde 2026-10-13 toda la
+// etiqueta se arrastra, no sólo la manija.
+function etiquetaHerramienta(pagina, indice) {
+  return pagina.porId("miFichaHerramientasLista").children[indice];
+}
+
 // El botón de quitar de la etiqueta en el índice dado (hijo 2 de su <li>).
 function quitarHerramienta(pagina, indice) {
   return pagina.porId("miFichaHerramientasLista").children[indice].children[2];
@@ -1728,7 +1734,7 @@ test("the dragged tag is lifted while it is dragged, keeps the lift when it chan
   const lista = pagina.porId("miFichaHerramientasLista");
   const levantada = () => lista.children.filter((item) => item.classList.contains("mi-ficha__etiquetas-item--arrastrando"));
 
-  manijaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1 });
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0 });
   assert.deepEqual(levantada().map((item) => item.children[1].textContent), ["A"]);
   assert.equal(lista.classList.contains("mi-ficha__etiquetas-lista--arrastrando"), true);
 
@@ -1740,6 +1746,118 @@ test("the dragged tag is lifted while it is dragged, keeps the lift when it chan
   lista.disparar("pointerup", { pointerId: 1 });
   assert.deepEqual(levantada(), []);
   assert.equal(lista.classList.contains("mi-ficha__etiquetas-lista--arrastrando"), false);
+});
+
+/* ---------- Arrastre con el dedo: mantener presionado (2026-10-13) ---------- */
+
+// Más que ESPERA_ARRASTRE_TACTIL_MS (250 ms), con temporizadores reales.
+const esperarPresion = () => new Promise((resolver) => setTimeout(resolver, 300));
+
+function levantadas(pagina) {
+  return pagina.porId("miFichaHerramientasLista").children
+    .filter((item) => item.classList.contains("mi-ficha__etiquetas-item--arrastrando"))
+    .map((item) => item.children[1].textContent);
+}
+
+test("with the mouse a tag is lifted at once from its text, not only from its handle", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const item = etiquetaHerramienta(pagina, 1);
+
+  item.disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, target: item.children[1] });
+
+  assert.deepEqual(levantadas(pagina), ["B"]);
+});
+
+test("the right mouse button does not lift a tag", async () => {
+  const { pagina } = await paginaConEtiquetas();
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 2 });
+
+  assert.deepEqual(levantadas(pagina), []);
+});
+
+test("pressing a tag's ✕ never starts a drag", async () => {
+  const { pagina } = await paginaConEtiquetas();
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", {
+    pointerId: 1, pointerType: "mouse", button: 0, target: quitarHerramienta(pagina, 0),
+  });
+  etiquetaHerramienta(pagina, 1).disparar("pointerdown", {
+    pointerId: 2, pointerType: "touch", clientX: 0, clientY: 0, target: quitarHerramienta(pagina, 1),
+  });
+  await esperarPresion();
+
+  assert.deepEqual(levantadas(pagina), []);
+});
+
+test("with a finger the tag is lifted only after holding it, and then it drags", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 7, pointerType: "touch", clientX: 40, clientY: 10 });
+  assert.deepEqual(levantadas(pagina), [], "todavía no: hay que mantenerla");
+
+  await esperarPresion();
+  assert.deepEqual(levantadas(pagina), ["A"]);
+
+  lista.disparar("pointermove", { pointerId: 7, clientX: 150, clientY: 10 });
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
+
+  lista.disparar("pointerup", { pointerId: 7 });
+  assert.deepEqual(levantadas(pagina), []);
+});
+
+test("a finger that moves before the hold is a scroll: the tag is never lifted", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 7, pointerType: "touch", clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 7, clientX: 40, clientY: 30 });
+  await esperarPresion();
+
+  assert.deepEqual(levantadas(pagina), []);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "B", "C"]);
+});
+
+test("a small wobble of the finger still counts as holding", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 7, pointerType: "touch", clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 7, clientX: 44, clientY: 14 });
+  await esperarPresion();
+
+  assert.deepEqual(levantadas(pagina), ["A"]);
+});
+
+test("a finger lifted (or cancelled by a scroll) before the hold is not a drag", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 7, pointerType: "touch", clientX: 40, clientY: 10 });
+  lista.disparar("pointerup", { pointerId: 7 });
+  etiquetaHerramienta(pagina, 1).disparar("pointerdown", { pointerId: 8, pointerType: "touch", clientX: 140, clientY: 10 });
+  lista.disparar("pointercancel", { pointerId: 8 });
+  await esperarPresion();
+
+  assert.deepEqual(levantadas(pagina), []);
+});
+
+test("while a finger drags, the tag stops the page from scrolling; before, it does not", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const item = etiquetaHerramienta(pagina, 0);
+  // Lo que cada manejador de touchmove hizo con su evento.
+  const frenaElScroll = () => {
+    const evento = { defaultPrevented: false, preventDefault() { evento.defaultPrevented = true; } };
+    item.listeners.touchmove.forEach((manejador) => manejador(evento));
+    return evento.defaultPrevented;
+  };
+
+  assert.equal(frenaElScroll(), false, "sin arrastre, el dedo scrollea");
+
+  item.disparar("pointerdown", { pointerId: 7, pointerType: "touch", clientX: 40, clientY: 10 });
+  await esperarPresion();
+  assert.equal(frenaElScroll(), true);
 });
 
 test("prefers-reduced-motion switches the slide off", async () => {

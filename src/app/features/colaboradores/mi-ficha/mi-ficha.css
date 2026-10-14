@@ -389,6 +389,18 @@
     background: none;
     color: var(--color-accent);
     font-size: 0.85rem;
+    /*
+      Toda la etiqueta se arrastra (2026-10-13): con mouse al instante, con el
+      dedo tras mantenerla presionada (mi-ficha.etiquetas.js). Su texto no se
+      selecciona ni abre el menú «Copiar / Traducir» de iOS al mantenerla, y
+      pan-y deja que un deslizamiento vertical que empieza encima siga
+      scrolleando la página.
+    */
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: pan-y;
     transition: border-color var(--transition-fast), background-color var(--transition-fast),
       scale var(--transition-fast), box-shadow var(--transition-fast);
   }
@@ -433,7 +445,6 @@
 
   .mi-ficha__etiquetas-item-manija {
     cursor: grab;
-    touch-action: none;
   }
 
   .mi-ficha__etiquetas-item-quitar {

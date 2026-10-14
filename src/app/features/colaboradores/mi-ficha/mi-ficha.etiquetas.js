@@ -59,6 +59,10 @@ const CLASE_ETIQUETA_ARRASTRANDO = "mi-ficha__etiquetas-item--arrastrando";
 const CLASE_LISTA_ARRASTRANDO = "mi-ficha__etiquetas-lista--arrastrando";
 // Lo que dura el deslizamiento de una etiqueta a su nuevo lugar.
 const DURACION_REORDENAR_MS = 180;
+// Con el dedo, cuánto hay que mantener presionada una etiqueta para levantarla,
+// y cuánto puede moverse el dedo antes: si se mueve más, es un scroll.
+const ESPERA_ARRASTRE_TACTIL_MS = 250;
+const TOLERANCIA_ARRASTRE_TACTIL_PX = 8;
 
 function crearEditorDeEtiquetas({
   campo,
@@ -79,6 +83,9 @@ function crearEditorDeEtiquetas({
   let catalogo = [];
   let sugerenciasActuales = [];
   let arrastre = null;
+  // Un toque que todavía no se convierte en arrastre: espera a cumplir
+  // ESPERA_ARRASTRE_TACTIL_MS sin moverse.
+  let pendiente = null;
 
   /* ---------- Editor de etiquetas ---------- */
 
@@ -178,7 +185,6 @@ function crearEditorDeEtiquetas({
     manija.setAttribute("data-indice-etiqueta", String(indice));
     manija.textContent = "⠿";
     manija.addEventListener("keydown", (evento) => manejarTecladoManija(evento, indice));
-    manija.addEventListener("pointerdown", (evento) => iniciarArrastre(evento, indice));
 
     const texto = document.createElement("span");
     texto.className = "mi-ficha__etiquetas-item-texto";
@@ -192,6 +198,19 @@ function crearEditorDeEtiquetas({
     quitar.addEventListener("click", () => quitarEnIndice(indice));
 
     item.append(manija, texto, quitar);
+    item.addEventListener("pointerdown", (evento) => tocarEtiqueta(evento, indice, quitar));
+    /*
+      Mientras se arrastra con el dedo, la página no debe scrollear. En iOS
+      Safari eso sólo lo frena un touchmove NO pasivo con preventDefault(); y
+      va en la etiqueta y no en la lista porque los eventos táctiles siguen
+      llegando al nodo donde empezó el toque aunque un repintado lo haya
+      sacado del DOM, y desde ahí ya no suben a la lista.
+    */
+    item.addEventListener("touchmove", (evento) => {
+      if (arrastre) evento.preventDefault();
+    }, { passive: false });
+    // El menú contextual que Android abre al mantener presionado.
+    item.addEventListener("contextmenu", (evento) => evento.preventDefault());
     return item;
   }
 
@@ -244,16 +263,48 @@ function crearEditorDeEtiquetas({
   }
 
   /*
+    Toda la etiqueta se arrastra, menos su ✕ (2026-10-13; antes sólo la
+    manija ⠿, y en iPhone el dedo caía sobre el texto y lo seleccionaba). Con
+    mouse empieza al instante; con el dedo hay que mantenerla presionada
+    ESPERA_ARRASTRE_TACTIL_MS, y si el dedo se mueve antes más de
+    TOLERANCIA_ARRASTRE_TACTIL_PX es un scroll y no hay arrastre.
+  */
+  function tocarEtiqueta(evento, indice, quitar) {
+    if (arrastre || pendiente) return;
+    if (evento.target === quitar) return;
+    if (evento.pointerType === "mouse") {
+      if (evento.button > 0) return;
+      iniciarArrastre(evento.pointerId, indice);
+      return;
+    }
+    pendiente = {
+      pointerId: evento.pointerId,
+      x: evento.clientX,
+      y: evento.clientY,
+      temporizador: setTimeout(() => {
+        pendiente = null;
+        iniciarArrastre(evento.pointerId, indice);
+      }, ESPERA_ARRASTRE_TACTIL_MS),
+    };
+  }
+
+  function cancelarPendiente() {
+    if (!pendiente) return;
+    clearTimeout(pendiente.temporizador);
+    pendiente = null;
+  }
+
+  /*
     Arrastre con Pointer Events, como el recorte de portadas
     (gestionar-curso.portada.js). La captura va en `lista` (el contenedor, que
-    nunca se recrea) y no en la manija que inició el arrastre: cada
-    movimiento repinta la lista entera, y una manija capturada que desaparece
+    nunca se recrea) y no en la etiqueta que inició el arrastre: cada
+    movimiento repinta la lista entera, y una etiqueta capturada que desaparece
     del DOM perdería la captura a mitad de camino.
   */
-  function iniciarArrastre(evento, indice) {
-    arrastre = { pointerId: evento.pointerId, actual: indice };
+  function iniciarArrastre(pointerId, indice) {
+    arrastre = { pointerId, actual: indice };
     try {
-      lista.setPointerCapture?.(evento.pointerId);
+      lista.setPointerCapture?.(pointerId);
     } catch {
       // Sin captura el arrastre sigue funcionando mientras el puntero esté
       // sobre la lista; no vale la pena abortarlo.
@@ -286,6 +337,12 @@ function crearEditorDeEtiquetas({
   }
 
   function moverArrastre(evento) {
+    if (pendiente && evento.pointerId === pendiente.pointerId) {
+      const dx = evento.clientX - pendiente.x;
+      const dy = evento.clientY - pendiente.y;
+      if (Math.hypot(dx, dy) > TOLERANCIA_ARRASTRE_TACTIL_PX) cancelarPendiente();
+      return;
+    }
     if (!arrastre || evento.pointerId !== arrastre.pointerId) return;
     const origen = lista.getBoundingClientRect();
     const destino = destinoDeArrastre(
@@ -302,6 +359,9 @@ function crearEditorDeEtiquetas({
   }
 
   function terminarArrastre(evento) {
+    // Se soltó (o el navegador empezó a scrollear y canceló el puntero) antes
+    // de cumplir la espera: fue un toque o un scroll, no un arrastre.
+    if (pendiente && evento.pointerId === pendiente.pointerId) cancelarPendiente();
     if (!arrastre || evento.pointerId !== arrastre.pointerId) return;
     arrastre = null;
     lista.classList.remove(CLASE_LISTA_ARRASTRANDO);

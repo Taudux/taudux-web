@@ -580,6 +580,16 @@ test("the stylesheet only uses the documented breakpoints", () => {
   assert.deepEqual(fueraDelSet, []);
 });
 
+test("a tag's text cannot be selected or long-pressed into a copy menu, and vertical scroll still starts on it", () => {
+  const css = sinComentariosCss(CSS);
+  const regla = css.match(/\.mi-ficha__etiquetas-item\s*\{([^}]*)\}/);
+  assert.ok(regla, "premisa: la etiqueta tiene su regla");
+  assert.match(regla[1], /(?:^|;)\s*user-select:\s*none/);
+  assert.match(regla[1], /-webkit-user-select:\s*none/);
+  assert.match(regla[1], /-webkit-touch-callout:\s*none/);
+  assert.match(regla[1], /touch-action:\s*pan-y/);
+});
+
 test("the stylesheet takes its colors, radii and focus ring from the tokens", () => {
   const css = sinComentariosCss(CSS);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/, "los colores salen de los tokens de styles.css");
