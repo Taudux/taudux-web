@@ -360,6 +360,7 @@ function abrirPagina({
   const documento = {
     activeElement: null,
     createElement: (etiqueta) => new Nodo(documento, etiqueta),
+    createElementNS: (_ns, etiqueta) => new Nodo(documento, etiqueta),
     createTextNode: (texto) => {
       const nodo = new Nodo(documento, "#text");
       nodo._texto = String(texto);
@@ -1455,7 +1456,11 @@ test("the edit link sits in the collaborator's own tile and stays put", async ()
 
   const enlace = enlacesDeEdicion(pagina)[yo];
   assert.equal(enlace.href, RUTA_MI_FICHA);
-  assert.equal(enlace.textContent, "Editar");
+  // Un lápiz y nada de texto visible: el nombre lo pone el aria-label.
+  assert.equal(enlace.textContent, "");
+  assert.deepEqual(enlace.children.map((hijo) => hijo.tagName.toLowerCase()), ["svg"]);
+  assert.equal(enlace.children[0].getAttribute("aria-hidden"), "true");
+  assert.equal(enlace.getAttribute("title"), "Editar mi ficha");
   assert.equal(enlace.getAttribute("aria-label"), "Editar mi ficha");
 
   const celda = pagina.porId("colaboradoresGrilla").children[yo];

@@ -112,36 +112,37 @@ test("the Perfil headings stand alone and the edit link is built by the script",
 });
 
 /*
-  El resplandor fuerte es de la ficha bajo el CURSOR y de nadie más. Con
-  teclado no hay cursor: la ficha enfocada se distingue con el anillo de
-  `:focus-visible` y un realce tenue, nunca con el mismo brillo — si brillaran
-  igual, tabular con el mouse apoyado en otra ficha dejaría dos encendidas y
-  ninguna mandando.
+  El anillo cian es de la ficha bajo el CURSOR y de la enfocada con teclado
+  (`:focus-visible`, que además lleva el contorno del sistema). La ficha es un
+  círculo, así que el anillo es un box-shadow que sigue el border-radius.
 
   Y el script no marca a la ficha elegida: esa marca era la que quedaba pegada
   al volver de un perfil.
 */
-test("the strong glow belongs to the cursor alone and the keyboard gets its own quieter rule", () => {
+test("the cyan ring belongs to the cursor and to keyboard focus, as a circle", () => {
   const css = sinComentariosCss(CSS);
 
-  const encendida = css.match(/([^{}]+)\{([^}]*--ficha-cielo:\s*rgba\(0,\s*120[^}]*)\}/);
+  const encendida = css.match(/([^{}]+)\{([^}]*0 0 0 3px var\(--color-accent\)[^}]*)\}/);
   assert.ok(encendida, "falta la regla de la ficha encendida");
   assert.deepEqual(
     encendida[1].split(",").map((selector) => selector.trim()).filter(Boolean),
     [".colaboradores__ficha--activa"],
-    "el resplandor fuerte lo enciende el cursor y nadie más",
+    "el anillo del cursor lo enciende `--activa` y nadie más",
   );
   assert.match(encendida[2], /box-shadow/);
+
+  const base = css.match(/\.colaboradores__ficha\s*\{([^}]*)\}/);
+  assert.ok(base, "falta la regla de la ficha");
+  assert.match(base[1], /border-radius:\s*50%/, "la ficha es un círculo");
+  assert.match(base[1], /scale:\s*var\(--escala/, "la escala del panal");
+  assert.match(base[1], /transition:\s*box-shadow/, "sólo se anima el box-shadow");
+  assert.doesNotMatch(base[1], /transition:[^;]*scale/, "la escala no se anima: la mueve el script cuadro a cuadro");
 
   // Quien navega con teclado tiene que ver dónde está: el anillo del sistema.
   const enfocada = css.match(/\.colaboradores__ficha:focus-visible\s*\{([^}]*)\}/);
   assert.ok(enfocada, "falta la regla de la ficha enfocada con teclado");
   assert.match(enfocada[1], /outline:\s*var\(--focus-ring\)/);
-
-  // Pero sin nada que compita con el resplandor del cursor.
-  for (const [, cuerpo] of css.matchAll(/\.colaboradores__ficha:focus-visible[^{]*\{([^}]*)\}/g)) {
-    assert.doesNotMatch(cuerpo, /box-shadow/, "la enfocada no lleva resplandor: no deben competir dos fichas");
-  }
+  assert.match(enfocada[1], /0 0 0 3px var\(--color-accent\)/);
 
   assert.doesNotMatch(css, /\.colaboradores__ficha--seleccionada/, "la marca fija de la elegida se fue");
   assert.doesNotMatch(sinComentariosJs(JS), /seleccionada|aria-current/,
@@ -150,25 +151,28 @@ test("the strong glow belongs to the cursor alone and the keyboard gets its own 
 
 /*
   El enlace se apila SOBRE la ficha —que es un <button>, y un <a> adentro sería
-  HTML inválido—, así que vive en la celda y se ancla en ella. Va arriba porque
-  el pie de la ficha es la franja del nombre.
+  HTML inválido—, así que vive en la celda y se ancla en ella. Va al pie y al
+  centro del círculo, fuera del recorte redondo de la ficha.
 */
-test("the tile edit link is pinned to the top corner above the tile", () => {
+test("the tile edit link is a pill at the bottom center of the circle, above the tile", () => {
   const css = sinComentariosCss(CSS);
 
   const celda = css.match(/\.colaboradores__celda\s*\{([^}]*)\}/);
   assert.ok(celda, "falta la regla de la celda");
-  assert.match(celda[1], /position:\s*relative/, "la celda es el ancla del enlace");
+  assert.match(celda[1], /position:\s*absolute/, "la celda la coloca el panal");
+  assert.doesNotMatch(celda[1], /(?:^|[\s;])(?:translate|transform)\s*:|z-index/,
+    "sin translate ni z-index: crearían un contexto de apilamiento que encierra a la ficha activa");
 
   const enlace = css.match(/\.colaboradores__editar\s*\{([^}]*)\}/);
   assert.ok(enlace, "falta la regla del enlace de editar");
   assert.match(enlace[1], /position:\s*absolute/);
-  assert.match(enlace[1], /inset:\s*\S+\s+\S+\s+auto/,
-    "anclado arriba: abajo está la franja del nombre de la ficha");
+  assert.match(enlace[1], /inset-inline-start:\s*calc\(50% \+ 35\.36% \* var\(--escala, 1\)\)/,
+    "sobre el borde del círculo escalado, a la derecha");
+  assert.match(enlace[1], /inset-block-start:\s*calc\(50% \+ 35\.36% \* var\(--escala, 1\)\)/, "y abajo");
+  assert.match(enlace[1], /border-radius:\s*50%/, "una insignia redonda");
   assert.match(enlace[1], /z-index:\s*var\(--z-highlight\)/,
     "por encima de la ficha, que sube a --z-elevated cuando está activa");
-  assert.match(enlace[1], /var\(--font-mono\)/);
-  assert.match(enlace[1], /white-space:\s*nowrap/, "a 360px la ficha mide ~78px: el texto no se parte");
+  assert.match(css, /\.colaboradores__editar svg\s*\{[^}]*stroke:\s*currentColor/, "el lápiz toma el cian del enlace");
 
   assert.match(css, /\.colaboradores__editar:focus-visible/,
     "con teclado, el anillo es el mismo que el del resto de los enlaces");
@@ -300,8 +304,13 @@ test("the page script never writes markup from data", () => {
   assert.match(js, /createElement\("button"\)/);
   assert.match(js, /aria-label/);
   // Ningún estado visual (como el extinto punto de disponibilidad) se pinta
-  // con estilos en línea: el color siempre vive en la hoja, vía clases.
-  assert.doesNotMatch(js, /\.style\b/, "el script cambia de estado por clase, no con estilos en línea");
+  // con estilos en línea: el color siempre vive en la hoja, vía clases. La
+  // ÚNICA excepción es la geometría del panal (posición, diámetro, escala y el
+  // alto propio en móvil), que es un cálculo y no un estado.
+  const estilos = js.match(/\.style\b[^;]*/g) || [];
+  const geometria = /^\.style\.(?:left|top|blockSize|minBlockSize)\s*=|^\.style\.setProperty\(`?"?--(?:diametro|escala)/;
+  assert.deepEqual(estilos.filter((uso) => !geometria.test(uso)), [],
+    "el script cambia de estado por clase; en línea sólo va la geometría del panal");
 });
 
 test("the stylesheet lives in the features layer", () => {
@@ -350,17 +359,17 @@ test("the top offset derives from the navbar token and the side padding lives on
   );
 });
 
-test("the tile grid keeps the four columns moverSeleccion() assumes", () => {
-  const { COLUMNAS_ROSTER } = require("../src/app/features/colaboradores/colaboradores.datos.js");
-  const reglas = [...sinComentariosCss(CSS).matchAll(/\.colaboradores__grilla\s*[,{]([^}]*)\}/g)];
-  // Las COLUMNAS se declaran una sola vez, fuera de todo breakpoint:
-  // moverSeleccion() salta de a COLUMNAS_ROSTER y un ancho con otra cantidad de
-  // columnas rompería ↑/↓ el día que se conecten las flechas (hoy la página no
-  // escucha keydown). Un breakpoint sí puede tocar las FILAS (en móvil
-  // dejan de repartirse el alto de la ventana), pero nunca las columnas.
-  const conColumnas = reglas.filter(([, cuerpo]) => /grid-template-columns/.test(cuerpo));
-  assert.equal(conColumnas.length, 1, "las columnas de la grilla se declaran una vez y ningún breakpoint las toca");
-  assert.match(conColumnas[0][1], new RegExp(`grid-template-columns:\\s*repeat\\(${COLUMNAS_ROSTER},`));
+test("the tile grid is a honeycomb canvas placed by script, not a CSS grid", () => {
+  const css = sinComentariosCss(CSS);
+  const grilla = css.match(/\.colaboradores__grilla\s*\{([^}]*)\}/);
+  assert.ok(grilla, "falta la regla de la grilla");
+  assert.match(grilla[1], /position:\s*relative/, "es el ancla de las celdas absolutas");
+  assert.doesNotMatch(grilla[1], /display:\s*grid|grid-template/,
+    "las celdas se colocan con posicionesDelPanal(), no con columnas CSS");
+  assert.match(css, /\.colaboradores__marco\s*\{[^}]*overflow:\s*hidden/,
+    "el marco recorta: nada del panal mete scroll horizontal");
+  assert.match(sinComentariosJs(JS), /posicionesDelPanal\(/);
+  assert.match(sinComentariosJs(JS), /new ResizeObserver/);
 });
 
 /*
@@ -369,10 +378,10 @@ test("the tile grid keeps the four columns moverSeleccion() assumes", () => {
   dejaba fluir y a 1907×1040 "¿Quién?" y la tarjeta de perfil caían bajo el
   pliegue. El alto sale de la ventana menos el despeje del navbar (el token) y
   el aire inferior; las filas de fichas se reparten ese alto por igual, así que
-  las fichas dejan de ser cuadradas y pasan a llenar su celda.
+  el panal de círculos llena el marco, que es lo elástico.
 
-  En ≤760px no hay forma de meter previa + 12 fichas + tarjeta en una pantalla:
-  ahí la página vuelve a fluir y las fichas recuperan su proporción 1:1.
+  En ≤760px no hay forma de meter previa + panal + tarjeta en una pantalla:
+  ahí la página vuelve a fluir y el panal se da su propio alto.
 */
 test("the roster fits the viewport height on desktop and flows again on mobile", () => {
   const css = sinComentariosCss(CSS);
@@ -388,22 +397,17 @@ test("the roster fits the viewport height on desktop and flows again on mobile",
   assert.match(roster, /min-block-size:\s*\d+px/,
     "con un piso: en una ventana muy baja se prefiere scrollear a aplastar las fichas");
 
-  const grilla = regla(".colaboradores__grilla");
-  assert.match(grilla, /grid-template-rows:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
-    "tres filas fijas: con pocas fichas, una sola no se estira al alto entero de la grilla");
-  assert.match(grilla, /grid-auto-rows:\s*minmax\(0,\s*1fr\)/,
-    "las filas de más, si las hay, se reparten el mismo alto");
   assert.doesNotMatch(regla(".colaboradores__ficha"), /aspect-ratio/,
-    "en escritorio la ficha llena su celda; un 1:1 acá volvería a desbordar el alto");
+    "la ficha es un círculo de diámetro fijo por script: un 1:1 acá se pelearía con él");
 
   const movil = css.indexOf("@media (max-width: 760px)");
   assert.notEqual(movil, -1);
   assert.match(regla(".colaboradores__roster", movil), /block-size:\s*auto/,
     "en móvil el roster vuelve a fluir");
-  assert.match(regla(".colaboradores__grilla", movil), /grid-template-rows:\s*none/,
-    "sin alto que repartir, tres filas `fr` quedarían como filas cuadradas vacías");
-  assert.match(regla(".colaboradores__ficha", movil), /aspect-ratio:\s*1\s*\/\s*1/,
-    "y las fichas recuperan el cuadrado");
+  assert.match(regla(".colaboradores__grilla", movil), /min-block-size:\s*\d+px/,
+    "en móvil el panal se da su propio alto (script) y tiene un piso de respaldo");
+  assert.match(regla(".colaboradores__previa", movil), /min-block-size:\s*3\d\dpx/,
+    "la previa móvil es más alta para que el círculo sea grande");
 });
 
 test("motion is switched off for people who asked for less of it", () => {
@@ -540,4 +544,49 @@ test("the company cell sits between the role and the sector, and starts hidden",
     return indice;
   });
   assert.deepEqual([...orden].sort((a, b) => a - b), orden, "la empresa no está entre el puesto y el sector");
+});
+
+test("the frame is a grab surface on desktop and only on desktop", () => {
+  const css = sinComentariosCss(CSS);
+  const marco = css.match(/\.colaboradores__marco\s*\{([^}]*)\}/);
+  assert.match(marco[1], /cursor:\s*grab/);
+  assert.match(css, /\.colaboradores__marco--arrastrando\s*\{[^}]*cursor:\s*grabbing[^}]*user-select:\s*none/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.colaboradores__marco\s*\{[^}]*cursor:\s*auto/, "en móvil no se arrastra");
+});
+
+test("the script drags with the mouse only, keeps clicks and stops its animation loop", () => {
+  const js = sinComentariosJs(JS);
+  assert.match(js, /pointerType\s*!==\s*"mouse"/);
+  assert.match(js, /addEventListener\("wheel",\s*hacerZoom,\s*\{\s*passive:\s*false\s*\}\)/);
+  assert.match(js, /addEventListener\("click"[\s\S]*?,\s*true\)/, "el clic tras arrastrar se traga en captura");
+  // El rAF sólo se vuelve a pedir si algo sigue moviéndose.
+  assert.match(js, /if \(sigue\) cuadro = requestAnimationFrame/);
+});
+
+test("the summary has a fixed height on desktop, so hovering a card never resizes the honeycomb", () => {
+  // Con alto libre, una bio larga encogía el marco, el panal se reacomodaba
+  // bajo el cursor y la ficha "vibraba" (reporte del 14 de octubre).
+  const regla = CSS.match(/\.colaboradores__resumen\s*\{([^}]*)\}/);
+  assert.ok(regla, "existe la regla base del resumen");
+  assert.match(regla[1], /block-size:\s*\d/);
+  assert.match(regla[1], /overflow-y:\s*auto/);
+});
+
+test("photos and the edit link in the honeycomb never start a native drag", () => {
+  // Empezar a arrastrar el panal sobre una foto sacaba la copia fantasma del
+  // navegador y el panal no se movía (reporte del 14 de octubre).
+  assert.match(JS, /imagen\.setAttribute\("draggable", "false"\)/);
+  assert.match(JS, /enlace\.setAttribute\("draggable", "false"\)/);
+  assert.match(JS, /el\.marco\.addEventListener\("dragstart", \(evento\) => evento\.preventDefault\(\)\)/);
+  const foto = CSS.match(/\.colaboradores__ficha-foto\s*\{([^}]*)\}/);
+  assert.match(foto[1], /-webkit-user-drag:\s*none/);
+});
+
+test("the large portrait photos never start a native drag either", () => {
+  // Mismo fantasma que en el panal, pero en la vista previa y el perfil.
+  for (const id of ["previaFoto", "perfilFoto"]) {
+    assert.match(HTML, new RegExp(`<img[^>]*id="${id}"[^>]*draggable="false"`));
+  }
+  const regla = CSS.match(/\.colaboradores__retrato-foto\s*\{([^}]*)\}/);
+  assert.match(regla[1], /-webkit-user-drag:\s*none/);
 });

@@ -97,62 +97,64 @@
   }
 
   /*
-    El marco rayado que hace de "retrato" mientras no haya fotos. Se disuelve
-    hacia abajo para que el nombre, que se le monta encima, no pelee con un
-    borde duro.
+    El retrato es un CÍRCULO con anillo cian, centrado en una caja que no es
+    cuadrada (la previa y la figura del perfil llenan lo que les dicta la
+    ventana). `container-type: size` vuelve a la caja un contenedor y deja medir
+    el círculo en unidades de contenedor: `min(94cqi, 94cqb)` es el 94% del lado
+    más corto, así que el círculo nunca se deforma ni se sale, ni a lo ancho ni
+    a lo alto. El 6% restante deja un respiro al aro (pedido del 14 de octubre: más grande).
+
+    Sin borde, sin fondo y sin máscara: lo que se ve es el anillo, no la caja.
   */
   .colaboradores__retrato {
     position: relative;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: var(--radius-panel);
-    background: repeating-linear-gradient(135deg, rgba(0, 225, 255, 0.06) 0 6px, transparent 6px 22px);
-    -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
-    mask-image: linear-gradient(to bottom, #000 70%, transparent);
+    container-type: size;
+    overflow: visible;
   }
 
+  /* La inicial es el círculo vacío de quien no tiene foto: un anillo tenue y
+     la letra a ~38% del lado, para que ocupe el centro sin tocar el borde. */
   .colaboradores__inicial {
     position: absolute;
     inset: 0;
+    margin: auto;
+    inline-size: min(94cqi, 94cqb);
+    block-size: min(94cqi, 94cqb);
+    box-sizing: border-box;
     display: grid;
     place-items: center;
-    font: 900 clamp(200px, 24vw, 300px) / 1 var(--font-display);
-    color: rgba(0, 225, 255, 0.07);
-  }
-
-  .colaboradores__silueta {
-    position: absolute;
-  }
-
-  .colaboradores__silueta--cabeza {
-    inset: 12% 30% auto;
-    block-size: 26%;
+    border: 3px solid rgba(0, 225, 255, 0.28);
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.07);
-  }
-
-  .colaboradores__silueta--torso {
-    inset: 40% 10% 0;
-    border-radius: 45% 45% 0 0 / 60% 60% 0 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+    background: radial-gradient(circle, rgba(0, 225, 255, 0.07), transparent 70%);
+    font: 900 min(47cqi, 47cqb) / 1 var(--font-display);
+    color: rgba(0, 225, 255, 0.35);
   }
 
   /*
-    La foto, cuando la hay, ocupa el retrato entero y la silueta y la inicial
-    se apagan. Va después de ellas en el DOM, así que pinta encima aunque se
+    La foto, cuando la hay, es el mismo círculo con el anillo hecho de relleno
+    degradado (5px de padding sobre el fondo en degradado); la inicial se apaga.
+    Va después de la inicial en el DOM, así que pinta encima aunque se
     olvidara el display: none. object-fit: cover recorta sin deformar: la foto
-    sale cuadrada del editor y el retrato no lo es.
+    sale cuadrada del editor y el círculo no necesariamente.
   */
   .colaboradores__retrato-foto {
     position: absolute;
     inset: 0;
-    inline-size: 100%;
-    block-size: 100%;
+    margin: auto;
+    inline-size: min(94cqi, 94cqb);
+    block-size: min(94cqi, 94cqb);
+    box-sizing: border-box;
+    padding: 5px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-accent-dark), var(--color-accent));
+    box-shadow: 0 0 40px rgba(0, 225, 255, 0.35);
     object-fit: cover;
+    /* Igual que en el panal: sin la copia fantasma al arrastrar la foto. El
+       HTML ya trae draggable="false"; esto es para Safari. */
+    -webkit-user-drag: none;
   }
 
-  .colaboradores__retrato--con-foto .colaboradores__inicial,
-  .colaboradores__retrato--con-foto .colaboradores__silueta {
+  .colaboradores__retrato--con-foto .colaboradores__inicial {
     display: none;
   }
 
@@ -247,13 +249,22 @@
     justify-content: flex-end;
     min-inline-size: 0;
     min-block-size: 0;
-    overflow: hidden;
+    /* Visible a propósito: el resplandor del anillo (40px de blur) sale de la
+       caja, y con `hidden` se cortaba en seco a los lados. Un box-shadow es
+       desborde de pintura: no suma a scrollWidth, así que no trae scroll. */
+    overflow: visible;
   }
 
-  /* El retrato ocupa todo menos la franja del nombre, que se le monta encima. */
+  /* El retrato ocupa todo menos la franja del nombre, y el círculo queda
+     centrado en esa caja. */
   .colaboradores__previa .colaboradores__retrato {
     position: absolute;
     inset: 0 0 120px;
+  }
+
+  /* Bajo un círculo centrado, el nombre y el puesto también van al centro. */
+  .colaboradores__previa .colaboradores__identidad {
+    text-align: center;
   }
 
   .colaboradores__identidad {
@@ -318,156 +329,157 @@
   }
 
   /* El marco de las fichas es lo único elástico de la columna: el título y la
-     tarjeta de perfil miden lo que mide su contenido, y él se queda el resto. */
+     tarjeta de perfil miden lo que mide su contenido, y él se queda el resto.
+     `overflow: hidden` es la red de seguridad: ni el resplandor de una ficha
+     ni un cálculo desfasado pueden meter scroll horizontal en la página. */
   .colaboradores__marco {
     flex: 1 1 0;
     display: flex;
     min-block-size: 0;
     padding: 3px;
+    overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.06);
+    /* El panal se arrastra con el mouse (colaboradores.js). En móvil no. */
+    cursor: grab;
+  }
+
+  .colaboradores__marco--arrastrando {
+    cursor: grabbing;
+    user-select: none;
   }
 
   /*
-    CUATRO columnas en TODOS los anchos, sin excepción por breakpoint:
-    moverSeleccion (colaboradores.datos.js) salta de a COLUMNAS_ROSTER fichas.
-    Las flechas del teclado TODAVÍA no están conectadas en colaboradores.js;
-    cuando lo estén, un breakpoint con otro número haría que ↑/↓ no caigan en
-    la ficha de arriba/abajo. Hay un test que fija las columnas.
+    PANAL de círculos, como la pantalla de apps del Apple Watch. La grilla ya
+    no es una grilla CSS: es el lienzo sobre el que colaboradores.js coloca
+    cada celda (posicionesDelPanal, en colaboradores.datos.js) con posición
+    absoluta. El orden del DOM no cambia, así que el orden de tabulación y el
+    de lectura siguen siendo el de la lista.
+
+    Las columnas ya no existen como concepto visual; moverSeleccion() sigue
+    usando COLUMNAS_ROSTER, pero las flechas todavía no están conectadas.
   */
   .colaboradores__grilla {
+    position: relative;
     flex: 1 1 auto;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    /* Tres filas fijas se reparten el alto del marco aunque haya pocas fichas:
-       con una sola, ésta ocupa su celda y no se estira al alto entero de la
-       grilla. Con más de doce, las filas extra entran por grid-auto-rows y se
-       reparten el mismo alto (con 16 serían cuatro filas más bajas). */
-    grid-template-rows: repeat(3, minmax(0, 1fr));
-    grid-auto-rows: minmax(0, 1fr);
-    gap: 3px;
+    min-inline-size: 0;
     min-block-size: 0;
     list-style: none;
   }
 
-  /* Relativa para anclar el enlace de "Mi ficha", que se apila sobre la ficha.
-     SIN z-index propio: con uno, la celda crearía un contexto de apilamiento y
-     encerraría a la ficha activa, cuyo resplandor volvería a quedar debajo de
-     las vecinas. */
+  /*
+    Una celda es el hueco de un círculo: JS le da el CENTRO (`left`/`top`) y el
+    diámetro (`--diametro`). Los márgenes negativos lo corren a su esquina; un
+    `translate` crearía un contexto de apilamiento y encerraría a la ficha
+    activa, cuyo resplandor volvería a quedar debajo de las vecinas. SIN
+    z-index propio por lo mismo.
+  */
   .colaboradores__celda {
-    position: relative;
-    min-inline-size: 0;
-    min-block-size: 0;
+    position: absolute;
+    inline-size: var(--diametro, 0px);
+    block-size: var(--diametro, 0px);
+    margin-inline-start: calc(var(--diametro, 0px) / -2);
+    margin-block-start: calc(var(--diametro, 0px) / -2);
   }
 
   /*
-    "EDITAR" en la esquina de la ficha propia. Vive en la CELDA y no dentro del
-    <button> (un <a> ahí sería HTML inválido), así que se apila encima con
-    posición absoluta.
+    "EDITAR" en la ficha propia: una píldora al pie del círculo, sin tapar la
+    cara. Vive en la CELDA y no dentro del <button> (un <a> ahí sería HTML
+    inválido) ni dentro del círculo, que recorta: así no la corta el borde
+    redondo.
 
-    Arriba a la derecha: el pie de la ficha es la franja del nombre (27% del
-    alto) y el enlace no debe taparlo. A 360px la ficha mide ~78px y el texto
-    entra en ~48px, pegado a la esquina y sin partirse.
+    La ficha se encoge con `--escala` alrededor de su centro, pero la celda no;
+    el `bottom` suma lo que el círculo se achicó para que la píldora siga
+    pegada a SU borde y no al del hueco.
   */
   .colaboradores__editar {
     position: absolute;
-    inset: 4px 4px auto auto;
+    /* Sobre el borde del círculo, abajo a la derecha (a 45°). El círculo mide
+       --escala del diámetro de la celda, así que su borde a 45° queda a
+       50% · cos 45° ≈ 35.36% · --escala del centro, en cada eje. */
+    inset-inline-start: calc(50% + 35.36% * var(--escala, 1));
+    inset-block-start: calc(50% + 35.36% * var(--escala, 1));
+    translate: -50% -50%;
     /* Por encima de la ficha, que sube a --z-elevated cuando está activa. */
     z-index: var(--z-highlight);
-    padding: 2px 5px;
-    border-radius: var(--radius-pill);
-    background: rgba(4, 6, 10, 0.85);
-    font: 500 0.5625rem var(--font-mono);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    display: grid;
+    place-items: center;
+    inline-size: 30px;
+    block-size: 30px;
+    border-radius: 50%;
+    background: rgba(4, 6, 10, 0.92);
+    box-shadow: 0 0 0 2px var(--color-accent);
     color: var(--color-accent);
-    text-decoration: none;
-    white-space: nowrap;
+    -webkit-user-drag: none;
+    transition: box-shadow var(--transition-fast);
+  }
+
+  .colaboradores__editar svg {
+    inline-size: 15px;
+    block-size: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .colaboradores__editar:hover {
-    background: rgba(4, 6, 10, 0.95);
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    background: rgba(4, 6, 10, 1);
+    box-shadow: 0 0 0 2px var(--color-accent), 0 0 14px rgba(0, 225, 255, 0.6);
   }
 
-  .colaboradores__ficha {
-    --ficha-cielo: #1a1f26;
+  /*
+    La ficha es el círculo. `--diametro` lo hereda de la celda y `--escala` es
+    de ella: los de afuera del panal se achican para dar profundidad. Sin foto
+    muestra la inicial; con foto, la foto llena el círculo.
 
+    El nombre queda en el aria-label del botón; la franja visible, la cabeza y
+    el torso del dibujo viejo ya no se pintan.
+  */
+  .colaboradores__ficha {
     position: relative;
     z-index: var(--z-content);
     display: block;
-    inline-size: 100%;
-    /* Llena su celda en vez de ser cuadrada: el alto lo dicta la ventana. Su
-       interior ya está medido en porcentajes, así que escala sin deformarse. */
-    block-size: 100%;
+    inline-size: var(--diametro, 0px);
+    block-size: var(--diametro, 0px);
+    scale: var(--escala, 1);
     overflow: hidden;
     border: 0;
-    outline: 2px solid transparent;
-    outline-offset: -2px;
-    background: linear-gradient(180deg, var(--ficha-cielo) 0%, #07090c 100%);
-    color: #d8dde3;
+    border-radius: 50%;
+    padding: 0;
+    background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
+    box-shadow: 0 0 0 2px rgba(0, 225, 255, 0.22);
+    color: var(--color-text);
     cursor: pointer;
-    transition: outline-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition: box-shadow var(--transition-fast);
   }
 
   /*
     La ficha encendida: la que está bajo el CURSOR, y ninguna otra. `--activa`
     la pone colaboradores.js. Sube de nivel para que su resplandor no quede
-    debajo de las vecinas.
+    debajo de las vecinas, y se agranda hasta casi su tamaño pleno: nunca más
+    que el hueco de su celda, para no salirse del panal.
   */
   .colaboradores__ficha--activa {
-    --ficha-cielo: rgba(0, 120, 150, 0.55);
-
     z-index: var(--z-elevated);
-    outline-color: var(--color-accent);
-    box-shadow: 0 0 22px rgba(0, 225, 255, 0.45), inset 0 0 30px rgba(0, 225, 255, 0.18);
-    color: var(--color-text);
+    box-shadow: 0 0 0 3px var(--color-accent), 0 0 22px rgba(0, 225, 255, 0.6);
   }
 
-  /* Con teclado no hay cursor, así que la ficha enfocada se distingue con el
-     anillo del sistema. Va hacia ADENTRO: las fichas están a 3px una de otra y
-     uno hacia afuera quedaría tapado por las vecinas. */
+  /* Con teclado no hay cursor: la ficha enfocada lleva el mismo anillo que la
+     activa, y encima el contorno del sistema (en un círculo, `outline`
+     respeta el border-radius), por si el anillo se confunde con el fondo. */
   .colaboradores__ficha:focus-visible {
+    z-index: var(--z-elevated);
     outline: var(--focus-ring);
-    outline-offset: -3px;
+    outline-offset: var(--focus-ring-offset);
+    box-shadow: 0 0 0 3px var(--color-accent), 0 0 22px rgba(0, 225, 255, 0.6);
   }
 
-  /*
-    Y un realce tenue, para que el anillo no sea lo único que la distinga del
-    fondo. Deliberadamente por debajo del resplandor de arriba: con las dos al
-    mismo brillo, tabular con el mouse apoyado en otra ficha dejaba dos
-    encendidas y ninguna mandando.
-
-    Sólo si NO está bajo el cursor: cuando coinciden manda el resplandor
-    fuerte. Sin el `:not()` ganaría esta regla —una pseudo-clase pesa más que
-    una clase— y la ficha se vería MÁS apagada justo al tabular hasta ella.
-  */
-  .colaboradores__ficha:focus-visible:not(.colaboradores__ficha--activa) {
-    --ficha-cielo: rgba(0, 80, 110, 0.35);
-
-    color: var(--color-text);
-  }
-
-  .colaboradores__ficha-cabeza {
-    position: absolute;
-    inset: 12% auto auto 50%;
-    /* Redonda por proporción, y medida por el ALTO: la ficha ya no es cuadrada
-       (llena una celda cuyo alto dicta la ventana). Con ancho y alto en % por
-       separado salía un óvalo; y el alto es el recurso escaso, así que manda
-       él y el ancho lo sigue. */
-    block-size: 34%;
-    aspect-ratio: 1 / 1;
-    translate: -50% 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.07);
-  }
-
-  .colaboradores__ficha-torso {
-    position: absolute;
-    inset: 46% 16% 24%;
-    border-radius: 45% 45% 0 0 / 100% 100% 0 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  .colaboradores__ficha-cabeza,
+  .colaboradores__ficha-torso,
+  .colaboradores__ficha-nombre {
+    display: none;
   }
 
   .colaboradores__ficha-inicial {
@@ -475,47 +487,42 @@
     inset: 0;
     display: grid;
     place-items: center;
-    padding-block-end: 22%;
-    font: 900 clamp(1.1rem, 5vw, 2.125rem) var(--font-display);
-    color: rgba(0, 225, 255, 0.16);
+    /* ~38% del diámetro, igual que la inicial del retrato grande. */
+    font: 900 calc(var(--diametro, 0px) * 0.38) / 1 var(--font-display);
+    color: rgba(0, 225, 255, 0.45);
     pointer-events: none;
   }
 
-  /* La foto de la ficha cubre el retrato; la franja del nombre, que viene
-     después en el DOM, queda encima. */
+  /* La foto llena el círculo; el recorte redondo lo hace el overflow de la
+     ficha. */
   .colaboradores__ficha-foto {
     position: absolute;
     inset: 0;
     inline-size: 100%;
     block-size: 100%;
     object-fit: cover;
+    /* Safari no siempre respeta draggable="false" en imágenes: sin esto,
+       empezar a arrastrar el panal sobre una foto sacaba su copia fantasma. */
+    -webkit-user-drag: none;
   }
 
-  .colaboradores__ficha--con-foto .colaboradores__ficha-cabeza,
-  .colaboradores__ficha--con-foto .colaboradores__ficha-torso,
   .colaboradores__ficha--con-foto .colaboradores__ficha-inicial {
     display: none;
   }
 
-  .colaboradores__ficha-nombre {
-    position: absolute;
-    inset: auto 0 0;
-    display: grid;
-    place-items: center;
-    block-size: 27%;
-    padding-inline: 6px;
-    background: linear-gradient(to top, #04060a 60%, rgba(4, 6, 10, 0));
-    /* El piso en vw es para 360px: ahí una ficha mide ~78px y "SEBASTIÁN" a
-       12px fijos se salía de su caja. */
-    font: 700 clamp(0.5rem, 2.4vw, 0.75rem) / 1.15 var(--font-display);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    text-align: center;
-    text-wrap: balance;
-    overflow-wrap: anywhere;
-  }
-
+  /*
+    Alto FIJO en escritorio. El resumen cambia con la ficha bajo el cursor
+    (una bio corta, otra larga con enlaces), y el marco del panal es el que
+    absorbe la diferencia: con alto libre, pasar el cursor por Samael encogía
+    el panal 51px, los círculos se reacomodaban, el borde se iba de debajo del
+    cursor, el resumen volvía y el ciclo se repetía — el "vibra" del 14 de
+    octubre. Lo que no quepa scrollea adentro. En móvil vuelve a ser libre
+    (ahí el panal se mide por el ancho, no por lo que sobra).
+  */
   .colaboradores__resumen {
+    flex: none;
+    block-size: 11rem;
+    overflow-y: auto;
     padding: 18px 22px;
   }
 
@@ -558,16 +565,10 @@
     min-block-size: 360px;
   }
 
+  /* Mismo círculo que la previa: sólo cambia que es una columna flex y crece
+     con ella. */
   .colaboradores__retrato--perfil {
     flex: 1 1 auto;
-    border-color: rgba(0, 225, 255, 0.25);
-    box-shadow: inset 0 0 60px rgba(0, 225, 255, 0.08);
-    -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
-    mask-image: linear-gradient(to bottom, #000 78%, transparent);
-  }
-
-  .colaboradores__retrato--perfil .colaboradores__inicial {
-    font-size: clamp(160px, 20vw, 260px);
   }
 
   .colaboradores__ficha-tecnica {
@@ -674,8 +675,7 @@
       padding-inline: 1rem;
     }
 
-    /* Una sola columna en las dos vistas. La grilla de fichas NO cambia: sigue
-       en cuatro columnas (ver el comentario de .colaboradores__grilla). */
+    /* Una sola columna en las dos vistas. */
     .colaboradores__roster,
     .colaboradores__perfil {
       grid-template-columns: minmax(0, 1fr);
@@ -691,30 +691,44 @@
 
     .colaboradores__marco {
       flex: none;
+      cursor: auto;
     }
 
-    /* Sin alto que repartir, las tres filas `fr` quedarían como filas
-       cuadradas vacías debajo de la última ficha. */
-    .colaboradores__grilla {
-      grid-template-rows: none;
-      grid-auto-rows: auto;
-    }
-
-    .colaboradores__ficha {
+    .colaboradores__resumen {
       block-size: auto;
-      aspect-ratio: 1 / 1;
+      overflow-y: visible;
+    }
+
+    /* Sin alto de ventana que repartir, el panal se da su propio alto:
+       colaboradores.js lo fija según los anillos que necesita. Este piso es
+       sólo el respaldo si el script no llega a medir. */
+    .colaboradores__grilla {
+      flex: none;
+      inline-size: 100%;
+      min-block-size: 320px;
     }
 
     .colaboradores__previa {
-      min-block-size: 240px;
+      min-block-size: 360px;
     }
 
+    /* Más caja para el círculo, y 128px abajo para que el nombre (hasta dos
+       renglones) y el puesto queden a 16px o más del anillo. */
     .colaboradores__previa .colaboradores__retrato {
-      inset-block-end: 96px;
+      inset-block-end: 128px;
     }
 
     .colaboradores__figura {
       min-block-size: 280px;
+    }
+
+    /* En una columna, la figura no recibe alto de ninguna fila: el retrato
+       sólo crecía por `flex` y, con `container-type: size`, Chrome resolvía
+       `cqb` en 0 y el círculo del perfil quedaba de 10px (el puro aro). Un alto
+       propio lo vuelve medible. */
+    .colaboradores__retrato--perfil {
+      flex: none;
+      block-size: min(88vw, 360px);
     }
 
     .colaboradores__datos {
@@ -733,7 +747,8 @@
   @media (prefers-reduced-motion: reduce) {
     .colaboradores__ficha,
     .colaboradores__enlace,
-    .colaboradores__enlace-empresa {
+    .colaboradores__enlace-empresa,
+    .colaboradores__editar {
       transition: none;
     }
   }
