@@ -568,6 +568,19 @@ test("the script drags with the mouse's left button and, on mobile, with a finge
   assert.match(js, /UMBRAL_ARRASTRE_TACTIL/);
 });
 
+test("on mobile a held finger in the honeycomb never selects text or opens the system menu", () => {
+  // iPhone, 14 de octubre: mantener el dedo sobre una letra sacaba «Copiar ·
+  // Traducir» y sobre la foto, «Guardar en Fotos».
+  const css = sinComentariosCss(CSS);
+  const regla = css.match(/@media \(max-width: 760px\)[\s\S]*?\.colaboradores__marco,\s*\.colaboradores__marco \*\s*\{([^}]*)\}/);
+  assert.ok(regla, "el marco y todo lo que contiene tienen su regla en el bloque móvil");
+  assert.match(regla[1], /-webkit-touch-callout:\s*none/);
+  assert.match(regla[1], /-webkit-user-select:\s*none/);
+  assert.match(regla[1], /(^|[^-])user-select:\s*none/);
+  const js = sinComentariosJs(JS);
+  assert.match(js, /el\.marco\.addEventListener\("contextmenu",\s*\(evento\) => evento\.preventDefault\(\)\)/);
+});
+
 test("on mobile the honeycomb is capped to part of the window, so the page can still scroll around it", () => {
   const js = sinComentariosJs(JS);
   const fraccion = Number(js.match(/const ALTO_MAXIMO_MOVIL = ([\d.]+);/)?.[1]);

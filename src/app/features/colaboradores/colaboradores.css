@@ -700,6 +700,17 @@
       touch-action: none;
     }
 
+    /* Mantener el dedo sobre una letra la seleccionaba («Copiar · Traducir»)
+       y sobre una foto o el lápiz abría el menú de iOS («Guardar en Fotos»):
+       dentro del panal un dedo quieto es el inicio de un arrastre o de un
+       toque, nunca una selección. Fuera del marco el texto se copia igual. */
+    .colaboradores__marco,
+    .colaboradores__marco * {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
     .colaboradores__resumen {
       block-size: auto;
       overflow-y: visible;

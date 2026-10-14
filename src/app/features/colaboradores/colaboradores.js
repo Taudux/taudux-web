@@ -204,6 +204,10 @@
     // de la foto seguía al cursor y el panal no se movía). La foto y el enlace
     // ya salen con draggable="false"; esto cubre cualquier otro que aparezca.
     el.marco.addEventListener("dragstart", (evento) => evento.preventDefault());
+    // Mantener el dedo encima abre el menú contextual en Android (el de iOS
+    // lo apaga -webkit-touch-callout en el CSS). En el panal no hay nada que
+    // copiar ni guardar.
+    el.marco.addEventListener("contextmenu", (evento) => evento.preventDefault());
 
     // Devuelve la promesa de la primera carga: el navegador la ignora, y así
     // quien dispara DOMContentLoaded (los tests) puede esperarla.
