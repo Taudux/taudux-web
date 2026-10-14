@@ -562,10 +562,28 @@ test("the frame is a grab surface on desktop and takes the finger on mobile", ()
 
 test("the script drags with the mouse's left button and, on mobile, with a finger or pen", () => {
   const js = sinComentariosJs(JS);
-  assert.match(js, /evento\.pointerType === "mouse" \? evento\.button !== 0 : !esMovil/);
-  // Un segundo dedo no arranca otro arrastre.
+  assert.match(js, /if \(evento\.pointerType === "mouse"\) \{\s*if \(evento\.button !== 0\) return;\s*\} else \{\s*if \(!esMovil\) return;/);
   assert.match(js, /if \(arrastre\) return;/);
   assert.match(js, /UMBRAL_ARRASTRE_TACTIL/);
+});
+
+test("on mobile two fingers pinch-zoom the honeycomb and a multi-finger touch never opens a profile", () => {
+  // iPhone, 14 de octubre: el pellizco no hacía nada y tocar con dos dedos
+  // abría el perfil del primero.
+  const js = sinComentariosJs(JS);
+  assert.match(js, /const dedos = new Map\(\);/);
+  assert.match(js, /if \(dedos\.size >= 2\) \{\s*multitoque = true;/);
+  // El zoom del pellizco usa los mismos topes que la rueda.
+  assert.match(js, /recortar\(p\.zoom0 \* \(Math\.hypot\([^)]*\) \/ p\.d0\), ZOOM_MIN, ZOOM_MAX\)/);
+  // Al soltar el último dedo de un gesto de varios, el clic se traga.
+  const fin = js.match(/function terminarDedoDeMultitoque\(\) \{[\s\S]*?\n {4}\}/);
+  assert.ok(fin, "existe terminarDedoDeMultitoque");
+  assert.match(fin[0], /tragarClic = true;/);
+  // En móvil el zoom ya no se fuerza a 1.
+  assert.doesNotMatch(js, /esMovil \? 1 : vista\.zoom/);
+  assert.doesNotMatch(js, /if \(movil\) vista\.zoom = 1/);
+  // El pellizco de página propio de Safari no sale del marco.
+  assert.match(js, /el\.marco\.addEventListener\("gesturestart",\s*\(evento\) => evento\.preventDefault\(\)\)/);
 });
 
 test("on mobile a held finger in the honeycomb never selects text or opens the system menu", () => {

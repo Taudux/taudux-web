@@ -157,6 +157,12 @@
     // navegador dispara al soltar un arrastre.
     let arrastre = null;
     let tragarClic = false;
+    // Dedos (o lápices) apoyados en el marco, en móvil: id → {x, y}. Con dos
+    // o más el gesto es un pellizco y `multitoque` queda encendido hasta que
+    // se levanta el último: un gesto así nunca abre un perfil.
+    const dedos = new Map();
+    let pellizco = null;
+    let multitoque = false;
     // Animación: un solo bucle rAF. `inercia` son px/ms por eje; `destino`, un
     // pan al que se llega suave (enfocar con teclado). Se apaga solo.
     let cuadro = 0;
@@ -208,6 +214,10 @@
     // lo apaga -webkit-touch-callout en el CSS). En el panal no hay nada que
     // copiar ni guardar.
     el.marco.addEventListener("contextmenu", (evento) => evento.preventDefault());
+    // Safari hace zoom a la PÁGINA con su propio evento de gesto, aparte de
+    // touch-action. Dentro del marco el pellizco es del panal.
+    el.marco.addEventListener("gesturestart", (evento) => evento.preventDefault());
+    el.marco.addEventListener("gesturechange", (evento) => evento.preventDefault());
 
     // Devuelve la promesa de la primera carga: el navegador la ignora, y así
     // quien dispara DOMContentLoaded (los tests) puede esperarla.
@@ -528,9 +538,8 @@
       areaAlto = alto;
       esMovil = movil;
 
-      // En móvil no hay zoom: vuelve a 1. Un cambio de medida puede dejar el
-      // pan fuera de los límites nuevos, así que se recorta.
-      if (movil) vista.zoom = 1;
+      // Un cambio de medida puede dejar el pan fuera de los límites nuevos,
+      // así que se recorta. El zoom se conserva.
       const l = limitesDelPan();
       vista.panX = recortar(vista.panX, l.minX, l.maxX);
       vista.panY = recortar(vista.panY, l.minY, l.maxY);
@@ -584,7 +593,7 @@
     */
     function pintarPanal() {
       if (celdas.length === 0 || base.length !== celdas.length || !(areaAncho > 0)) return;
-      const z = esMovil ? 1 : vista.zoom;
+      const z = vista.zoom;
       const pan = panVisible();
       const diametro = diametroBase * z;
       celdas.forEach((celda, indice) => {
@@ -614,6 +623,9 @@
     // Corta cualquier gesto o animación (cambio a móvil, vista de perfil).
     function cancelarGestos() {
       detenerCuadros();
+      dedos.clear();
+      pellizco = null;
+      multitoque = false;
       if (arrastre) {
         const id = arrastre.id;
         arrastre = null;
@@ -691,9 +703,20 @@
 
     function empezarArrastre(evento) {
       if (fichas.length === 0) return;
-      // Mouse sólo con el botón izquierdo; dedo y lápiz siempre. Un segundo
-      // dedo no arranca otro arrastre.
-      if (evento.pointerType === "mouse" ? evento.button !== 0 : !esMovil) return;
+      // Mouse sólo con el botón izquierdo; dedo y lápiz sólo en móvil.
+      if (evento.pointerType === "mouse") {
+        if (evento.button !== 0) return;
+      } else {
+        if (!esMovil) return;
+        dedos.set(evento.pointerId, { x: evento.clientX, y: evento.clientY });
+        // El segundo dedo convierte el gesto en pellizco; un tercero no
+        // cambia nada (el pellizco sigue con los dos primeros).
+        if (dedos.size >= 2) {
+          multitoque = true;
+          if (dedos.size === 2) empezarPellizco();
+          return;
+        }
+      }
       if (arrastre) return;
       // El enlace «Editar» es un clic de verdad, no un agarre.
       if (evento.target.closest?.(".colaboradores__editar")) return;
@@ -713,6 +736,11 @@
     }
 
     function moverArrastre(evento) {
+      if (dedos.has(evento.pointerId)) dedos.set(evento.pointerId, { x: evento.clientX, y: evento.clientY });
+      if (pellizco) {
+        moverPellizco();
+        return;
+      }
       if (!arrastre || evento.pointerId !== arrastre.id) return;
 
       if (!arrastre.activo) {
@@ -739,6 +767,10 @@
     }
 
     function terminarArrastre(evento) {
+      if (dedos.delete(evento.pointerId) && multitoque) {
+        terminarDedoDeMultitoque();
+        return;
+      }
       if (!arrastre || evento.pointerId !== arrastre.id) return;
       // Primero se limpia el estado: releasePointerCapture puede lanzar.
       const gesto = arrastre;
@@ -778,6 +810,93 @@
         }
       }
       arrancarCuadros();
+    }
+
+    // Los dos primeros dedos apoyados: el pellizco se mide siempre con ellos.
+    function dosDedos() {
+      const [a, b] = dedos.values();
+      return [a, b];
+    }
+
+    /*
+      El pellizco arranca (o se vuelve a basar) con los dos primeros dedos.
+      Guarda el punto medio relativo al centro de la grilla: el punto del
+      panal que está entre los dedos se queda entre ellos al acercar o alejar,
+      y sigue al punto medio si los dedos se trasladan.
+    */
+    function empezarPellizco() {
+      const [a, b] = dosDedos();
+      detenerCuadros();
+      if (arrastre) {
+        try { el.marco.releasePointerCapture(arrastre.id); } catch { /* ya soltado */ }
+        arrastre = null;
+      }
+      const caja = el.grilla.getBoundingClientRect();
+      const cx = caja.left + caja.width / 2;
+      const cy = caja.top + caja.height / 2;
+      const pan = panVisible();
+      vista.panX = pan.x;
+      vista.panY = pan.y;
+      pellizco = {
+        cx,
+        cy,
+        d0: Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1),
+        zoom0: vista.zoom,
+        mx0: (a.x + b.x) / 2 - cx,
+        my0: (a.y + b.y) / 2 - cy,
+        panX0: pan.x,
+        panY0: pan.y,
+      };
+      el.marco.classList.add(CLASE_MARCO_ARRASTRANDO);
+    }
+
+    // Misma cuenta que hacerZoom() con la rueda: pan' = m − (m0 − pan0)·(z'/z0).
+    function moverPellizco() {
+      if (dedos.size < 2) return;
+      const [a, b] = dosDedos();
+      const p = pellizco;
+      const zoom = recortar(p.zoom0 * (Math.hypot(b.x - a.x, b.y - a.y) / p.d0), ZOOM_MIN, ZOOM_MAX);
+      const factor = zoom / p.zoom0;
+      vista.zoom = zoom;
+      vista.panX = (a.x + b.x) / 2 - p.cx - (p.mx0 - p.panX0) * factor;
+      vista.panY = (a.y + b.y) / 2 - p.cy - (p.my0 - p.panY0) * factor;
+      pintarPanal();
+    }
+
+    /*
+      Se levantó un dedo de un gesto que tuvo dos o más. Si quedan dos, el
+      pellizco se vuelve a basar en ellos; si queda uno, sigue arrastrando
+      desde donde está (sin salto); si no queda ninguno, el panal vuelve a sus
+      límites y el clic que el navegador pueda disparar se traga.
+    */
+    function terminarDedoDeMultitoque() {
+      if (dedos.size >= 2) {
+        empezarPellizco();
+        return;
+      }
+      pellizco = null;
+      if (dedos.size === 1) {
+        const [[id, dedo]] = dedos;
+        arrastre = {
+          id,
+          umbral: UMBRAL_ARRASTRE_TACTIL,
+          x0: dedo.x,
+          y0: dedo.y,
+          panX0: vista.panX,
+          panY0: vista.panY,
+          activo: true,
+          muestras: [],
+        };
+        return;
+      }
+      arrastre = null;
+      multitoque = false;
+      el.marco.classList.remove(CLASE_MARCO_ARRASTRANDO);
+      // iOS puede disparar el clic un poco después del último touchend: la
+      // ventana es más larga que la del arrastre de un dedo.
+      tragarClic = true;
+      setTimeout(() => { tragarClic = false; }, 350);
+      volverALosLimites();
     }
 
     /*
