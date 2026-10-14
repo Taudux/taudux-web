@@ -1,7 +1,7 @@
 /*
   Editor de etiquetas genérico: un combobox con sugerencias de un catálogo, un
   listbox de sugerencias y una lista de etiquetas ya elegidas que se pueden
-  quitar y reordenar (con el teclado o arrastrando). Lo instancian
+  quitar y reordenar arrastrando. Lo instancian
   Herramientas, Habilidades e Idiomas de "Mi ficha" (mi-ficha.js), cada uno
   con sus propios nodos del DOM.
 
@@ -31,8 +31,7 @@
     input             el combobox de texto.
     opciones          el <ul role="listbox"> de sugerencias.
     lista             el <ul> de las etiquetas ya elegidas.
-    estado            la región aria-live de anuncios del widget (duplicados,
-                      reordenar).
+    estado            la región aria-live de anuncios del widget (duplicados).
     ayuda             el <p> con el texto de ayuda del campo.
     textoAyuda        el texto de ayuda cuando todavía se puede escribir.
     textoAyudaLlena   el texto de ayuda cuando ya se llegó al máximo.
@@ -122,8 +121,8 @@ function crearEditorDeEtiquetas({
     Repinta la lista y desliza cada etiqueta que cambió de lugar (técnica
     FLIP): antes de repintar se anota dónde está cada una (clave: su texto, que
     no se repite), y después se la anima desde esa posición vieja hasta la
-    nueva con Web Animations. Cubre arrastrar, mover con el teclado desde la
-    manija y quitar con ✕ (las que quedan se corren). Es una animación corta
+    nueva con Web Animations. Cubre arrastrar (salvo la etiqueta arrastrada, que
+    va con el puntero) y quitar con ✕ (las que quedan se corren). Es una animación corta
     y FINITA —180 ms, una vez— y no un bucle (regla de CLAUDE.md sobre
     animaciones infinitas); con prefers-reduced-motion no se anima nada.
     Donde no existe `animate` (navegadores viejos, el DOM falso de las
@@ -146,7 +145,9 @@ function crearEditorDeEtiquetas({
     marcarEtiquetaArrastrada();
 
     if (!animar || antes.size === 0) return;
-    for (const item of Array.from(lista.children)) {
+    for (const [indice, item] of Array.from(lista.children).entries()) {
+      // La que se arrastra no se desliza: va pegada al puntero (seguirPuntero).
+      if (arrastre && indice === arrastre.actual) continue;
       if (typeof item.animate !== "function") continue;
       const anterior = antes.get(item.children[1].textContent);
       const rect = anterior && item.getBoundingClientRect?.();
@@ -161,30 +162,69 @@ function crearEditorDeEtiquetas({
     }
   }
 
-  // La clase de "levantada" vive en un nodo que cada repintado recrea: se
-  // vuelve a poner después de cada uno.
+  // La clase de "levantada" y su desplazamiento viven en un nodo que cada
+  // repintado recrea: se vuelven a poner después de cada uno.
   function marcarEtiquetaArrastrada() {
     if (!arrastre) return;
     lista.children[arrastre.actual]?.classList.add(CLASE_ETIQUETA_ARRASTRANDO);
+    seguirPuntero();
   }
 
   /*
-    Una etiqueta: una manija para reordenar (por teclado o arrastrando), el
-    texto y un botón para quitarla. La manija y el botón de quitar son texto
-    plano (no un span decorativo adentro): así evento.target en un clic o un
-    pointerdown es siempre el botón, nunca un hijo suyo.
+    La etiqueta levantada va pegada al puntero (2026-10-13; antes saltaba de
+    hueco en hueco y entre saltos se quedaba quieta, y en el iPhone el dedo se
+    separaba de ella). Se la corre con la propiedad individual `translate`
+    desde su lugar en el layout hasta donde está el puntero, conservando el
+    punto de donde se la tomó; `translate` se compone con el `scale` del
+    levantado y con el `transform` de los deslizamientos, sin pisarlos.
+
+    En horizontal no sale de la lista: un elemento transformado también
+    cuenta para el ancho que se puede scrollear, y la página nunca scrollea
+    en horizontal (regla de CLAUDE.md). En vertical puede asomar una fila por
+    arriba o por abajo.
+  */
+  function seguirPuntero() {
+    const item = lista.children[arrastre.actual];
+    if (!item || !arrastre.punto) return;
+    let izquierda = arrastre.punto.x - arrastre.toma.x;
+    let arriba = arrastre.punto.y - arrastre.toma.y;
+    const ancho = lista.clientWidth;
+    if (Number.isFinite(ancho) && ancho > 0) {
+      izquierda = Math.min(Math.max(izquierda, 0), Math.max(ancho - item.offsetWidth, 0));
+    }
+    const alto = lista.clientHeight;
+    if (Number.isFinite(alto) && alto > 0) {
+      arriba = Math.min(Math.max(arriba, -item.offsetHeight), alto);
+    }
+    arrastre.dx = izquierda - item.offsetLeft;
+    arrastre.dy = arriba - item.offsetTop;
+    item.style.translate = `${arrastre.dx}px ${arrastre.dy}px`;
+  }
+
+  // El puntero en coordenadas de la lista, las mismas que las cajas de layout.
+  function puntoEnLista(clientX, clientY) {
+    const origen = lista.getBoundingClientRect();
+    return { x: clientX - origen.left, y: clientY - origen.top };
+  }
+
+  /*
+    Una etiqueta: la manija ⠿, el texto y un botón para quitarla. El botón de
+    quitar es texto plano (no un span decorativo adentro): así evento.target
+    en un clic o un pointerdown es siempre el botón, nunca un hijo suyo.
+
+    La manija es sólo un dibujo (2026-10-13): no es un botón, no entra con Tab
+    y los lectores de pantalla no la leen. Antes era un botón que reordenaba
+    con las flechas, pero se pidió que Tab no se detuviera en ella; desde
+    entonces reordenar es sólo arrastrando. Con Tab se recorren las ✕.
   */
   function crearEtiqueta(tecnologia, indice) {
     const item = document.createElement("li");
     item.className = "mi-ficha__etiquetas-item";
 
-    const manija = document.createElement("button");
-    manija.type = "button";
+    const manija = document.createElement("span");
     manija.className = "mi-ficha__etiquetas-item-manija";
-    manija.setAttribute("aria-label", `Reordenar ${tecnologia}`);
-    manija.setAttribute("data-indice-etiqueta", String(indice));
+    manija.setAttribute("aria-hidden", "true");
     manija.textContent = "⠿";
-    manija.addEventListener("keydown", (evento) => manejarTecladoManija(evento, indice));
 
     const texto = document.createElement("span");
     texto.className = "mi-ficha__etiquetas-item-texto";
@@ -214,20 +254,14 @@ function crearEditorDeEtiquetas({
     return item;
   }
 
-  function enfocarManija(indice) {
-    const item = lista.children[indice];
-    if (!item) return;
-    item.children[0].focus();
-  }
-
   /*
-    Al quitar, el foco va a la manija que quedó en el mismo índice; si ya no
-    hay ninguna ahí (se quitó la última), a la anterior; si la lista quedó
-    vacía, al input.
+    Al quitar, el foco va a la ✕ de la etiqueta que quedó en el mismo índice;
+    si ya no hay ninguna ahí (se quitó la última), a la anterior; si la lista
+    quedó vacía, al input.
   */
   function enfocarTrasQuitar(indiceQuitado) {
     if (valores.length === 0) { input.focus(); return; }
-    enfocarManija(Math.min(indiceQuitado, valores.length - 1));
+    lista.children[Math.min(indiceQuitado, valores.length - 1)]?.children[2].focus();
   }
 
   function quitarEnIndice(indice) {
@@ -237,29 +271,6 @@ function crearEditorDeEtiquetas({
     pintarLista();
     actualizarLimite();
     enfocarTrasQuitar(indice);
-  }
-
-  // Reordenar desde la manija: el foco sigue a la etiqueta en su nueva
-  // posición, y se anuncia por la región aria-live del widget.
-  function mover(origen, destino) {
-    const anterior = valores;
-    valores = moverEtiqueta(valores, origen, destino);
-    if (valores === anterior) return;
-    const posicionFinal = Math.min(Math.max(destino, 0), valores.length - 1);
-    pintarLista();
-    enfocarManija(posicionFinal);
-    anunciar(`${valores[posicionFinal]}, posición ${posicionFinal + 1} de ${valores.length}.`);
-  }
-
-  function manejarTecladoManija(evento, indice) {
-    let destino;
-    if (evento.key === "ArrowLeft") destino = indice - 1;
-    else if (evento.key === "ArrowRight") destino = indice + 1;
-    else if (evento.key === "Home") destino = 0;
-    else if (evento.key === "End") destino = valores.length - 1;
-    else return;
-    evento.preventDefault();
-    mover(indice, destino);
   }
 
   /*
@@ -274,16 +285,19 @@ function crearEditorDeEtiquetas({
     if (evento.target === quitar) return;
     if (evento.pointerType === "mouse") {
       if (evento.button > 0) return;
-      iniciarArrastre(evento.pointerId, indice);
+      iniciarArrastre(evento.pointerId, indice, evento.clientX, evento.clientY);
       return;
     }
     pendiente = {
       pointerId: evento.pointerId,
       x: evento.clientX,
       y: evento.clientY,
+      // Dónde está el dedo ahora: puede temblar un poco sin cancelar la espera.
+      ultimo: { x: evento.clientX, y: evento.clientY },
       temporizador: setTimeout(() => {
+        const { ultimo } = pendiente;
         pendiente = null;
-        iniciarArrastre(evento.pointerId, indice);
+        iniciarArrastre(evento.pointerId, indice, ultimo.x, ultimo.y);
       }, ESPERA_ARRASTRE_TACTIL_MS),
     };
   }
@@ -301,8 +315,14 @@ function crearEditorDeEtiquetas({
     movimiento repinta la lista entera, y una etiqueta capturada que desaparece
     del DOM perdería la captura a mitad de camino.
   */
-  function iniciarArrastre(pointerId, indice) {
-    arrastre = { pointerId, actual: indice };
+  function iniciarArrastre(pointerId, indice, clientX, clientY) {
+    const item = lista.children[indice];
+    arrastre = { pointerId, actual: indice, punto: null, toma: null, dx: 0, dy: 0 };
+    if (item && Number.isFinite(clientX) && Number.isFinite(clientY)) {
+      const punto = puntoEnLista(clientX, clientY);
+      arrastre.punto = punto;
+      arrastre.toma = { x: punto.x - item.offsetLeft, y: punto.y - item.offsetTop };
+    }
     try {
       lista.setPointerCapture?.(pointerId);
     } catch {
@@ -341,21 +361,46 @@ function crearEditorDeEtiquetas({
       const dx = evento.clientX - pendiente.x;
       const dy = evento.clientY - pendiente.y;
       if (Math.hypot(dx, dy) > TOLERANCIA_ARRASTRE_TACTIL_PX) cancelarPendiente();
+      else pendiente.ultimo = { x: evento.clientX, y: evento.clientY };
       return;
     }
     if (!arrastre || evento.pointerId !== arrastre.pointerId) return;
-    const origen = lista.getBoundingClientRect();
-    const destino = destinoDeArrastre(
-      cajasDeEtiquetas(),
-      arrastre.actual,
-      { x: evento.clientX - origen.left, y: evento.clientY - origen.top },
-    );
-    if (destino === -1 || destino === arrastre.actual) return;
+    const punto = puntoEnLista(evento.clientX, evento.clientY);
+    // Sin coordenadas al empezar, se la toma desde el primer movimiento.
+    if (!arrastre.toma) {
+      const item = lista.children[arrastre.actual];
+      if (item) arrastre.toma = { x: punto.x - item.offsetLeft, y: punto.y - item.offsetTop };
+    }
+    arrastre.punto = punto;
+    const destino = destinoDeArrastre(cajasDeEtiquetas(), arrastre.actual, punto);
     const anterior = valores;
-    valores = moverEtiqueta(valores, arrastre.actual, destino);
-    if (valores === anterior) return;
+    if (destino !== -1 && destino !== arrastre.actual) {
+      valores = moverEtiqueta(valores, arrastre.actual, destino);
+    }
+    if (valores === anterior) {
+      seguirPuntero();
+      return;
+    }
     arrastre.actual = Math.min(Math.max(destino, 0), valores.length - 1);
+    // pintarLista vuelve a pegar la etiqueta al puntero, ya en su hueco nuevo.
     pintarLista();
+  }
+
+  /*
+    Al soltar, la etiqueta deja de seguir al puntero y se desliza desde donde
+    quedó hasta su hueco, con la misma animación corta y finita de
+    pintarLista; con prefers-reduced-motion cae directo.
+  */
+  function soltarEtiqueta() {
+    const item = lista.children[arrastre.actual];
+    if (!item) return;
+    item.style.translate = "";
+    const { dx, dy } = arrastre;
+    if ((dx === 0 && dy === 0) || prefiereMenosMovimiento() || typeof item.animate !== "function") return;
+    item.animate(
+      [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+      { duration: DURACION_REORDENAR_MS, easing: "cubic-bezier(.2, .8, .2, 1)" },
+    );
   }
 
   function terminarArrastre(evento) {
@@ -363,6 +408,7 @@ function crearEditorDeEtiquetas({
     // de cumplir la espera: fue un toque o un scroll, no un arrastre.
     if (pendiente && evento.pointerId === pendiente.pointerId) cancelarPendiente();
     if (!arrastre || evento.pointerId !== arrastre.pointerId) return;
+    soltarEtiqueta();
     arrastre = null;
     lista.classList.remove(CLASE_LISTA_ARRASTRANDO);
     for (const item of Array.from(lista.children)) item.classList.remove(CLASE_ETIQUETA_ARRASTRANDO);

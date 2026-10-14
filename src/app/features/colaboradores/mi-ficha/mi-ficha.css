@@ -455,7 +455,6 @@
     color: var(--color-error-text);
   }
 
-  .mi-ficha__etiquetas-item-manija:focus-visible,
   .mi-ficha__etiquetas-item-quitar:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);

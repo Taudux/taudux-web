@@ -1093,6 +1093,15 @@ function etiquetaHerramienta(pagina, indice) {
   return pagina.porId("miFichaHerramientasLista").children[indice];
 }
 
+// Arrastra con el mouse la primera etiqueta de `campo` al segundo lugar, con
+// el layout de conLayoutDeEtiquetas (lugares en x = 0, 100, 200).
+function arrastrarPrimeraAlSegundoLugar(pagina, campo = "herramientas") {
+  const lista = pagina.porId(`${ID_DE[campo]}Lista`);
+  lista.children[0].disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 1, clientX: 150, clientY: 10 });
+  lista.disparar("pointerup", { pointerId: 1 });
+}
+
 // El botón de quitar de la etiqueta en el índice dado (hijo 2 de su <li>).
 function quitarHerramienta(pagina, indice) {
   return pagina.porId("miFichaHerramientasLista").children[indice].children[2];
@@ -1248,19 +1257,19 @@ test("the twelfth technology disables the input and the help says so; removing o
   assert.equal(pagina.porId("miFichaHerramientas").disabled, false);
 });
 
-test("removing a tag moves focus to the handle at the same index, then the previous one, then the input when the list empties", async () => {
+test("removing a tag moves focus to the remove button at the same index, then the previous one, then the input when the list empties", async () => {
   const pagina = await cargarPagina();
   ["A", "B", "C"].forEach((tecnologia) => pagina.agregarEtiqueta("herramientas", tecnologia));
 
-  // Quita "B" (índice 1): el foco va a la manija que ocupa ese índice ahora ("C").
+  // Quita "B" (índice 1): el foco va a la ✕ de la que ocupa ese índice ahora ("C").
   quitarHerramienta(pagina, 1).disparar("click");
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "C"]);
-  assert.equal(pagina.activo(), manijaHerramienta(pagina, 1));
+  assert.equal(pagina.activo(), quitarHerramienta(pagina, 1));
 
   // Quita "C", que ahora es la última (índice 1 de 2): el foco va a la anterior.
   quitarHerramienta(pagina, 1).disparar("click");
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A"]);
-  assert.equal(pagina.activo(), manijaHerramienta(pagina, 0));
+  assert.equal(pagina.activo(), quitarHerramienta(pagina, 0));
 
   // Quita la última que queda: la lista se vacía y el foco va al input.
   quitarHerramienta(pagina, 0).disparar("click");
@@ -1280,19 +1289,19 @@ test("Backspace on an empty input removes nothing: a tag only goes away with its
   assertFocoEn(pagina, "miFichaHerramientas");
 });
 
-test("keyboard reordering from the handle moves the tag and focus follows it", async () => {
+test("the handle is only a drawing: Tab skips it, screen readers ignore it, and keys do nothing", async () => {
   const pagina = await cargarPagina();
   ["A", "B", "C"].forEach((tecnologia) => pagina.agregarEtiqueta("herramientas", tecnologia));
+  const manija = manijaHerramienta(pagina, 0);
 
-  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+  assert.equal(manija.tagName, "SPAN", "no es un botón: Tab no se detiene en ella");
+  assert.equal(manija.hasAttribute("tabindex"), false);
+  assert.equal(manija.getAttribute("aria-hidden"), "true");
+  manija.focus();
+  assert.notEqual(pagina.activo(), manija);
 
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
-  assert.equal(pagina.activo(), manijaHerramienta(pagina, 1));
-  assert.equal(pagina.texto("miFichaHerramientasEstado"), "A, posición 2 de 3.");
-
-  manijaHerramienta(pagina, 1).disparar("keydown", { key: "End" });
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "C", "A"]);
-  assert.equal(pagina.activo(), manijaHerramienta(pagina, 2));
+  manija.disparar("keydown", { key: "ArrowRight" });
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "B", "C"]);
 });
 
 test("a missing technology catalog script degrades silently: no suggestions and nothing can be added", async () => {
@@ -1328,18 +1337,15 @@ test("preloading a card with a technology outside the catalog keeps it exactly a
   "herramientas" adentro de la fábrica sobrevivía).
 */
 
-// La manija (hijo 0) y el botón de quitar (hijo 2) de la etiqueta en el
-// índice dado, para cualquiera de las tres listas.
-function manijaDeEtiqueta(pagina, campo, indice) {
-  return pagina.porId(`${ID_DE[campo]}Lista`).children[indice].children[0];
-}
-
+// El botón de quitar (hijo 2) de la etiqueta en el índice dado, para
+// cualquiera de las tres listas.
 function quitarDeEtiqueta(pagina, campo, indice) {
   return pagina.porId(`${ID_DE[campo]}Lista`).children[indice].children[2];
 }
 
 test("the three tag lists are independent: adding, removing and reordering one leaves the others alone", async () => {
   const pagina = await cargarPagina();
+  conLayoutDeEtiquetas(pagina);
 
   ["Python", "Docker"].forEach((etiqueta) => pagina.agregarEtiqueta("herramientas", etiqueta));
   ["TDD", "Scrum"].forEach((etiqueta) => pagina.agregarEtiqueta("habilidades", etiqueta));
@@ -1355,17 +1361,12 @@ test("the three tag lists are independent: adding, removing and reordering one l
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Python", "Docker"]);
   assert.deepEqual(pagina.etiquetasEnPantalla("idiomas"), ["Español"]);
 
-  // Reordenar en herramientas tampoco: el arrastre y el teclado de cada
-  // instancia capturan sobre SU <ul>, no sobre el documento.
-  manijaDeEtiqueta(pagina, "herramientas", 0).disparar("keydown", { key: "ArrowRight" });
+  // Reordenar en herramientas tampoco: el arrastre de cada instancia captura
+  // sobre SU <ul>, no sobre el documento.
+  arrastrarPrimeraAlSegundoLugar(pagina, "herramientas");
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["Docker", "Python"]);
   assert.deepEqual(pagina.etiquetasEnPantalla("habilidades"), ["Scrum"]);
   assert.deepEqual(pagina.etiquetasEnPantalla("idiomas"), ["Español"]);
-
-  // Y cada una anuncia por SU región aria-live.
-  assert.equal(pagina.texto("miFichaHerramientasEstado"), "Python, posición 2 de 2.");
-  assert.equal(pagina.texto("miFichaHabilidadesEstado"), "");
-  assert.equal(pagina.texto("miFichaIdiomasEstado"), "");
 });
 
 /*
@@ -1685,16 +1686,16 @@ async function paginaConEtiquetas() {
 
 test("moving a tag slides the tags that changed place, from where they were to where they are", async () => {
   const { pagina, animaciones } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
 
-  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 1, clientX: 150, clientY: 10 });
 
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
-  assert.deepEqual(animaciones.map((a) => a.texto).sort(), ["A", "B"], "C no se movió y no se anima");
-  const deA = animaciones.find((a) => a.texto === "A");
-  assert.deepEqual(structuredClone(deA.fotogramas), [{ transform: "translate(-100px, 0px)" }, { transform: "none" }]);
-  assert.equal(deA.opciones.duration, 180);
-  const deB = animaciones.find((a) => a.texto === "B");
-  assert.deepEqual(structuredClone(deB.fotogramas), [{ transform: "translate(100px, 0px)" }, { transform: "none" }]);
+  // A va con el puntero; C no se movió y no se anima.
+  assert.deepEqual(animaciones.map((a) => a.texto), ["B"]);
+  assert.deepEqual(structuredClone(animaciones[0].fotogramas), [{ transform: "translate(100px, 0px)" }, { transform: "none" }]);
+  assert.equal(animaciones[0].opciones.duration, 180);
 });
 
 test("removing a tag slides the ones that stay", async () => {
@@ -1723,7 +1724,7 @@ test("without Web Animations the list still repaints and nothing throws", async 
     : undefined);
   ["A", "B", "C"].forEach((texto) => pagina.agregarEtiqueta("herramientas", texto));
 
-  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+  arrastrarPrimeraAlSegundoLugar(pagina);
   quitarHerramienta(pagina, 0).disparar("click");
 
   assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "C"]);
@@ -1860,13 +1861,97 @@ test("while a finger drags, the tag stops the page from scrolling; before, it do
   assert.equal(frenaElScroll(), true);
 });
 
+/* ---------- La etiqueta arrastrada sigue al puntero (2026-10-13) ---------- */
+
+const desplazamientoDe = (pagina, texto) => pagina.porId("miFichaHerramientasLista").children
+  .find((item) => item.children[1].textContent === texto).style.translate;
+
+test("the dragged tag follows the pointer from the point where it was grabbed", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  // Se la toma a 40px de su borde izquierdo; A está en x = 0.
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 1, clientX: 60, clientY: 25 });
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "B", "C"], "todavía no cruza el centro de B");
+  assert.equal(desplazamientoDe(pagina, "A"), "20px 15px");
+});
+
+test("after changing place, the offset is measured from the new slot, and only the others slide", async () => {
+  const { pagina, animaciones } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 1, clientX: 150, clientY: 10 });
+
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
+  // A ya está en x = 100: 150 − 40 − 100.
+  assert.equal(desplazamientoDe(pagina, "A"), "10px 0px");
+  assert.deepEqual(animaciones.map((a) => a.texto), ["B"], "la arrastrada no se desliza: va con el puntero");
+});
+
+test("on release the tag drops its offset and glides into its slot", async () => {
+  const { pagina, animaciones } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 1, clientX: 150, clientY: 10 });
+  animaciones.length = 0;
+  lista.disparar("pointerup", { pointerId: 1 });
+
+  assert.equal(desplazamientoDe(pagina, "A"), "");
+  assert.deepEqual(structuredClone(animaciones.map((a) => [a.texto, a.fotogramas])), [
+    ["A", [{ transform: "translate(10px, 0px)" }, { transform: "none" }]],
+  ]);
+});
+
+test("with reduced motion the tag still follows the pointer but drops straight into place", async () => {
+  const { pagina, animaciones } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+  pagina.contexto.matchMedia = () => ({ matches: true });
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 1, clientX: 60, clientY: 10 });
+  assert.equal(desplazamientoDe(pagina, "A"), "20px 0px");
+  lista.disparar("pointerup", { pointerId: 1 });
+
+  assert.equal(desplazamientoDe(pagina, "A"), "");
+  assert.deepEqual(animaciones, []);
+});
+
+test("the dragged tag never leaves the list sideways, so the page cannot scroll horizontally", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+  lista.clientWidth = 300;
+
+  etiquetaHerramienta(pagina, 2).disparar("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, clientX: 240, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 1, clientX: 900, clientY: 10 });
+
+  // C mide 80 y la lista 300: su borde izquierdo se queda en 220 (está en 200).
+  assert.equal(desplazamientoDe(pagina, "C"), "20px 0px");
+});
+
+test("with a finger, the tag is grabbed where the finger rests when the hold completes", async () => {
+  const { pagina } = await paginaConEtiquetas();
+  const lista = pagina.porId("miFichaHerramientasLista");
+
+  etiquetaHerramienta(pagina, 0).disparar("pointerdown", { pointerId: 7, pointerType: "touch", clientX: 40, clientY: 10 });
+  lista.disparar("pointermove", { pointerId: 7, clientX: 44, clientY: 12 });
+  await esperarPresion();
+  lista.disparar("pointermove", { pointerId: 7, clientX: 54, clientY: 12 });
+
+  assert.equal(desplazamientoDe(pagina, "A"), "10px 0px");
+});
+
 test("prefers-reduced-motion switches the slide off", async () => {
   const { pagina, animaciones } = await paginaConEtiquetas();
   // El vm comparte `window` con el contexto: matchMedia se define ahí.
   pagina.contexto.matchMedia = () => ({ matches: true });
 
-  manijaHerramienta(pagina, 0).disparar("keydown", { key: "ArrowRight" });
+  arrastrarPrimeraAlSegundoLugar(pagina);
+  quitarHerramienta(pagina, 0).disparar("click");
 
-  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["B", "A", "C"]);
+  assert.deepEqual(pagina.etiquetasEnPantalla("herramientas"), ["A", "C"]);
   assert.deepEqual(animaciones, []);
 });
