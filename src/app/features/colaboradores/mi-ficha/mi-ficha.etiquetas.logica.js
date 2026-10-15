@@ -12,13 +12,19 @@
   pero mañana también lo van a usar Habilidades e Idiomas, cada uno con su
   propia clave en LIMITES_MI_FICHA y MENSAJES_MI_FICHA.
 
-  El catálogo NO es una lista blanca. Sólo alimenta las sugerencias: cualquier
-  texto que pase errorDeElementoEtiquetaMiFicha entra, esté o no en él.
+  El catálogo es la lista blanca de lo que se puede AGREGAR (2026-10-13): el
+  editor sólo agrega lo que se elige de las sugerencias, nunca texto libre.
+  agregarEtiqueta() sigue validando cada elemento contra los CHECK de la base
+  porque protege lo que llegue por cualquier camino, y las etiquetas ya
+  guardadas que no estén en el catálogo se conservan y se muestran: el
+  catálogo sólo decide qué se ofrece de ahora en adelante.
 */
 
-// Cuántas sugerencias se muestran a la vez. El catálogo tiene ~175 entradas y
-// "a" coincide con media lista: sin tope, el desplegable taparía la página.
-const MAXIMO_SUGERENCIAS_ETIQUETAS = 8;
+// Cuántas sugerencias se devuelven a lo sumo. El catálogo tiene ~175 entradas
+// y "a" coincide con media lista, pero desde 2026-10-13 el desplegable ocupa su
+// propio lugar en el flujo y scrollea por dentro (unas 5 filas visibles), así
+// que ya no tapa la página: el tope sólo evita pintar cientos de filas.
+const MAXIMO_SUGERENCIAS_ETIQUETAS = 50;
 
 /*
   La clave con la que se compara y se busca: sin acentos, en minúsculas y con
@@ -140,34 +146,64 @@ function sugerenciasDeEtiqueta(catalogo, consulta, yaElegidas = [], limite = MAX
 }
 
 /*
-  Cuál de los centros queda más cerca del puntero. Toma números, no nodos: el
-  cableado mide las etiquetas con getBoundingClientRect() y esta función sólo
-  hace la aritmética, igual que calculateCrop()/clampPan() en el recortador de
-  portadas. Así la decisión del arrastre se prueba sin navegador.
+  A qué lugar se pasa la etiqueta que se arrastra (2026-10-13). Toma números,
+  no nodos: el cableado mide las cajas de LAYOUT de las etiquetas
+  (offsetLeft y compañía, que ignoran transformaciones) y convierte el
+  puntero a coordenadas de la lista; esta función sólo hace la aritmética.
 
-  Se compara la distancia AL CUADRADO: la raíz no cambia cuál es la menor y
-  sobra calcularla en cada frame. Con empate gana el primero, que es el que ya
-  estaba a la izquierda y evita que dos etiquetas parpadeen entre sí.
+  EL ERROR QUE EVITA. La primera versión elegía "el centro más cercano al
+  puntero", y en el navegador las etiquetas se intercambiaban de ida y vuelta
+  en cada paso: tras un cambio, el centro del vecino —que ahora está donde
+  estaba la arrastrada, y es de otro ancho— seguía siendo el más cercano, y
+  volvía a cambiar. Medir con getBoundingClientRect() empeoraba todo, porque
+  incluye la animación de deslizamiento en curso.
+
+  Ahora hay HISTÉRESIS, en orden de lectura:
+    - el candidato es la caja que contiene al puntero, o la de menor distancia
+      al rectángulo (0 si el punto está adentro);
+    - si el candidato es la propia etiqueta, no se mueve;
+    - para pasar a un lugar POSTERIOR hay que haber cruzado el centro del
+      candidato (en su fila: x mayor; en una fila más abajo: ya cuenta);
+    - para pasar a uno ANTERIOR, lo mismo al revés (x menor, o fila más arriba).
+  Tras un cambio, el puntero queda del lado "ya cruzado" del vecino que acaba
+  de pasar, así que no hay cambio de regreso hasta que lo recorra de vuelta:
+  la holgura es el ancho de la etiqueta arrastrada más el hueco.
+
+  \`cajas\` son { left, top, width, height } en coordenadas de la lista. Devuelve
+  el índice de destino, que puede ser \`actual\` (no se mueve); con entradas
+  inválidas devuelve \`actual\`, o -1 si \`actual\` tampoco es un índice.
 */
-function indiceMasCercano(centros, punto) {
-  const lista = Array.isArray(centros) ? centros : [];
-  if (lista.length === 0) return -1;
-  if (!punto || typeof punto.x !== "number" || typeof punto.y !== "number") return -1;
+function destinoDeArrastre(cajas, actual, punto) {
+  const lista = Array.isArray(cajas) ? cajas : [];
+  if (!Number.isInteger(actual) || actual < 0 || actual >= lista.length) return -1;
+  if (!punto || !Number.isFinite(punto.x) || !Number.isFinite(punto.y)) return actual;
 
-  let elegido = -1;
+  const valida = (caja) => caja
+    && [caja.left, caja.top, caja.width, caja.height].every(Number.isFinite);
+
+  let candidato = -1;
   let menor = Infinity;
   for (let i = 0; i < lista.length; i += 1) {
-    const centro = lista[i];
-    if (!centro || typeof centro.x !== "number" || typeof centro.y !== "number") continue;
-    const dx = centro.x - punto.x;
-    const dy = centro.y - punto.y;
+    const caja = lista[i];
+    if (!valida(caja)) continue;
+    const dx = Math.max(caja.left - punto.x, 0, punto.x - (caja.left + caja.width));
+    const dy = Math.max(caja.top - punto.y, 0, punto.y - (caja.top + caja.height));
     const distancia = dx * dx + dy * dy;
+    // Con empate gana la primera, como en lectura.
     if (distancia < menor) {
       menor = distancia;
-      elegido = i;
+      candidato = i;
     }
   }
-  return elegido;
+  if (candidato === -1 || candidato === actual) return actual;
+
+  const caja = lista[candidato];
+  const centroX = caja.left + caja.width / 2;
+  const debajo = punto.y > caja.top + caja.height;
+  const encima = punto.y < caja.top;
+
+  if (candidato > actual) return debajo || (!encima && punto.x > centroX) ? candidato : actual;
+  return encima || (!debajo && punto.x < centroX) ? candidato : actual;
 }
 
 if (typeof module === "object" && module.exports) {
@@ -178,6 +214,6 @@ if (typeof module === "object" && module.exports) {
     quitarEtiqueta,
     moverEtiqueta,
     sugerenciasDeEtiqueta,
-    indiceMasCercano,
+    destinoDeArrastre,
   });
 }

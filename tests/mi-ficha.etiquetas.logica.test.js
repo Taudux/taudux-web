@@ -25,7 +25,7 @@ const {
   quitarEtiqueta,
   moverEtiqueta,
   sugerenciasDeEtiqueta,
-  indiceMasCercano,
+  destinoDeArrastre,
 } = contexto;
 
 /*
@@ -90,7 +90,8 @@ test("a technology is added at the end, trimmed, on a new array", () => {
   assert.deepEqual(herramientas, ["Python"], "el arreglo de entrada no se toca");
 });
 
-// El catálogo sugiere, nunca restringe: es la decisión de fondo del editor.
+// agregarEtiqueta no consulta el catálogo: que sólo se agreguen etiquetas del
+// catálogo lo decide el editor (mi-ficha.etiquetas.js), que sólo le pasa lo elegido.
 test("a technology outside the catalog is added just the same", () => {
   const resultado = agregarEtiqueta("herramientas", [], "Un framework que nadie conoce");
 
@@ -279,73 +280,97 @@ test("an empty query suggests nothing; one character already suggests", () => {
 });
 
 /*
-  El tope existe para que el desplegable no tape la página: en el catálogo
-  real, "a" coincide con media lista.
+  El tope existe para no pintar cientos de filas: en el catálogo
+  real, "a" coincide con media lista (el desplegable scrollea por dentro).
 */
 test("the suggestions are capped, by default at the limit of the widget", () => {
-  const muchas = Array.from({ length: 40 }, (_, i) => `Etiqueta ${i}`);
+  const muchas = Array.from({ length: 80 }, (_, i) => `Etiqueta ${i}`);
 
   assert.equal(sugerenciasDeEtiqueta(muchas, "etiqueta").length, MAXIMO_SUGERENCIAS_ETIQUETAS);
-  assert.equal(MAXIMO_SUGERENCIAS_ETIQUETAS, 8);
+  assert.equal(MAXIMO_SUGERENCIAS_ETIQUETAS, 50);
   assert.equal(sugerenciasDeEtiqueta(muchas, "etiqueta", [], 3).length, 3);
   assert.deepEqual(plano(sugerenciasDeEtiqueta(muchas, "etiqueta", [], 0)), []);
 });
 
-// Sin catálogo el editor sigue vivo: se escribe y se agrega a mano.
+// Sin catálogo no hay nada que sugerir (y, por tanto, nada que agregar).
 test("a missing or broken catalog suggests nothing instead of failing", () => {
   for (const roto of [[], null, undefined, "PostgreSQL", [7, null, "", {}]]) {
     assert.deepEqual(plano(sugerenciasDeEtiqueta(roto, "post")), [], JSON.stringify(roto));
   }
 });
 
+
 /* ---------- Arrastre ---------- */
 
-test("the nearest center wins, by plain distance", () => {
-  const centros = [
-    { x: 0, y: 0 },
-    { x: 100, y: 0 },
-    { x: 200, y: 0 },
-  ];
+const caja = (left, top, width, height = 20) => ({ left, top, width, height });
 
-  assert.equal(indiceMasCercano(centros, { x: 10, y: 0 }), 0);
-  assert.equal(indiceMasCercano(centros, { x: 90, y: 5 }), 1);
-  assert.equal(indiceMasCercano(centros, { x: 500, y: 0 }), 2);
+test("the dragged tag stays put until the pointer crosses the center of the neighbour", () => {
+  const cajas = [caja(0, 0, 80), caja(88, 0, 80), caja(176, 0, 80)];
+
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 40, y: 10 }), 0, "sobre sí misma");
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 100, y: 10 }), 0, "dentro del vecino pero antes de su centro");
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 130, y: 10 }), 1, "pasado su centro");
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 400, y: 10 }), 2, "más allá de la última: la última");
+  assert.equal(destinoDeArrastre(cajas, 2, { x: 200, y: 10 }), 2, "hacia atrás, antes de cruzar el centro");
+  assert.equal(destinoDeArrastre(cajas, 2, { x: 120, y: 10 }), 1, "hacia atrás, ya cruzado");
+  assert.equal(destinoDeArrastre(cajas, 2, { x: -50, y: 10 }), 0, "antes de la primera: la primera");
 });
 
-// Las etiquetas envuelven en varias filas: el eje vertical cuenta igual.
-test("the vertical axis counts too, because the tags wrap into rows", () => {
-  const centros = [
-    { x: 0, y: 0 },
-    { x: 0, y: 100 },
-  ];
+test("the pointer in the gap between two tags goes to the nearest box", () => {
+  const cajas = [caja(0, 0, 80), caja(88, 0, 80)];
 
-  assert.equal(indiceMasCercano(centros, { x: 0, y: 40 }), 0);
-  assert.equal(indiceMasCercano(centros, { x: 0, y: 60 }), 1);
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 84, y: 10 }), 0, "el hueco está antes del centro de la segunda");
+  assert.equal(destinoDeArrastre(cajas, 1, { x: 84, y: 10 }), 1, "y no ha cruzado el centro de la primera (empate a distancia: gana la primera)");
 });
 
 /*
-  Con empate gana el primero: si alternara, dos etiquetas a la misma distancia
-  se intercambiarían en cada frame aunque el puntero no se mueva.
+  LA REGRESIÓN. Una etiqueta angosta junto a una ancha, arrastrada con el
+  puntero quieto en el mismo punto: con "el centro más cercano" tras el
+  cambio volvía a cambiar, y así en cada paso. Se simula el diseño antes y
+  después del cambio y se exige que la segunda llamada se quede donde está.
 */
-test("a tie goes to the first one", () => {
-  const centros = [
-    { x: 0, y: 0 },
-    { x: 100, y: 0 },
-  ];
+test("a narrow tag dragged over a wide one does not flip back after the swap", () => {
+  // HTML (40px) y Supabase (120px), con 8px de hueco.
+  const antes = [caja(0, 0, 40), caja(48, 0, 120)];
+  const punto = { x: 110, y: 10 };
 
-  assert.equal(indiceMasCercano(centros, { x: 50, y: 0 }), 0);
+  const primera = destinoDeArrastre(antes, 0, punto);
+  assert.equal(primera, 1, "cruzó el centro de la ancha: se intercambian");
+
+  // Después del cambio: la ancha primero, la angosta (ahora en el lugar 1) detrás.
+  const despues = [caja(0, 0, 120), caja(128, 0, 40)];
+  assert.equal(destinoDeArrastre(despues, 1, punto), 1, "con el puntero quieto no vuelve");
+
+  // Y recorrer de vuelta hasta el centro de la ancha sí la devuelve.
+  assert.equal(destinoDeArrastre(despues, 1, { x: 70, y: 10 }), 1, "todavía no pasó el centro (60)");
+  assert.equal(destinoDeArrastre(despues, 1, { x: 50, y: 10 }), 0, "pasado el centro: vuelve");
 });
 
-test("without centers or without a point there is no destination", () => {
-  assert.equal(indiceMasCercano([], { x: 0, y: 0 }), -1);
-  assert.equal(indiceMasCercano(null, { x: 0, y: 0 }), -1);
-  for (const punto of [null, undefined, {}, { x: 1 }, { x: "1", y: 2 }]) {
-    assert.equal(indiceMasCercano([{ x: 0, y: 0 }], punto), -1, JSON.stringify(punto));
+test("with wrapped rows, a lower row counts as past and an upper row as before", () => {
+  const cajas = [caja(0, 0, 80), caja(88, 0, 80), caja(0, 30, 80)];
+
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 30, y: 40 }), 0, "en la fila de abajo, antes del centro");
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 50, y: 40 }), 2, "en la fila de abajo, pasado el centro");
+  assert.equal(destinoDeArrastre(cajas, 0, { x: 5, y: 80 }), 2, "bajo la última fila cuenta como pasado");
+  assert.equal(destinoDeArrastre(cajas, 2, { x: 50, y: 10 }), 2, "en la fila de arriba, a la derecha del centro de la primera");
+  assert.equal(destinoDeArrastre(cajas, 2, { x: 30, y: 10 }), 0, "en la fila de arriba, antes del centro");
+  assert.equal(destinoDeArrastre(cajas, 2, { x: 120, y: -15 }), 1, "sobre la primera fila cuenta como antes");
+});
+
+test("without boxes, or with a source that is not an index, there is no destination", () => {
+  assert.equal(destinoDeArrastre([], 0, { x: 0, y: 0 }), -1);
+  assert.equal(destinoDeArrastre(null, 0, { x: 0, y: 0 }), -1);
+  for (const actual of [-1, 2, 0.5, NaN, undefined, "0"]) {
+    assert.equal(destinoDeArrastre([caja(0, 0, 80), caja(88, 0, 80)], actual, { x: 0, y: 0 }), -1, String(actual));
   }
 });
 
-test("centers that are not points are skipped, not counted", () => {
-  const centros = [null, { x: 500, y: 0 }, { x: 10, y: 0 }];
+test("a broken pointer or broken boxes leave the tag where it is", () => {
+  const cajas = [caja(0, 0, 80), caja(88, 0, 80)];
 
-  assert.equal(indiceMasCercano(centros, { x: 0, y: 0 }), 2);
+  for (const punto of [null, undefined, {}, { x: 1 }, { x: "1", y: 2 }, { x: NaN, y: 0 }]) {
+    assert.equal(destinoDeArrastre(cajas, 0, punto), 0, JSON.stringify(punto));
+  }
+  assert.equal(destinoDeArrastre([caja(0, 0, 80), null, { left: "x" }], 0, { x: 500, y: 10 }), 0);
+  assert.equal(destinoDeArrastre([caja(0, 0, 80), null, caja(176, 0, 80)], 0, { x: 300, y: 10 }), 2, "las cajas rotas se saltan");
 });

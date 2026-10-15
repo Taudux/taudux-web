@@ -415,3 +415,146 @@ test("a LinkedIn or GitHub link must point at that site, the same rule as the 00
     assert.deepEqual(tipos({ github }), [], `debe rechazar ${github}`);
   }
 });
+
+/*
+  El panal del roster: círculos en anillos hexagonales. La función es pura, así
+  que lo que importa se prueba con números: el primero al centro, todo dentro
+  del área (con el radio, escalado o no), la escala que sólo baja hacia afuera
+  y el tope del diámetro.
+*/
+const { posicionesDelPanal } = DATOS;
+
+const ESCENARIOS_PANAL = [
+  [1, 689, 544],
+  [4, 689, 544],
+  [7, 689, 544],
+  [19, 689, 544],
+  [19, 350, 350],
+  [37, 350, 700],
+  [12, 1200, 200],
+];
+
+test("the honeycomb puts the first circle at the center of the area", () => {
+  for (const [cantidad, ancho, alto] of ESCENARIOS_PANAL) {
+    const { posiciones } = posicionesDelPanal(cantidad, ancho, alto);
+    assert.equal(posiciones.length, cantidad);
+    assert.ok(Math.abs(posiciones[0].x - ancho / 2) < 1e-9, `x, ${cantidad} círculos`);
+    assert.ok(Math.abs(posiciones[0].y - alto / 2) < 1e-9, `y, ${cantidad} círculos`);
+    assert.equal(posiciones[0].escala, 1, "el central es el más grande");
+  }
+});
+
+test("every circle stays inside the area, scaled or not", () => {
+  for (const [cantidad, ancho, alto] of ESCENARIOS_PANAL) {
+    const { diametro, posiciones } = posicionesDelPanal(cantidad, ancho, alto);
+    const radio = diametro / 2;
+    const EPS = 1e-6;
+    posiciones.forEach(({ x, y, escala }, indice) => {
+      for (const r of [radio, radio * escala]) {
+        const donde = `${cantidad} círculos, #${indice}, radio ${r.toFixed(1)}`;
+        assert.ok(x - r >= -EPS && x + r <= ancho + EPS, `horizontal: ${donde}`);
+        assert.ok(y - r >= -EPS && y + r <= alto + EPS, `vertical: ${donde}`);
+      }
+    });
+  }
+});
+
+test("the scale never grows with the distance to the center", () => {
+  for (const [cantidad, ancho, alto] of ESCENARIOS_PANAL) {
+    const { posiciones } = posicionesDelPanal(cantidad, ancho, alto);
+    const ordenadas = posiciones
+      .map(({ x, y, escala }) => ({ distancia: Math.hypot(x - ancho / 2, y - alto / 2), escala }))
+      .sort((a, b) => a.distancia - b.distancia);
+    ordenadas.forEach((punto, i) => {
+      assert.ok(punto.escala >= 0.45 && punto.escala <= 1, "escala entre 0.45 y 1");
+      if (i > 0) assert.ok(punto.escala <= ordenadas[i - 1].escala + 1e-9, `${cantidad} círculos, posición ${i}`);
+    });
+  }
+});
+
+test("the honeycomb caps the diameter and shrinks it to fit small areas", () => {
+  assert.equal(posicionesDelPanal(1, 2000, 2000).diametro, 118, "un solo círculo no se vuelve gigante");
+  assert.equal(posicionesDelPanal(4, 689, 544).diametro, 118);
+  const { diametro } = posicionesDelPanal(19, 689, 544);
+  assert.ok(diametro > 100 && diametro < 118, `19 en 689×544 ronda 114px (salió ${diametro})`);
+  assert.ok(posicionesDelPanal(19, 350, 350).diametro < 70);
+  assert.equal(posicionesDelPanal(1, 2000, 2000, 50).diametro, 50, "el tope es un parámetro");
+});
+
+test("the honeycomb spaces centers 1.08 diameters apart in a row and handles empty input", () => {
+  const { diametro, posiciones } = posicionesDelPanal(3, 689, 544);
+  // El hueco 1 está al este del central, en su misma fila.
+  assert.ok(Math.abs(posiciones[1].y - posiciones[0].y) < 1e-9);
+  assert.ok(Math.abs(posiciones[1].x - posiciones[0].x - diametro * 1.08) < 1e-9);
+
+  for (const vacio of [0, -3, NaN, undefined]) {
+    assert.deepEqual(posicionesDelPanal(vacio, 100, 100).posiciones, []);
+  }
+  assert.doesNotThrow(() => posicionesDelPanal(5, 0, 0));
+  assert.equal(posicionesDelPanal(5, 0, 0).diametro, 0);
+});
+
+test("a half-filled ring is spread evenly, so a small team stays centered", () => {
+  for (const cantidad of [3, 4, 5]) {
+    const { diametro, posiciones } = posicionesDelPanal(cantidad, 689, 544);
+    const alrededor = posiciones.slice(1);
+    const cx = alrededor.reduce((s, p) => s + p.x, 0) / alrededor.length;
+    const cy = alrededor.reduce((s, p) => s + p.y, 0) / alrededor.length;
+    // Sin el reparto, con 4 los tres de afuera quedaban juntos abajo a la derecha.
+    assert.ok(Math.hypot(cx - 689 / 2, cy - 544 / 2) < diametro * 0.4, `${cantidad}: el racimo no se carga a un lado`);
+  }
+});
+
+test("escalaEnPanal matches the scales of the honeycomb and shrinks with distance down to 0.45", () => {
+  const { escalaEnPanal, posicionesDelPanal } = DATOS;
+  const { posiciones } = posicionesDelPanal(19, 689, 544);
+  for (const p of posiciones) {
+    assert.ok(Math.abs(escalaEnPanal(p.x - 689 / 2, p.y - 544 / 2, 689, 544) - p.escala) < 1e-12);
+  }
+  assert.equal(escalaEnPanal(0, 0, 689, 544), 1);
+  let previa = 1;
+  for (let d = 50; d <= 500; d += 50) {
+    const e = escalaEnPanal(d, 0, 689, 544);
+    assert.ok(e <= previa, "no crece al alejarse");
+    previa = e;
+  }
+  assert.equal(escalaEnPanal(5000, 5000, 689, 544), 0.45);
+  assert.doesNotThrow(() => escalaEnPanal(10, 10, 0, 0));
+});
+
+test("limitarDesplazamiento is the identity inside, resisted and monotonic outside", () => {
+  const { limitarDesplazamiento } = DATOS;
+  for (const v of [-100, -40, 0, 33, 100]) assert.equal(limitarDesplazamiento(v, -100, 100), v);
+
+  let previo = 100;
+  for (let exceso = 1; exceso <= 2000; exceso += 37) {
+    const arriba = limitarDesplazamiento(100 + exceso, -100, 100);
+    assert.ok(arriba > previo, "sube con el exceso");
+    assert.ok(arriba - 100 < exceso, "rinde menos que el exceso crudo");
+    assert.ok(arriba - 100 < 160, "el estiramiento está acotado");
+    previo = arriba;
+    // Simétrico del otro lado.
+    assert.ok(Math.abs((limitarDesplazamiento(-100 - exceso, -100, 100) + 100) + (arriba - 100)) < 1e-9);
+  }
+  // Un rango invertido se colapsa a su punto medio.
+  assert.equal(limitarDesplazamiento(5, 10, -10), 5 > 0 ? limitarDesplazamiento(5, 0, 0) : 0);
+});
+
+test("pasoDeInercia always slows down and terminates", () => {
+  const { pasoDeInercia } = DATOS;
+  for (const inicial of [0.5, -3, 50, -1e6]) {
+    let v = inicial;
+    let pasos = 0;
+    for (;;) {
+      const siguiente = pasoDeInercia(v, 16, 0.004);
+      assert.ok(Math.abs(siguiente.velocidad) <= Math.abs(v), "nunca acelera");
+      v = siguiente.velocidad;
+      pasos += 1;
+      if (siguiente.frenado) break;
+      assert.ok(pasos < 5000, "debe frenar en un número acotado de pasos");
+    }
+    assert.equal(v, 0);
+  }
+  assert.equal(pasoDeInercia(2, 16, 0).frenado, true, "sin fricción válida frena de golpe");
+  assert.equal(pasoDeInercia(2, 16, NaN).frenado, true);
+});

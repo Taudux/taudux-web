@@ -2,6 +2,45 @@
 
 @layer features {
   /*
+    EL FONDO (2026-10-13): el mismo cielo de estrellas que Colaboradores. Las
+    reglas son las de #particles-fondo y body.colaboradores-page de
+    colaboradores.css, copiadas acá y acotadas a esta página (mismo criterio
+    que admin-nav.css con qr.css): esa hoja no se carga acá. El lienzo lo
+    dibuja colaboradores.fondo.js, que se reutiliza tal cual. Orden de capas:
+
+        body (color plano)  <  degradado  <  #particles-fondo  <  contenido
+
+    Las dos capas fijas comparten alto (100lvh): anclar una sola deja una
+    costura cuando la barra del navegador móvil aparece o se va.
+  */
+  body.mi-ficha-page::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-behind);
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 40% 55% at 22% 60%, rgba(0, 180, 220, 0.14), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 72% 50%, rgba(24, 82, 210, 0.14), transparent 70%),
+      linear-gradient(180deg, rgb(2, 4, 8) 0%, rgb(5, 10, 17) 62%, rgb(6, 19, 27) 100%);
+  }
+
+  .mi-ficha-page #particles-fondo {
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 100vh;
+    height: 100lvh;
+    z-index: var(--z-base);
+    pointer-events: none;
+  }
+
+  .mi-ficha-page #particles-fondo canvas {
+    opacity: 0.88;
+  }
+
+  /*
     Relleno en el padre y contenedor compartido sin relleno en el hijo, como
     .colaboradores y .extractor. El despeje superior cuelga del token del
     navbar, así que sigue solo si la barra cambia de alto.
@@ -11,7 +50,10 @@
     padding-block-start: var(--espacio-bajo-navbar);
     padding-block-end: 4rem;
     padding-inline: 2rem;
-    background-color: var(--color-background);
+    /* Sin fondo propio: dejaría tapado el cielo de estrellas. Por encima de
+       él (z-index) para que el contenido siga recibiendo clics. */
+    position: relative;
+    z-index: var(--z-content);
   }
 
   .mi-ficha__cabecera {
@@ -64,6 +106,25 @@
 
   .mi-ficha__panel-titulo {
     font-size: clamp(1.3rem, 3vw, 1.7rem);
+  }
+
+  /*
+    Paneles planos, como en Administración (admin-nav.css): sin recuadro, sin
+    fondo ni sombra. `.panel` es compartida por todo el sitio y no se toca;
+    acá se aplana sólo dentro de esta página. `.panel--spacious` traía 4rem de
+    alto por recuadro: sin recuadro, 1.5rem arriba y abajo y sin relleno
+    lateral, para que el contenido alinee con el título.
+  */
+  .mi-ficha .panel {
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .mi-ficha .panel--spacious {
+    padding: 1.5rem 0;
   }
 
   /* El aviso de consentimiento: todo lo que se guarda es público. */
@@ -163,46 +224,137 @@
   }
 
   /*
-    El editor de etiquetas de las herramientas: el input de arriba, el
-    desplegable de sugerencias flotando debajo (position: relative en el
-    envoltorio) y la lista de etiquetas elegidas, que envuelve en su propia
-    fila y nunca empuja el ancho de la página.
+    El editor de etiquetas (habilidades, herramientas e idiomas): el input
+    arriba, el desplegable de sugerencias EN EL FLUJO justo debajo (empuja lo
+    que sigue en vez de flotar sobre el campo de abajo) y, después, la lista
+    de etiquetas elegidas, que envuelve en su propia fila y nunca empuja el
+    ancho de la página.
   */
   .mi-ficha__etiquetas {
-    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
 
-  .mi-ficha__etiquetas-opciones {
-    position: absolute;
-    inset-block-start: calc(100% + 0.25rem);
-    inset-inline: 0;
-    z-index: 5;
-    margin: 0;
-    padding: 0.35rem;
-    list-style: none;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-field);
-    background-color: var(--color-field);
-    max-block-size: 16rem;
-    overflow-y: auto;
+  /*
+    La flecha del combobox: un chevron cian que apunta hacia abajo con la
+    lista cerrada y hacia arriba con la lista abierta. Lo maneja
+    aria-expanded, que el editor ya mantiene, y no una clase aparte. Es una
+    capa más de background-image DELANTE de la línea: por eso la línea se
+    declara con variables (ver `.mi-ficha .field`) y acá sólo se agregan la
+    capa, su posición y su tamaño. El cian va escrito como %2300e1ff (el
+    --color-accent) porque dentro de un data: URI no hay variables.
+  */
+  .mi-ficha__etiquetas .field[role="combobox"] {
+    padding-inline-end: 1.75rem;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 5l6 6 6-6' fill='none' stroke='%2300e1ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+      var(--ficha-linea);
+    background-repeat: no-repeat, no-repeat;
+    background-position: right 0.25rem center, left bottom;
+    background-size: 1rem 1rem, 100% var(--ficha-grosor);
   }
 
+  .mi-ficha__etiquetas .field[role="combobox"][aria-expanded="true"] {
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 11l6-6 6 6' fill='none' stroke='%2300e1ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+      var(--ficha-linea);
+  }
+
+  /*
+    El desplegable ("vidrio con barra", 2026-10-13): una caja azul-negra
+    translúcida con su propio scroll. Unas cinco filas
+    visibles (12.5rem deja la sexta asomada, que avisa que hay más) y
+    `overscroll-behavior: contain` para que al llegar al final de la lista la
+    rueda no arrastre la página. La barra es la del sitio (ver html en
+    styles.css y .slides__dialogo): degradado de la marca, riel oscuro y
+    flechas cian. El diálogo del editor de foto la comparte.
+
+    El `backdrop-filter: blur` es caro en móvil (ver CLAUDE.md), y aquí se
+    permite porque no anima nada y sólo existe mientras la lista está abierta:
+    cerrada lleva `hidden` y no se pinta.
+  */
+  .mi-ficha__etiquetas-opciones {
+    margin: 0;
+    padding: 0.25rem 0;
+    list-style: none;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+    border-radius: 10px;
+    background-color: color-mix(in srgb, rgb(10 26 36) 70%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    max-block-size: 12.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar,
+  .editor-foto::-webkit-scrollbar { width: 8px; }
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar-track,
+  .editor-foto::-webkit-scrollbar-track { background: var(--color-background-deep); }
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar-thumb,
+  .editor-foto::-webkit-scrollbar-thumb {
+    background: linear-gradient(to bottom, var(--color-accent-dark), var(--color-accent));
+    border-radius: 99px;
+  }
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar-button:single-button:vertical,
+  .editor-foto::-webkit-scrollbar-button:single-button:vertical {
+    display: block;
+    height: 0.75rem;
+    background: var(--color-background-deep) no-repeat center / 8px 8px;
+  }
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar-button:single-button:vertical:decrement,
+  .editor-foto::-webkit-scrollbar-button:single-button:vertical:decrement {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 2 L7 6 H1 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar-button:single-button:vertical:increment,
+  .editor-foto::-webkit-scrollbar-button:single-button:vertical:increment {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1 2 H7 L4 6 Z' fill='%2300e1ff'/%3E%3C/svg%3E");
+  }
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar-button:vertical:start:increment,
+  .mi-ficha__etiquetas-opciones::-webkit-scrollbar-button:vertical:end:decrement,
+  .editor-foto::-webkit-scrollbar-button:vertical:start:increment,
+  .editor-foto::-webkit-scrollbar-button:vertical:end:decrement { display: none; }
+
+  /* Firefox: mismos colores, sin degradado. Dentro de @supports porque en
+     Chrome un `scrollbar-color` anula los ::-webkit-scrollbar. */
+  @supports not selector(::-webkit-scrollbar) {
+    .mi-ficha__etiquetas-opciones,
+    .editor-foto {
+      scrollbar-width: thin;
+      scrollbar-color: var(--color-accent-dark) var(--color-background-deep);
+    }
+  }
+
+  /* Una fila limpia, sin iconos. No hay resaltado por teclado: sólo la fila
+     bajo el puntero se marca, con una barra cian a la izquierda y un velo. */
   .mi-ficha__etiquetas-opcion {
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--radius-field);
+    padding: 0.6rem 1rem;
+    border-inline-start: 3px solid transparent;
+    border-radius: 0;
     color: var(--color-text);
     cursor: pointer;
     overflow-wrap: anywhere;
   }
 
-  .mi-ficha__etiquetas-opcion--resaltada {
-    background-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  .mi-ficha__etiquetas-opcion:hover {
+    border-inline-start-color: var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
   }
 
+  /* Lo escrito, dentro de cada opción, en cian y negritas (es un <mark>: sin
+     su amarillo del navegador). */
+  .mi-ficha__etiquetas-opcion-coincidencia {
+    background: none;
+    color: var(--color-accent);
+    font-weight: 700;
+  }
+
+  /* `position: relative` para que los offsetLeft/offsetTop de las etiquetas
+     (que mide el arrastre) sean relativos a la lista. */
   .mi-ficha__etiquetas-lista {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -231,12 +383,44 @@
     align-items: center;
     gap: 0.4rem;
     max-inline-size: 100%;
-    padding: 0.4rem 0.6rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-pill);
-    background-color: var(--color-field);
-    color: var(--color-text);
-    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--color-accent);
+    border-radius: 999px;
+    background: none;
+    color: var(--color-accent);
+    font-size: 0.85rem;
+    /*
+      Toda la etiqueta se arrastra (2026-10-13): con mouse al instante, con el
+      dedo tras mantenerla presionada (mi-ficha.etiquetas.js). Su texto no se
+      selecciona ni abre el menú «Copiar / Traducir» de iOS al mantenerla, y
+      pan-y deja que un deslizamiento vertical que empieza encima siga
+      scrolleando la página.
+    */
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: pan-y;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast),
+      scale var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  /*
+    La etiqueta levantada mientras se arrastra. Usa la propiedad `scale` y no
+    `transform` para componerse con el deslizamiento de pintarLista, que sí
+    anima `transform`. Queda por encima de sus vecinas.
+  */
+  .mi-ficha__etiquetas-item--arrastrando {
+    position: relative;
+    z-index: var(--z-content);
+    scale: 1.05;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent) 55%, transparent);
+    cursor: grabbing;
+  }
+
+  .mi-ficha__etiquetas-lista--arrastrando,
+  .mi-ficha__etiquetas-lista--arrastrando .mi-ficha__etiquetas-item-manija {
+    cursor: grabbing;
   }
 
   /* El aviso de "ya está en tus herramientas": se apaga solo, a los 1.2s. */
@@ -261,7 +445,6 @@
 
   .mi-ficha__etiquetas-item-manija {
     cursor: grab;
-    touch-action: none;
   }
 
   .mi-ficha__etiquetas-item-quitar {
@@ -272,10 +455,303 @@
     color: var(--color-error-text);
   }
 
-  .mi-ficha__etiquetas-item-manija:focus-visible,
   .mi-ficha__etiquetas-item-quitar:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
+  }
+
+  /*
+    La foto. Un círculo de vista previa y sus botones. El placeholder
+    es una silueta (cabeza y torso) sobre el mismo rayado del retrato de
+    Colaboradores, pero propio de esta hoja: aquella no se carga acá. Sin aro
+    ni resplandor cian alrededor, a pedido; el borde discontinuo desaparece en
+    cuanto hay foto.
+  */
+  .mi-ficha__foto-fila {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.5rem;
+  }
+
+  .mi-ficha__foto-vista {
+    position: relative;
+    flex: none;
+    inline-size: 7rem;
+    block-size: 7rem;
+    overflow: hidden;
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    border-radius: 50%;
+    background: repeating-linear-gradient(135deg, rgba(0, 225, 255, 0.06) 0 6px, transparent 6px 22px);
+  }
+
+  .mi-ficha__foto-vista--con-foto {
+    border-color: transparent;
+  }
+
+  .mi-ficha__foto-silueta {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .mi-ficha__foto-silueta--cabeza {
+    inset: 18% 33% auto;
+    block-size: 28%;
+    border-radius: 50%;
+  }
+
+  .mi-ficha__foto-silueta--torso {
+    inset: 52% 14% 0;
+    border-radius: 50% 50% 0 0 / 70% 70% 0 0;
+  }
+
+  .mi-ficha__foto-img {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .mi-ficha__foto-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  /* `.button` fija su propio display y le gana al [hidden] del navegador. */
+  .mi-ficha__foto-acciones [hidden] {
+    display: none;
+  }
+
+  /*
+    El diálogo del editor de foto. Calca a .slides__dialogo (slides.css): el
+    mismo borde, radio y fondo, y la misma barra de scroll (arriba, junto a la
+    del desplegable de etiquetas). `margin: auto` porque el reset global pone
+    margin: 0, que anula el centrado nativo del <dialog>. No se le pone
+    `display`: un display de autor lo dejaría abierto aun sin showModal().
+  */
+  .editor-foto {
+    margin: auto;
+    inline-size: min(46rem, calc(100vw - 2rem));
+    max-block-size: calc(100dvh - 2rem);
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    color: var(--color-text);
+    background: var(--color-background);
+    border: var(--border-subtle);
+    border-radius: var(--radius-panel);
+  }
+
+  .editor-foto::backdrop {
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  /*
+    Con el diálogo abierto la página no scrollea y su barra no se ve. El
+    `scrollbar-gutter` conserva el hueco de la barra para que el contenido no
+    pegue un salto de ancho al abrir y al cerrar.
+  */
+  html.editor-foto-abierto {
+    overflow: hidden;
+    scrollbar-gutter: stable;
+  }
+
+  .editor-foto__cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+  }
+
+  .editor-foto__titulo {
+    font-size: 1.3rem;
+  }
+
+  .editor-foto__cerrar,
+  .editor-foto__icono {
+    display: grid;
+    place-items: center;
+    flex: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-field);
+    background: transparent;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+  }
+
+  .editor-foto__cerrar {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+  }
+
+  .editor-foto__icono {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+
+  .editor-foto__cerrar:hover,
+  .editor-foto__icono:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .editor-foto__cerrar:focus-visible,
+  .editor-foto__icono:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .editor-foto__cerrar svg,
+  .editor-foto__icono svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .editor-foto__aviso {
+    margin: 0 1.5rem 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-error);
+    border-radius: var(--radius-field);
+    background-color: color-mix(in srgb, var(--color-error) 12%, transparent);
+    color: var(--color-error-text);
+  }
+
+  .editor-foto__paso {
+    padding: 0 1.5rem 1.5rem;
+  }
+
+  /* `:not([hidden])` porque este display le ganaría al [hidden] del paso. */
+  .editor-foto__paso--editar:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .editor-foto__zona {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    padding: 2.5rem 1.5rem;
+    border: 2px dashed color-mix(in srgb, var(--color-accent) 45%, transparent);
+    border-radius: var(--radius-panel);
+    text-align: center;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+  }
+
+  .editor-foto__zona--sobre {
+    border-color: var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+
+  .editor-foto__zona-texto {
+    font-size: 1.1rem;
+  }
+
+  .editor-foto__zona-o {
+    color: var(--color-text-muted);
+  }
+
+  .editor-foto__ayuda {
+    margin-block-start: 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  /*
+    El marco del encuadre: un cuadrado exacto. El canvas es `display: block`
+    (si fuera inline, dejaría la franja de la línea de texto debajo) y ocupa
+    el marco entero; la guía circular es una capa encima que no recibe
+    eventos. El velo oscuro fuera del círculo es un degradado radial, no un
+    dibujo en el canvas, así el archivo exportado no lo hereda.
+  */
+  .editor-foto__marco {
+    position: relative;
+    min-inline-size: 0;
+    inline-size: 100%;
+    max-inline-size: 24rem;
+    margin-inline: auto;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--radius-field);
+    background: var(--color-background-deep);
+  }
+
+  .editor-foto__lienzo {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .editor-foto__lienzo--arrastrando {
+    cursor: grabbing;
+  }
+
+  .editor-foto__lienzo:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: -3px;
+  }
+
+  .editor-foto__guia {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      circle closest-side,
+      transparent calc(100% - 2px),
+      rgba(255, 255, 255, 0.75) calc(100% - 2px) 100%,
+      rgba(8, 10, 12, 0.72) 100%
+    );
+  }
+
+  .editor-foto__controles {
+    display: grid;
+    gap: 1.25rem;
+    min-inline-size: 0;
+  }
+
+  .editor-foto__herramientas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .editor-foto__control {
+    display: grid;
+    grid-template-columns: 3.5rem minmax(0, 1fr) 3rem;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .editor-foto__control input[type="range"] {
+    inline-size: 100%;
+    min-inline-size: 0;
+    accent-color: var(--color-accent);
+  }
+
+  .editor-foto__valor {
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+  }
+
+  .editor-foto__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.75rem;
   }
 
   /* El fieldset de modalidad de trabajo se ve como un grupo más, sin marco. */
@@ -315,6 +791,71 @@
   }
 
   /*
+    Los campos, de una sola línea (2026-10-13): sin caja, sin fondo y sin
+    radio, sólo una línea inferior de 1px en degradado del azul al cian. Todo
+    acotado a esta página: .field es compartido y los demás formularios
+    conservan su caja.
+
+    La línea es una capa de `background-image` (no un borde) para convivir con
+    otras capas, como la flecha del combobox: `--ficha-linea` y
+    `--ficha-grosor` son las dos perillas que cambian con el foco y el error,
+    y cada regla que las cambia no tiene que repetir las capas de más.
+
+    Con foco la línea pasa a 2px y proyecta un resplandor suave debajo. El
+    contorno por defecto se reemplaza por eso mismo, y sigue siendo bien
+    visible: es más gruesa, más brillante y con luz. Un campo inválido conserva
+    el rojo también con foco (va después, como en field.css).
+  */
+  .mi-ficha .field {
+    --ficha-linea: linear-gradient(to right, var(--color-accent-dark), var(--color-accent));
+    --ficha-grosor: 1px;
+
+    padding: 0.6rem 0;
+    border: 0;
+    border-radius: 0;
+    background-color: transparent;
+    background-image: var(--ficha-linea);
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size: 100% var(--ficha-grosor);
+    transition: background-size var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  /*
+    La bio: crece con lo que se escribe (ajustarAltoBio en mi-ficha.js), así
+    que no se redimensiona a mano ni muestra barra hasta llegar a su tope. El
+    mínimo son los 3 renglones del `rows` del HTML: se anula el
+    min-height de .field--textarea.
+  */
+  .mi-ficha .field--textarea {
+    min-height: 0;
+    resize: none;
+    overflow-y: hidden;
+  }
+
+  .mi-ficha .field::placeholder {
+    color: var(--color-text-subtle);
+    opacity: 0.8;
+  }
+
+  .mi-ficha .field:focus,
+  .mi-ficha .field:focus-visible {
+    --ficha-grosor: 2px;
+
+    outline: none;
+    box-shadow: 0 6px 10px -8px var(--color-accent);
+  }
+
+  .mi-ficha .field[aria-invalid="true"] {
+    --ficha-linea: linear-gradient(to right, var(--color-error), var(--color-error));
+  }
+
+  .mi-ficha .field[aria-invalid="true"]:focus,
+  .mi-ficha .field[aria-invalid="true"]:focus-visible {
+    box-shadow: 0 6px 10px -8px var(--color-error);
+  }
+
+  /*
     El campo apagado (Proyectos) y los campos mientras se guarda. Acotado a
     esta página: .field es compartido y los demás formularios no lo piden.
   */
@@ -342,10 +883,9 @@
       padding-inline: 1.25rem;
     }
 
-    /* El 4rem 3rem de .panel--spacious dejaría el formulario en la mitad del
-       ancho de un teléfono. */
-    .mi-ficha__panel {
-      padding: 2rem 1.25rem;
+    /* Una sola columna: el encuadre arriba y los controles debajo. */
+    .editor-foto__paso--editar:not([hidden]) {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     /* En móvil los botones ocupan el ancho: más fácil de tocar. */

@@ -15,6 +15,11 @@
   el roster, pero no abre perfil; su ficha sólo se elige y la vista previa
   muestra su nombre.
 
+  La foto (0050) es opcional: quien la tiene la muestra en su ficha, en la vista
+  previa y en el perfil, y quien no, conserva la inicial de
+  siempre. Si el navegador no logra cargarla (el archivo se retiró y la ruta
+  quedó vieja) se vuelve a la inicial en vez de dejar un ícono de imagen rota.
+
   Todo el texto entra por textContent. Los nombres vienen de la base y las
   fichas las escribe a mano cada persona: nada de lo que venga de ahí se
   interpreta como markup.
@@ -32,6 +37,26 @@
     puesto: "Pasa el cursor o elige una ficha",
     bio: "Elige una ficha del roster para ver su perfil y especialidades.",
   };
+
+  // Arrastre del panal (mouse en escritorio, dedo en móvil) y zoom con la
+  // rueda (sólo escritorio).
+  const CLASE_MARCO_ARRASTRANDO = "colaboradores__marco--arrastrando";
+  const UMBRAL_ARRASTRE = 5; // px: menos que eso sigue siendo un clic
+  const UMBRAL_ARRASTRE_TACTIL = 8; // px: un dedo tiembla más que un mouse
+  // En móvil el panal no pasa de esta fracción de la ventana: el marco no
+  // scrollea la página (touch-action: none) y tiene que quedar página fuera de
+  // él donde apoyar el dedo.
+  const ALTO_MAXIMO_MOVIL = 0.62;
+  const VENTANA_DE_VELOCIDAD = 80; // ms de muestras para la velocidad al soltar
+  const VELOCIDAD_MAXIMA = 4; // px/ms: tope para que un tirón no lance el panal lejos
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 2;
+
+  const CLASE_FICHA_CON_FOTO = "colaboradores__ficha--con-foto";
+  const CLASE_RETRATO_CON_FOTO = "colaboradores__retrato--con-foto";
+
+  // URLs de foto que el navegador no pudo cargar: se tratan como "sin foto".
+  const fotosRotas = new Set();
 
   const AVISOS = {
     cargando: "Cargando colaboradores…",
@@ -54,12 +79,16 @@
       marco: porId("colaboradoresMarco"),
       grilla: porId("colaboradoresGrilla"),
       resumen: porId("colaboradoresResumen"),
+      previaRetrato: porId("previaRetrato"),
+      previaFoto: porId("previaFoto"),
       previaInicial: porId("previaInicial"),
       previaNombre: porId("previaNombre"),
       previaRol: porId("previaRol"),
       previaBio: porId("previaBio"),
       previaEnlaces: porId("previaEnlaces"),
       perfilNumero: porId("perfilNumero"),
+      perfilRetrato: porId("perfilRetrato"),
+      perfilFoto: porId("perfilFoto"),
       perfilInicial: porId("perfilInicial"),
       perfilEnlaces: porId("perfilEnlaces"),
       perfilNombre: porId("perfilNombre"),
@@ -103,6 +132,43 @@
     let colaboradores = [];
     let fichas = [];
     let enlacesDeEdicion = [];
+    let celdas = [];
+    // La última medida aplicada al panal: si no cambió, acomodarPanal() no
+    // toca el DOM. Es lo que corta el ciclo observador → alto de la grilla →
+    // observador en móvil.
+    let medidaDelPanal = "";
+
+    /*
+      La VISTA del panal: cuánto se arrastró (panX, panY, en px
+      desde el centro del marco) y el zoom. `base` guarda el centro de cada
+      círculo respecto del centro del marco con zoom 1 y sin arrastre: sólo
+      cambia al cambiar la medida, mientras que la vista cambia a cada gesto.
+      pintarPanal() combina las dos. panX/panY son el valor CRUDO (puede quedar
+      fuera de límites mientras se jala o rebota); lo que se pinta pasa por
+      limitarDesplazamiento().
+    */
+    const vista = { panX: 0, panY: 0, zoom: 1 };
+    let base = [];
+    let diametroBase = 0;
+    let areaAncho = 0;
+    let areaAlto = 0;
+    let esMovil = false;
+    // Gesto de arrastre en curso (o null) y bandera para tragar el clic que el
+    // navegador dispara al soltar un arrastre.
+    let arrastre = null;
+    let tragarClic = false;
+    // Dedos (o lápices) apoyados en el marco, en móvil: id → {x, y}. Con dos
+    // o más el gesto es un pellizco y `multitoque` queda encendido hasta que
+    // se levanta el último: un gesto así nunca abre un perfil.
+    const dedos = new Map();
+    let pellizco = null;
+    let multitoque = false;
+    // Animación: un solo bucle rAF. `inercia` son px/ms por eje; `destino`, un
+    // pan al que se llega suave (enfocar con teclado). Se apaga solo.
+    let cuadro = 0;
+    let ultimoCuadro = 0;
+    const inercia = { x: 0, y: 0 };
+    let destino = null;
     // El hash se conecta UNA vez, con la primera lista que llega.
     let conectada = false;
 
@@ -116,6 +182,42 @@
     let miSlug = null;
 
     el.reintentar.addEventListener("click", reintentarCarga);
+
+    // El panal se vuelve a acomodar cuando el marco cambia de tamaño (ventana,
+    // giro del teléfono, la vista que reaparece tras el perfil). Sin
+    // ResizeObserver (los tests, navegadores viejos) se acomoda al montar y ya.
+    if (typeof ResizeObserver === "function") new ResizeObserver(() => acomodarPanal()).observe(el.marco);
+    // En móvil el tope del panal depende del ALTO de la ventana, que el
+    // observador del marco no ve.
+    window.addEventListener("resize", () => acomodarPanal());
+
+    el.marco.addEventListener("pointerdown", empezarArrastre);
+    el.marco.addEventListener("pointermove", moverArrastre);
+    el.marco.addEventListener("pointerup", terminarArrastre);
+    el.marco.addEventListener("pointercancel", terminarArrastre);
+    // En captura: el clic que sigue a un arrastre no debe llegar a la ficha
+    // (abriría un perfil por haber soltado el mouse encima de ella).
+    el.marco.addEventListener("click", (evento) => {
+      if (!tragarClic) return;
+      tragarClic = false;
+      evento.stopPropagation();
+      evento.preventDefault();
+    }, true);
+    // passive:false porque el zoom frena el scroll de la página.
+    el.marco.addEventListener("wheel", hacerZoom, { passive: false });
+    // El navegador deja arrastrar imágenes y enlaces para soltarlos en otra
+    // pestaña; ese arrastre nativo le ganaba al del panal (una copia fantasma
+    // de la foto seguía al cursor y el panal no se movía). La foto y el enlace
+    // ya salen con draggable="false"; esto cubre cualquier otro que aparezca.
+    el.marco.addEventListener("dragstart", (evento) => evento.preventDefault());
+    // Mantener el dedo encima abre el menú contextual en Android (el de iOS
+    // lo apaga -webkit-touch-callout en el CSS). En el panal no hay nada que
+    // copiar ni guardar.
+    el.marco.addEventListener("contextmenu", (evento) => evento.preventDefault());
+    // Safari hace zoom a la PÁGINA con su propio evento de gesto, aparte de
+    // touch-action. Dentro del marco el pellizco es del panal.
+    el.marco.addEventListener("gesturestart", (evento) => evento.preventDefault());
+    el.marco.addEventListener("gesturechange", (evento) => evento.preventDefault());
 
     // Devuelve la promesa de la primera carga: el navegador la ignora, y así
     // quien dispara DOMContentLoaded (los tests) puede esperarla.
@@ -262,9 +364,13 @@
       colaboradores = lista;
       fichas = colaboradores.map(crearFicha);
       enlacesDeEdicion = colaboradores.map(crearEnlaceDeEdicion);
-      el.grilla.replaceChildren(...fichas.map(envolverEnCelda));
+      celdas = fichas.map(envolverEnCelda);
+      el.grilla.replaceChildren(...celdas);
       // Sin fichas, el marco sería una caja vacía debajo del aviso.
       el.marco.hidden = fichas.length === 0;
+      // Las celdas nuevas no tienen posición todavía.
+      medidaDelPanal = "";
+      acomodarPanal();
       // La tarjeta de abajo existe para mostrar fichas de perfil. Se decide una
       // vez por lista y no por ficha: prenderla y apagarla al pasar el cursor
       // cambiaría el alto del marco y haría saltar la grilla entera.
@@ -286,8 +392,13 @@
         crearDecorado("colaboradores__ficha-cabeza"),
         crearDecorado("colaboradores__ficha-torso"),
         crearDecorado("colaboradores__ficha-inicial", inicialDe(persona)),
-        nombre,
       );
+      const foto = fotoDe(persona);
+      if (foto) {
+        boton.classList.add(CLASE_FICHA_CON_FOTO);
+        boton.append(crearFotoDeFicha(boton, foto));
+      }
+      boton.append(nombre);
 
       const resaltar = (origen) => () => { resaltado[origen] = indice; pintar(); };
       const soltar = (origen) => () => {
@@ -301,13 +412,34 @@
       boton.addEventListener("mouseenter", resaltar("cursor"));
       boton.addEventListener("mouseleave", soltar("cursor"));
       boton.addEventListener("focus", resaltar("foco"));
+      boton.addEventListener("focus", () => traerAlCentro(indice, boton));
       boton.addEventListener("blur", soltar("foco"));
       boton.addEventListener("click", () => elegirFicha(indice));
 
       return boton;
     }
 
-    // Siluetas, iniciales y el nombre corto repiten lo que ya dice el
+    // La foto va ANTES del nombre en el DOM (que hoy la hoja no pinta).
+    // Decorativa (alt vacío): el aria-label del botón ya nombra a la
+    // persona.
+    function crearFotoDeFicha(boton, url) {
+      const imagen = document.createElement("img");
+      imagen.className = "colaboradores__ficha-foto";
+      imagen.setAttribute("alt", "");
+      imagen.setAttribute("loading", "lazy");
+      imagen.setAttribute("decoding", "async");
+      imagen.setAttribute("draggable", "false");
+      imagen.setAttribute("src", url);
+      imagen.addEventListener("error", () => {
+        fotosRotas.add(url);
+        imagen.hidden = true;
+        boton.classList.remove(CLASE_FICHA_CON_FOTO);
+        pintar();
+      });
+      return imagen;
+    }
+
+    // Las iniciales y el nombre corto repiten lo que ya dice el
     // aria-label del botón: para un lector de pantalla son ruido.
     function crearDecorado(clase, texto) {
       const nodo = document.createElement("span");
@@ -323,29 +455,518 @@
       es después de que la lista ya está en pantalla.
 
       "Editar" a secas no dice de quién, así que el nombre accesible lo aclara;
-      el texto visible sigue corto porque la ficha mide ~78px de ancho.
+      el texto visible sigue corto porque el círculo mide ~63px en móvil.
     */
     function crearEnlaceDeEdicion() {
       const enlace = document.createElement("a");
       enlace.className = "colaboradores__editar";
       enlace.href = RUTA_MI_FICHA;
       enlace.setAttribute("aria-label", "Editar mi ficha");
-      enlace.textContent = "Editar";
+      // El aviso del cursor dice lo que el lápiz sólo sugiere.
+      enlace.setAttribute("title", "Editar mi ficha");
+      enlace.append(crearIconoLapiz());
+      enlace.setAttribute("draggable", "false");
       enlace.hidden = true;
       return enlace;
+    }
+
+    // Un lápiz en trazos, como los iconos del editor de foto de "Mi ficha".
+    // Decorativo: el nombre accesible lo pone el aria-label del enlace.
+    function crearIconoLapiz() {
+      const ns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+      for (const trazo of ["M4 20h4L19 9l-4-4L4 16v4z", "M14 6l4 4"]) {
+        const camino = document.createElementNS(ns, "path");
+        camino.setAttribute("d", trazo);
+        svg.append(camino);
+      }
+      return svg;
     }
 
     /*
       El enlace va en la CELDA y no dentro del botón: un <a> dentro de un
       <button> es HTML inválido. Va DESPUÉS de él —la ficha es la acción
-      principal de la celda, el enlace su extra— y la hoja lo apila en la
-      esquina de arriba, lejos de la franja del nombre.
+      principal de la celda, el enlace su extra— y la hoja lo apila al pie del
+      círculo.
     */
     function envolverEnCelda(boton, indice) {
       const celda = document.createElement("li");
       celda.className = "colaboradores__celda";
       celda.append(boton, enlacesDeEdicion[indice]);
       return celda;
+    }
+
+    /*
+      Aplica a las celdas lo que calcula posicionesDelPanal(): centro, diámetro
+      y escala de cada una. Sólo escribe estilos; el orden del DOM no se toca.
+
+      En escritorio el panal llena el marco, cuyo alto manda la ventana. En
+      móvil no hay alto que llenar: se calcula con el ancho y el panal se da el
+      alto que el racimo necesita. Se lee SÓLO el ancho para decidirlo, así que
+      fijar ese alto no vuelve a disparar el cálculo.
+    */
+    function acomodarPanal() {
+      const ancho = el.grilla.clientWidth;
+      if (!(ancho > 0) || celdas.length === 0) return;
+
+      const movil = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
+      const necesario = Math.ceil(posicionesDelPanal(celdas.length, ancho, ancho).altoNecesario);
+      // clientHeight y no innerHeight: no cambia cuando la barra del navegador
+      // se esconde al scrollear, así que el panal no se reacomoda a medio gesto.
+      const tope = Math.floor((document.documentElement.clientHeight || 0) * ALTO_MAXIMO_MOVIL);
+      const alto = movil
+        ? (tope > 0 ? Math.min(necesario, tope) : necesario)
+        : el.grilla.clientHeight;
+      if (!(alto > 0)) return;
+
+      const medida = `${movil ? "m" : "d"}|${celdas.length}|${ancho}|${alto}`;
+      if (medida === medidaDelPanal) return;
+      medidaDelPanal = medida;
+
+      // Móvil: alto propio (y sin el piso de la hoja, que lo falsearía).
+      // Escritorio: se devuelve al marco.
+      el.grilla.style.blockSize = movil ? `${alto}px` : "";
+      el.grilla.style.minBlockSize = movil ? `${alto}px` : "";
+
+      const { diametro, posiciones } = posicionesDelPanal(celdas.length, ancho, alto);
+      base = posiciones.map(({ x, y }) => ({ x: x - ancho / 2, y: y - alto / 2 }));
+      diametroBase = diametro;
+      areaAncho = ancho;
+      areaAlto = alto;
+      esMovil = movil;
+
+      // Un cambio de medida puede dejar el pan fuera de los límites nuevos,
+      // así que se recorta. El zoom se conserva.
+      const l = limitesDelPan();
+      vista.panX = recortar(vista.panX, l.minX, l.maxX);
+      vista.panY = recortar(vista.panY, l.minY, l.maxY);
+      pintarPanal();
+    }
+
+    /* ---------- Vista del panal: arrastre, zoom e inercia ---------- */
+
+    function recortar(valor, min, max) {
+      return Math.min(Math.max(valor, min), max);
+    }
+
+    // Función y no `const`: vive después del `return` de iniciar() y una
+    // constante ahí nunca llegaría a inicializarse.
+    function movimientoReducido() {
+      return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    }
+
+    /*
+      El centro de la vista puede recorrer la caja del racimo (escalada por el
+      zoom): así cualquier círculo puede llegar al centro, y ni uno más. Un
+      círculo en base.x queda centrado con pan = -base.x · zoom.
+    */
+    function limitesDelPan() {
+      if (base.length === 0) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+      const xs = base.map((p) => p.x);
+      const ys = base.map((p) => p.y);
+      const z = vista.zoom;
+      return {
+        minX: -Math.max(...xs) * z,
+        maxX: -Math.min(...xs) * z,
+        minY: -Math.max(...ys) * z,
+        maxY: -Math.min(...ys) * z,
+      };
+    }
+
+    // El pan que se ve: el crudo, con la resistencia elástica fuera de límites.
+    function panVisible() {
+      const l = limitesDelPan();
+      return {
+        x: limitarDesplazamiento(vista.panX, l.minX, l.maxX),
+        y: limitarDesplazamiento(vista.panY, l.minY, l.maxY),
+      };
+    }
+
+    /*
+      Escribe en cada celda lo mismo que antes: centro, diámetro y escala. El
+      centro es `centro + base·zoom + pan`; la escala se recalcula con la
+      distancia al centro del MARCO, no del racimo, así que el círculo que
+      llega al medio crece y los que se van a las orillas se achican.
+    */
+    function pintarPanal() {
+      if (celdas.length === 0 || base.length !== celdas.length || !(areaAncho > 0)) return;
+      const z = vista.zoom;
+      const pan = panVisible();
+      const diametro = diametroBase * z;
+      celdas.forEach((celda, indice) => {
+        const dx = base[indice].x * z + pan.x;
+        const dy = base[indice].y * z + pan.y;
+        celda.style.left = `${(areaAncho / 2 + dx).toFixed(1)}px`;
+        celda.style.top = `${(areaAlto / 2 + dy).toFixed(1)}px`;
+        celda.style.setProperty("--diametro", `${diametro.toFixed(1)}px`);
+        celda.style.setProperty("--escala", escalaEnPanal(dx, dy, areaAncho, areaAlto).toFixed(3));
+      });
+    }
+
+    function arrancarCuadros() {
+      if (cuadro) return;
+      ultimoCuadro = performance.now();
+      cuadro = requestAnimationFrame(cuadroDeAnimacion);
+    }
+
+    function detenerCuadros() {
+      if (cuadro) cancelAnimationFrame(cuadro);
+      cuadro = 0;
+      inercia.x = 0;
+      inercia.y = 0;
+      destino = null;
+    }
+
+    // Corta cualquier gesto o animación (cambio a móvil, vista de perfil).
+    function cancelarGestos() {
+      detenerCuadros();
+      dedos.clear();
+      pellizco = null;
+      multitoque = false;
+      if (arrastre) {
+        const id = arrastre.id;
+        arrastre = null;
+        el.marco.classList.remove(CLASE_MARCO_ARRASTRANDO);
+        try { el.marco.releasePointerCapture(id); } catch { /* ya soltado */ }
+      }
+    }
+
+    /*
+      El único bucle de animación. Cada cuadro avanza la inercia (con un
+      resorte hacia el límite si se pasó) o el viaje a `destino`, y se vuelve a
+      pedir SOLO si algo sigue moviéndose: nunca queda un rAF girando en vacío.
+    */
+    function cuadroDeAnimacion(ahora) {
+      cuadro = 0;
+      const dt = Math.min(Math.max(ahora - ultimoCuadro, 1), 32);
+      ultimoCuadro = ahora;
+      const l = limitesDelPan();
+      let sigue = false;
+
+      if (destino) {
+        const k = 1 - Math.exp(-dt / 90);
+        vista.panX += (destino.x - vista.panX) * k;
+        vista.panY += (destino.y - vista.panY) * k;
+        if (Math.hypot(destino.x - vista.panX, destino.y - vista.panY) < 0.5) {
+          vista.panX = destino.x;
+          vista.panY = destino.y;
+          destino = null;
+        } else {
+          sigue = true;
+        }
+      } else {
+        for (const [eje, min, max] of [["x", l.minX, l.maxX], ["y", l.minY, l.maxY]]) {
+          const clave = eje === "x" ? "panX" : "panY";
+          let posicion = vista[clave];
+          // Fuera de límites la fricción sube: el rebote no se estira.
+          const paso = pasoDeInercia(inercia[eje], dt, posicion < min || posicion > max ? 0.03 : 0.004);
+          inercia[eje] = paso.velocidad;
+          posicion += paso.velocidad * dt;
+          if (!paso.frenado) sigue = true;
+
+          const limite = recortar(posicion, min, max);
+          if (posicion !== limite) {
+            posicion += (limite - posicion) * (1 - Math.exp(-dt / 110));
+            if (Math.abs(limite - posicion) < 0.5) {
+              posicion = limite;
+              inercia[eje] = 0;
+            } else {
+              sigue = true;
+            }
+          }
+          vista[clave] = posicion;
+        }
+      }
+
+      pintarPanal();
+      if (sigue) cuadro = requestAnimationFrame(cuadroDeAnimacion);
+    }
+
+    // Lleva el pan crudo adentro de los límites: de golpe con movimiento
+    // reducido, con el resorte del bucle si no.
+    function volverALosLimites() {
+      const l = limitesDelPan();
+      const x = recortar(vista.panX, l.minX, l.maxX);
+      const y = recortar(vista.panY, l.minY, l.maxY);
+      if (x === vista.panX && y === vista.panY) return;
+      if (movimientoReducido()) {
+        vista.panX = x;
+        vista.panY = y;
+        pintarPanal();
+      } else {
+        arrancarCuadros();
+      }
+    }
+
+    function empezarArrastre(evento) {
+      if (fichas.length === 0) return;
+      // Mouse sólo con el botón izquierdo; dedo y lápiz sólo en móvil.
+      if (evento.pointerType === "mouse") {
+        if (evento.button !== 0) return;
+      } else {
+        if (!esMovil) return;
+        dedos.set(evento.pointerId, { x: evento.clientX, y: evento.clientY });
+        // El segundo dedo convierte el gesto en pellizco; un tercero no
+        // cambia nada (el pellizco sigue con los dos primeros).
+        if (dedos.size >= 2) {
+          multitoque = true;
+          if (dedos.size === 2) empezarPellizco();
+          return;
+        }
+      }
+      if (arrastre) return;
+      // El enlace «Editar» es un clic de verdad, no un agarre.
+      if (evento.target.closest?.(".colaboradores__editar")) return;
+
+      detenerCuadros();
+      tragarClic = false;
+      arrastre = {
+        id: evento.pointerId,
+        umbral: evento.pointerType === "mouse" ? UMBRAL_ARRASTRE : UMBRAL_ARRASTRE_TACTIL,
+        x0: evento.clientX,
+        y0: evento.clientY,
+        panX0: vista.panX,
+        panY0: vista.panY,
+        activo: false,
+        muestras: [],
+      };
+    }
+
+    function moverArrastre(evento) {
+      if (dedos.has(evento.pointerId)) dedos.set(evento.pointerId, { x: evento.clientX, y: evento.clientY });
+      if (pellizco) {
+        moverPellizco();
+        return;
+      }
+      if (!arrastre || evento.pointerId !== arrastre.id) return;
+
+      if (!arrastre.activo) {
+        // Menos de 5px sigue siendo un clic con la mano temblando.
+        if (Math.hypot(evento.clientX - arrastre.x0, evento.clientY - arrastre.y0) < arrastre.umbral) return;
+        arrastre.activo = true;
+        // La captura se pide hasta aquí: capturar al apretar desviaría el clic
+        // de la ficha hacia el marco.
+        try { el.marco.setPointerCapture(arrastre.id); } catch { /* sin captura el arrastre sigue */ }
+        el.marco.classList.add(CLASE_MARCO_ARRASTRANDO);
+        // El agarre arranca aquí, sin el salto de los primeros 5px.
+        arrastre.x0 = evento.clientX;
+        arrastre.y0 = evento.clientY;
+      }
+
+      vista.panX = arrastre.panX0 + (evento.clientX - arrastre.x0);
+      vista.panY = arrastre.panY0 + (evento.clientY - arrastre.y0);
+      const ahora = performance.now();
+      arrastre.muestras.push({ t: ahora, x: evento.clientX, y: evento.clientY });
+      while (arrastre.muestras.length > 1 && ahora - arrastre.muestras[0].t > VENTANA_DE_VELOCIDAD) {
+        arrastre.muestras.shift();
+      }
+      pintarPanal();
+    }
+
+    function terminarArrastre(evento) {
+      if (dedos.delete(evento.pointerId) && multitoque) {
+        terminarDedoDeMultitoque();
+        return;
+      }
+      if (!arrastre || evento.pointerId !== arrastre.id) return;
+      // Primero se limpia el estado: releasePointerCapture puede lanzar.
+      const gesto = arrastre;
+      arrastre = null;
+      el.marco.classList.remove(CLASE_MARCO_ARRASTRANDO);
+      try { el.marco.releasePointerCapture(gesto.id); } catch { /* ya soltado */ }
+
+      if (!gesto.activo) {
+        // Un clic que pausó la inercia a medias no deja el panal pasado del borde.
+        volverALosLimites();
+        return;
+      }
+
+      // El navegador dispara un clic tras soltar: se traga. Si no llega, la
+      // bandera se apaga sola en la siguiente vuelta del bucle de eventos.
+      tragarClic = true;
+      setTimeout(() => { tragarClic = false; }, 0);
+
+      if (movimientoReducido()) {
+        const l = limitesDelPan();
+        vista.panX = recortar(vista.panX, l.minX, l.maxX);
+        vista.panY = recortar(vista.panY, l.minY, l.maxY);
+        pintarPanal();
+        return;
+      }
+
+      const ahora = performance.now();
+      const recientes = gesto.muestras.filter((m) => ahora - m.t <= VENTANA_DE_VELOCIDAD);
+      if (evento.type === "pointerup" && recientes.length >= 2) {
+        const primera = recientes[0];
+        const ultima = recientes[recientes.length - 1];
+        const tiempo = ultima.t - primera.t;
+        if (tiempo > 0) {
+          const tope = (v) => recortar(v, -VELOCIDAD_MAXIMA, VELOCIDAD_MAXIMA);
+          inercia.x = tope((ultima.x - primera.x) / tiempo);
+          inercia.y = tope((ultima.y - primera.y) / tiempo);
+        }
+      }
+      arrancarCuadros();
+    }
+
+    // Los dos primeros dedos apoyados: el pellizco se mide siempre con ellos.
+    function dosDedos() {
+      const [a, b] = dedos.values();
+      return [a, b];
+    }
+
+    /*
+      El pellizco arranca (o se vuelve a basar) con los dos primeros dedos.
+      Guarda el punto medio relativo al centro de la grilla: el punto del
+      panal que está entre los dedos se queda entre ellos al acercar o alejar,
+      y sigue al punto medio si los dedos se trasladan.
+    */
+    function empezarPellizco() {
+      const [a, b] = dosDedos();
+      detenerCuadros();
+      if (arrastre) {
+        try { el.marco.releasePointerCapture(arrastre.id); } catch { /* ya soltado */ }
+        arrastre = null;
+      }
+      const caja = el.grilla.getBoundingClientRect();
+      const cx = caja.left + caja.width / 2;
+      const cy = caja.top + caja.height / 2;
+      const pan = panVisible();
+      vista.panX = pan.x;
+      vista.panY = pan.y;
+      pellizco = {
+        cx,
+        cy,
+        d0: Math.max(Math.hypot(b.x - a.x, b.y - a.y), 1),
+        zoom0: vista.zoom,
+        mx0: (a.x + b.x) / 2 - cx,
+        my0: (a.y + b.y) / 2 - cy,
+        panX0: pan.x,
+        panY0: pan.y,
+      };
+      el.marco.classList.add(CLASE_MARCO_ARRASTRANDO);
+    }
+
+    // Misma cuenta que hacerZoom() con la rueda: pan' = m − (m0 − pan0)·(z'/z0).
+    function moverPellizco() {
+      if (dedos.size < 2) return;
+      const [a, b] = dosDedos();
+      const p = pellizco;
+      const zoom = recortar(p.zoom0 * (Math.hypot(b.x - a.x, b.y - a.y) / p.d0), ZOOM_MIN, ZOOM_MAX);
+      const factor = zoom / p.zoom0;
+      vista.zoom = zoom;
+      vista.panX = (a.x + b.x) / 2 - p.cx - (p.mx0 - p.panX0) * factor;
+      vista.panY = (a.y + b.y) / 2 - p.cy - (p.my0 - p.panY0) * factor;
+      pintarPanal();
+    }
+
+    /*
+      Se levantó un dedo de un gesto que tuvo dos o más. Si quedan dos, el
+      pellizco se vuelve a basar en ellos; si queda uno, sigue arrastrando
+      desde donde está (sin salto); si no queda ninguno, el panal vuelve a sus
+      límites y el clic que el navegador pueda disparar se traga.
+    */
+    function terminarDedoDeMultitoque() {
+      if (dedos.size >= 2) {
+        empezarPellizco();
+        return;
+      }
+      pellizco = null;
+      if (dedos.size === 1) {
+        const [[id, dedo]] = dedos;
+        arrastre = {
+          id,
+          umbral: UMBRAL_ARRASTRE_TACTIL,
+          x0: dedo.x,
+          y0: dedo.y,
+          panX0: vista.panX,
+          panY0: vista.panY,
+          activo: true,
+          muestras: [],
+        };
+        return;
+      }
+      arrastre = null;
+      multitoque = false;
+      el.marco.classList.remove(CLASE_MARCO_ARRASTRANDO);
+      // iOS puede disparar el clic un poco después del último touchend: la
+      // ventana es más larga que la del arrastre de un dedo.
+      tragarClic = true;
+      setTimeout(() => { tragarClic = false; }, 350);
+      volverALosLimites();
+    }
+
+    /*
+      La rueda hace zoom y deja fijo el punto que está bajo el cursor: con
+      p = base·zoom + pan, mantener p al cambiar de zoom obliga a
+      pan' = p − (p − pan)·(zoom'/zoom).
+    */
+    function hacerZoom(evento) {
+      if (esMovil || fichas.length === 0 || !(areaAncho > 0)) return;
+      evento.preventDefault();
+
+      const lineas = evento.deltaMode === 1 ? 16 : 1;
+      const nuevo = recortar(vista.zoom * Math.exp(-evento.deltaY * lineas * 0.0015), ZOOM_MIN, ZOOM_MAX);
+      if (nuevo === vista.zoom) return;
+
+      detenerCuadros();
+      const caja = el.grilla.getBoundingClientRect();
+      const px = evento.clientX - (caja.left + caja.width / 2);
+      const py = evento.clientY - (caja.top + caja.height / 2);
+      const pan = panVisible();
+      const factor = nuevo / vista.zoom;
+      vista.zoom = nuevo;
+      const l = limitesDelPan();
+      vista.panX = recortar(px - (px - pan.x) * factor, l.minX, l.maxX);
+      vista.panY = recortar(py - (py - pan.y) * factor, l.minY, l.maxY);
+      pintarPanal();
+    }
+
+    /*
+      Con teclado, Tab puede caer en un círculo que el arrastre o el zoom sacó
+      del marco; si queda (aunque sea en parte) fuera, se centra. Con mouse no:
+      enfocar al apretar no debe mover nada bajo el cursor.
+    */
+    function traerAlCentro(indice, boton) {
+      if (arrastre || !(areaAncho > 0) || !base[indice]) return;
+      // Enfocar un elemento fuera de un contenedor `overflow: hidden` lo
+      // desplaza; la geometría es nuestra, así que se deshace.
+      el.marco.scrollLeft = 0;
+      el.marco.scrollTop = 0;
+      el.grilla.scrollLeft = 0;
+      el.grilla.scrollTop = 0;
+
+      let porTeclado = false;
+      try { porTeclado = boton.matches(":focus-visible"); } catch { /* selector no soportado */ }
+      if (!porTeclado) return;
+
+      const z = vista.zoom;
+      const pan = panVisible();
+      const dx = base[indice].x * z + pan.x;
+      const dy = base[indice].y * z + pan.y;
+      const radio = (diametroBase * z * escalaEnPanal(dx, dy, areaAncho, areaAlto)) / 2;
+      const dentro = Math.abs(dx) + radio <= areaAncho / 2 && Math.abs(dy) + radio <= areaAlto / 2;
+      if (dentro) return;
+
+      const l = limitesDelPan();
+      const objetivo = {
+        x: recortar(-base[indice].x * z, l.minX, l.maxX),
+        y: recortar(-base[indice].y * z, l.minY, l.maxY),
+      };
+      detenerCuadros();
+      if (movimientoReducido()) {
+        vista.panX = objetivo.x;
+        vista.panY = objetivo.y;
+        pintarPanal();
+      } else {
+        vista.panX = pan.x;
+        vista.panY = pan.y;
+        destino = objetivo;
+        arrancarCuadros();
+      }
     }
 
     /* ---------- Transiciones de estado ---------- */
@@ -430,6 +1051,8 @@
       const hayPerfil = estado.vista === "perfil" && tienePerfil(colaboradores[estado.seleccion]);
 
       el.roster.hidden = hayPerfil;
+      // Con el roster oculto no hay nada que animar ni arrastrar.
+      if (hayPerfil) cancelarGestos();
       el.perfil.hidden = !hayPerfil;
 
       if (hayPerfil) pintarPerfil(estado.seleccion);
@@ -460,6 +1083,7 @@
 
       // Cada escritura se salta si el texto no cambió: las regiones aria-live
       // vuelven a anunciarse al reescribirlas, aunque sea con lo mismo.
+      pintarFoto(el.previaFoto, el.previaRetrato, fotoDe(persona));
       escribir(el.previaInicial, persona ? inicialDe(persona) : VACIA.inicial);
       escribir(el.previaNombre, persona ? persona.nombre : VACIA.nombre);
 
@@ -486,6 +1110,7 @@
       const ficha = colaboradores[indice];
 
       escribir(el.perfilNumero, numeroDeFicha(indice));
+      pintarFoto(el.perfilFoto, el.perfilRetrato, fotoDe(ficha));
       escribir(el.perfilInicial, inicialDe(ficha));
       escribir(el.perfilNombre, ficha.nombre);
       escribir(el.perfilPuesto, ficha.puesto);
@@ -617,6 +1242,24 @@
     const valor = typeof texto === "string" ? texto.trim() : "";
     celda.hidden = valor === "";
     escribir(nodo, valor);
+  }
+
+  // La URL de la foto de una persona, o null si no tiene o ya falló al cargar.
+  function fotoDe(persona) {
+    const url = persona?.foto;
+    return typeof url === "string" && url !== "" && !fotosRotas.has(url) ? url : null;
+  }
+
+  /*
+    Muestra u oculta la foto de un retrato. El `src` se escribe sólo si cambió
+    y NO se quita al ocultarla: una imagen oculta no se ve ni se anuncia, y
+    quitárselo haría que volver a pasar el cursor por la misma ficha reiniciara
+    la carga.
+  */
+  function pintarFoto(imagen, retrato, url) {
+    if (url && imagen.getAttribute("src") !== url) imagen.setAttribute("src", url);
+    imagen.hidden = !url;
+    retrato.classList.toggle(CLASE_RETRATO_CON_FOTO, Boolean(url));
   }
 
   function inicialDe(ficha) {

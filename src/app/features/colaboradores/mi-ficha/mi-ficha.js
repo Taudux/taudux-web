@@ -6,8 +6,9 @@
   etiquetas —instanciado tres veces: herramientas, habilidades e idiomas—, en
   mi-ficha.etiquetas.js
   (crearEditorDeEtiquetas), con su lógica pura de agregar/quitar/mover/sugerir en
-  mi-ficha.etiquetas.logica.js; la lectura y el guardado, en
-  core/colaboradores/ficha.service.js. Todos se
+  mi-ficha.etiquetas.logica.js; el editor de foto (crearEditorDeFoto), en
+  mi-ficha.foto.js, con su lógica pura en mi-ficha.foto.logica.js; la lectura,
+  el guardado y la foto, en core/colaboradores/ficha.service.js. Todos se
   cargan antes y dejan sus funciones en el ámbito global.
   establecerFormularioOcupado sale de features/auth/auth-ui.js.
 
@@ -17,6 +18,10 @@
   → formulario lleno, o vacío si todavía no hay ficha. Cualquier fallo de
   carga queda en el aviso con "Reintentar"; a quien no colabora se le dice,
   sin redirigirlo en silencio.
+
+  La foto se publica aparte de la ficha: crearEditorDeFoto recibe de acá las
+  funciones que suben y quitan (con el id de la sesión) y, al cargar la ficha,
+  la foto que ya estaba guardada. «Guardar ficha» nunca la manda.
 
   Los errores de cada campo van junto al campo, todos de una vez. La región
   role="alert" es sólo para los errores del servidor, y nunca se usa el canal
@@ -32,6 +37,7 @@
   const ERROR_DE_PAGINA = "No se pudo cargar la página. Recárgala para intentar de nuevo.";
   const SOLO_COLABORADORES = "Esta sección es sólo para colaboradores.";
   const SIN_NOMBRE = "Tu cuenta todavía no tiene nombre.";
+  const SIN_SESION_PARA_FOTO = "No se encontró tu sesión. Recarga la página e inicia sesión de nuevo para guardar tu foto.";
 
   /*
     Los tres campos que son listas de etiquetas. Una tabla y no tres bloques
@@ -41,9 +47,7 @@
 
     `prefijoIds` es la raíz de TODOS los ids del campo en el HTML: el control
     (`miFichaHabilidades`), sus nodos (`…Opciones`, `…Lista`, `…Estado`,
-    `…Ayuda`, `…Error`) y el prefijo de los id de cada opción del listbox, que
-    TIENE que ser distinto por instancia: con tres listbox en la misma página,
-    dos que generaran el mismo id escribirían el mismo aria-activedescendant.
+    `…Ayuda`, `…Error`).
 
     `nombreCatalogo` es el del catálogo estático que sugiere (catalogo.service.js);
     coincide con el campo en los tres, pero se nombra igual de explícito para
@@ -140,8 +144,8 @@
     `typeof` sobre una función no declarada da "undefined", no lanza.
 
     Los catálogos de etiquetas quedan AFUERA a propósito: son una sugerencia,
-    no una dependencia. Sin ellos los editores siguen vivos, sólo sin
-    autocompletar (ver cargarCatalogos).
+    no una dependencia de arranque. Sin ellos la ficha carga y se guarda, sólo
+    que los editores no tienen nada que ofrecer (ver cargarCatalogos).
   */
   function dependenciasFaltantes() {
     const disponibles = {
@@ -149,6 +153,9 @@
       obtenerPerfil: typeof obtenerPerfil,
       obtenerMiFicha: typeof obtenerMiFicha,
       guardarMiFicha: typeof guardarMiFicha,
+      subirFotoDeMiFicha: typeof subirFotoDeMiFicha,
+      quitarFotoDeMiFicha: typeof quitarFotoDeMiFicha,
+      urlDeFotoDeMiFicha: typeof urlDeFotoDeMiFicha,
       establecerFormularioOcupado: typeof establecerFormularioOcupado,
       formularioEstaOcupado: typeof formularioEstaOcupado,
       mostrarToast: typeof mostrarToast,
@@ -158,6 +165,7 @@
       nombreVisibleMiFicha: typeof nombreVisibleMiFicha,
       rutaPerfilPublicoMiFicha: typeof rutaPerfilPublicoMiFicha,
       crearEditorDeEtiquetas: typeof crearEditorDeEtiquetas,
+      crearEditorDeFoto: typeof crearEditorDeFoto,
     };
     return Object.keys(disponibles).filter((nombre) => disponibles[nombre] !== "function");
   }
@@ -233,6 +241,9 @@
       aviso.hidden = true;
       aviso.setAttribute("aria-busy", "false");
       contenido.hidden = false;
+      // Con el panel oculto el textarea no mide nada: el alto de la bio se
+      // calcula recién ahora que se ve.
+      ajustarAltoBio();
     }
 
     /* ---------- Errores de campo ---------- */
@@ -298,7 +309,62 @@
 
     bioInput.addEventListener("input", actualizarContadorBio);
 
+    /*
+      La bio crece con lo que se escribe (2026-10-13), de 3 renglones (el
+      `rows` del HTML es el mínimo) a 12; pasando de ahí, scrollea por dentro.
+      Se pone `height: auto` ANTES de leer scrollHeight: si no, el textarea
+      nunca encogería al borrar. El renglón se mide del estilo calculado y no
+      se fija en el código, para que siga cierto si cambia la tipografía. Donde
+      no hay medidas (el panel oculto, o un DOM sin layout) no se toca nada:
+      un NaN en `height` dejaría el campo sin alto.
+    */
+    const RENGLONES_MAXIMOS_BIO = 12;
+    const RENGLON_DE_RESPALDO_BIO_PX = 24;
+
+    function topeAltoBio() {
+      const estilo = typeof getComputedStyle === "function" ? getComputedStyle(bioInput) : null;
+      const numero = (valor) => (Number.isFinite(Number.parseFloat(valor)) ? Number.parseFloat(valor) : 0);
+      const renglon = estilo && numero(estilo.lineHeight) > 0 ? numero(estilo.lineHeight) : RENGLON_DE_RESPALDO_BIO_PX;
+      const relleno = estilo ? numero(estilo.paddingTop) + numero(estilo.paddingBottom) : 0;
+      return renglon * RENGLONES_MAXIMOS_BIO + relleno;
+    }
+
+    function ajustarAltoBio() {
+      bioInput.style.height = "auto";
+      const alto = bioInput.scrollHeight;
+      if (!Number.isFinite(alto) || alto <= 0) return;
+      const tope = topeAltoBio();
+      bioInput.style.height = `${Math.min(alto, tope)}px`;
+      bioInput.style.overflowY = alto > tope ? "auto" : "hidden";
+    }
+
+    bioInput.addEventListener("input", ajustarAltoBio);
+
+    // Al cambiar el ancho cambia dónde se parten los renglones. Un cuadro por
+    // cambio de tamaño, no uno por evento.
+    let ajusteBioPendiente = false;
+    window.addEventListener("resize", () => {
+      if (ajusteBioPendiente || typeof requestAnimationFrame !== "function") return;
+      ajusteBioPendiente = true;
+      requestAnimationFrame(() => {
+        ajusteBioPendiente = false;
+        ajustarAltoBio();
+      });
+    });
+
     /* ---------- Valores ---------- */
+
+    /*
+      La foto guardada va a la vista previa. Una ficha que no trae `foto_path`
+      (la que se arma del formulario cuando el guardado no devuelve fila) no
+      dice nada de la foto y no la toca; `null` (todavía no hay ficha) sí la
+      deja en blanco.
+    */
+    function mostrarFotoGuardada(ficha) {
+      if (ficha != null && !("foto_path" in ficha)) return;
+      const ruta = ficha?.foto_path ?? null;
+      foto?.fijar({ ruta, url: urlDeFotoDeMiFicha(ruta) });
+    }
 
     function llenarFormulario(ficha) {
       const valores = valoresFormularioMiFicha(ficha);
@@ -308,7 +374,9 @@
       }
       radios.forEach((radio) => { radio.checked = radio.value === valores.modalidad_trabajo; });
       for (const [campo, editor] of Object.entries(editores)) editor.establecer(valores[campo]);
+      mostrarFotoGuardada(ficha);
       actualizarContadorBio();
+      ajustarAltoBio();
       limpiarErrores();
       ocultarEstado();
     }
@@ -350,11 +418,15 @@
     */
     let editores = {};
 
+    // El editor de foto (mi-ficha.foto.js). Null hasta que arranca, y null si
+    // su diálogo no está en el HTML: la ficha se edita igual, sin foto.
+    let foto = null;
+
     /*
-      Los catálogos son sólo para sugerir: si el script no llegó o una carga
-      falla, ese editor queda sin catálogo y se degrada en silencio a texto
-      libre, sin aviso ni reintento (a quien edita su ficha no le toca
-      resolver eso). Los tres se piden a la vez y uno que falle no se lleva a
+      Desde 2026-10-13 el catálogo es lo único que se puede agregar: si el
+      script no llegó o una carga falla, ese editor queda sin catálogo y no
+      hay nada que agregar (las etiquetas ya guardadas se conservan), sin
+      aviso ni reintento (a quien edita su ficha no le toca resolver eso). Los tres se piden a la vez y uno que falle no se lleva a
       los otros: cada promesa resuelve su propio { ok }.
     */
     async function cargarCatalogos() {
@@ -411,8 +483,8 @@
           deshabilitado por este mismo await.
 
           Las sugerencias son decoración: llegan cuando lleguen y cada editor
-          se las pone solo. Si no llegan nunca, el campo sigue aceptando texto
-          libre, que es exactamente lo que ya pasa cuando el catálogo falla.
+          se las pone solo. Si no llegan nunca, el campo simplemente no ofrece
+          nada que agregar, que es lo mismo que pasa cuando el catálogo falla.
         */
         cargarCatalogos();
         const resultado = await obtenerMiFicha(sesion.user.id);
@@ -504,7 +576,6 @@
         lista: elementos[`${definicion.campo}Lista`],
         estado: elementos[`${definicion.campo}Estado`],
         ayuda: elementos[`${definicion.campo}Ayuda`],
-        prefijoIdOpcion: `${definicion.prefijoIds}Opcion`,
         textoAyuda: definicion.ayuda,
         textoAyudaLlena: definicion.ayudaLlena,
         nombrePlural: definicion.nombrePlural,
@@ -512,6 +583,16 @@
         limpiarError: () => limpiarError(definicion.campo),
       }),
     ]));
+
+    // Las dos operaciones de la foto salen de acá porque acá vive la sesión.
+    foto = crearEditorDeFoto({
+      subir: async (blob) => (sesion?.user?.id
+        ? subirFotoDeMiFicha(sesion.user.id, blob)
+        : { ok: false, mensaje: SIN_SESION_PARA_FOTO }),
+      quitar: async (ruta) => (sesion?.user?.id
+        ? quitarFotoDeMiFicha(sesion.user.id, ruta)
+        : { ok: false, mensaje: SIN_SESION_PARA_FOTO }),
+    });
 
     // Devuelve la promesa del arranque: el navegador la ignora, los tests la
     // esperan.

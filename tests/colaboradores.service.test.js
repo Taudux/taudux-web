@@ -10,7 +10,13 @@ const SOURCE = fs.readFileSync("src/app/core/colaboradores/colaboradores.service
   puede responder con { data, error } o lanzar (fallo de red); console.error se
   captura para verificar el registro sin ensuciar la salida de los tests.
 */
+const URL_BASE = "https://proyecto.supabase.co/storage/v1/object/public";
+const CUENTA = "5f1a7c2e-90b4-4d6e-b3a8-2e7d41c9f0a6";
+const RUTA_FOTO = `${CUENTA}/9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b.webp`;
+const URL_FOTO = `${URL_BASE}/colaboradores-fotos/${RUTA_FOTO}`;
+
 function createHarness({ data, error, lanza } = {}) {
+  const urlsPedidas = [];
   const calls = [];
   const logs = [];
   const context = {
@@ -21,10 +27,28 @@ function createHarness({ data, error, lanza } = {}) {
         if (lanza) throw lanza;
         return { data: data === undefined ? null : data, error: error ?? null };
       },
+      // Storage falso: arma la URL pública como lo hace supabase-js y anota el
+      // bucket y la ruta que se le pidieron.
+      storage: {
+        from(bucket) {
+          return {
+            getPublicUrl(ruta) {
+              urlsPedidas.push([bucket, ruta]);
+              return { data: { publicUrl: `${URL_BASE}/${bucket}/${ruta}` } };
+            },
+          };
+        },
+      },
     },
   };
   vm.runInNewContext(SOURCE, context);
-  return { calls, logs, listarColaboradores: context.listarColaboradores };
+  return {
+    calls,
+    logs,
+    urlsPedidas,
+    listarColaboradores: context.listarColaboradores,
+    urlDeFotoDeColaborador: context.urlDeFotoDeColaborador,
+  };
 }
 
 // Contexto sin cliente: el servicio se carga sin que exista supabaseClient.
@@ -67,6 +91,7 @@ const SIN_FICHA = Object.freeze({
   linkedin: null,
   github: null,
   correo: null,
+  foto: null,
 });
 const sinFicha = (identidad) => ({ ...identidad, ...SIN_FICHA });
 const LISTAS_DE_ETIQUETAS = Object.freeze(["herramientas", "habilidades", "idiomas"]);
@@ -91,6 +116,7 @@ const FILA_CON_FICHA = Object.freeze({
   linkedin: "https://www.linkedin.com/in/ejemplo-valeria-ortiz",
   github: null,
   correo: "valeria@example.com",
+  foto_path: RUTA_FOTO,
 });
 
 test("calls the listar_colaboradores RPC without args and maps rows to nombre, corto and slug", async () => {
@@ -180,6 +206,7 @@ test("passes the card fields through under their database names", async () => {
       linkedin: "https://www.linkedin.com/in/ejemplo-valeria-ortiz",
       github: null,
       correo: "valeria@example.com",
+      foto: URL_FOTO,
     },
   ]);
 });
@@ -188,7 +215,7 @@ test("passes the card fields through under their database names", async () => {
 // todos los campos de ficha en null: el servicio no los inventa.
 test("a collaborator without a card yet keeps every card field null", async () => {
   const { listarColaboradores } = createHarness({
-    data: [{ nombre: "Samael", apellidos: "Flores", slug: "samael", ...SIN_FICHA }],
+    data: [{ nombre: "Samael", apellidos: "Flores", slug: "samael", ...SIN_FICHA, foto_path: null }],
   });
   const result = await listarColaboradores();
 
@@ -261,7 +288,13 @@ test("every column the RPC returns reaches the page under its own name", async (
     assert.ok(columnas.includes(columna), `el RETURNS TABLE leído no trae ${columna}`);
   }
 
-  const esperadas = [...columnas.filter((columna) => columna !== "apellidos"), "corto"].sort();
+  // `apellidos` se funde en nombre/corto y `foto_path` sale como `foto`, ya
+  // convertida en URL.
+  const esperadas = [
+    ...columnas.filter((columna) => columna !== "apellidos" && columna !== "foto_path"),
+    "corto",
+    "foto",
+  ].sort();
   const { listarColaboradores } = createHarness({ data: [FILA_CON_FICHA] });
   const result = await listarColaboradores();
 
@@ -363,5 +396,69 @@ test("reports a failure without throwing when supabase-client.js failed to initi
 
   assert.equal(result.ok, false);
   assert.equal(result.mensaje, "No se pudo cargar la lista de colaboradores.");
+  assert.equal(logs.length, 1);
+});
+
+/* ---------- Foto (0050) ---------- */
+
+test("the photo reaches the page as the public URL of the colaboradores-fotos bucket", async () => {
+  const { listarColaboradores, urlsPedidas, logs } = createHarness({ data: [FILA_CON_FICHA] });
+  const result = await listarColaboradores();
+
+  assert.equal(result.data[0].foto, URL_FOTO);
+  assert.deepEqual(urlsPedidas, [["colaboradores-fotos", RUTA_FOTO]]);
+  assert.equal(logs.length, 0);
+  assert.equal(Object.hasOwn(result.data[0], "foto_path"), false, "la ruta cruda no llega a la página");
+});
+
+test("a collaborator without a photo gets foto null and the bucket is never asked for them", async () => {
+  const { listarColaboradores, urlsPedidas } = createHarness({
+    data: [{ ...FILA_CON_FICHA, foto_path: null }, { ...FILA_CON_FICHA, slug: "otra" }],
+  });
+  const result = await listarColaboradores();
+
+  assert.equal(result.data[0].foto, null);
+  assert.equal(result.data[1].foto, URL_FOTO);
+  assert.equal(urlsPedidas.length, 1);
+});
+
+test("urlDeFotoDeColaborador only accepts <uuid>/<uuid>.webp; anything else is null", () => {
+  const { urlDeFotoDeColaborador, urlsPedidas } = createHarness();
+  const OTRO = "9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b";
+
+  assert.equal(urlDeFotoDeColaborador(RUTA_FOTO), URL_FOTO);
+  for (const mala of [
+    null, undefined, "", 7, {},
+    `${CUENTA}/${OTRO}.png`,
+    `${CUENTA}/${OTRO}.webp?x=1`,
+    `${CUENTA}/${OTRO}.WEBP`,
+    `${CUENTA}/../${OTRO}.webp`,
+    `${CUENTA}/carpeta/${OTRO}.webp`,
+    `/${CUENTA}/${OTRO}.webp`,
+    `https://evil.example/${CUENTA}/${OTRO}.webp`,
+    `javascript:alert(1)//${CUENTA}/${OTRO}.webp`,
+    "mi-foto.webp",
+    `${CUENTA}/${OTRO}.webp
+`,
+  ]) {
+    assert.equal(urlDeFotoDeColaborador(mala), null, JSON.stringify(mala));
+  }
+  assert.equal(urlsPedidas.length, 1, "sólo la ruta válida llegó al bucket");
+});
+
+test("urlDeFotoDeColaborador is null without a client or when the client throws", () => {
+  const sinCliente = createHarnessSinCliente();
+  const contexto = vm.createContext({ console: { error() {} } });
+  vm.runInContext(SOURCE, contexto);
+  assert.equal(contexto.urlDeFotoDeColaborador(RUTA_FOTO), null);
+  assert.ok(sinCliente.listarColaboradores);
+
+  const logs = [];
+  const roto = vm.createContext({
+    console: { error: (...args) => logs.push(args) },
+    supabaseClient: { storage: { from() { throw new Error("sin storage"); } } },
+  });
+  vm.runInContext(SOURCE, roto);
+  assert.equal(roto.urlDeFotoDeColaborador(RUTA_FOTO), null);
   assert.equal(logs.length, 1);
 });

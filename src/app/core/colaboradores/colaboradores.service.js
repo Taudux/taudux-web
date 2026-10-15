@@ -4,10 +4,10 @@
   funciona con la anon key y sin sesión.
 
   La lista sale del RPC `listar_colaboradores()` (migraciones 0038, 0039,
-  0040 y 0041), security definer, que entrega de cada cuenta marcada nombre,
-  apellidos y slug, más los campos de su ficha pública (puesto, sector,
-  ubicación, herramientas, modalidad de trabajo, año de inicio, bio y
-  enlaces). Quien todavía no llenó su ficha los trae en null: el RPC hace
+  0040, 0041 y 0050), security definer, que entrega de cada cuenta marcada
+  nombre, apellidos y slug, más los campos de su ficha pública (puesto,
+  sector, ubicación, herramientas, habilidades, idiomas, empresa, modalidad
+  de trabajo, año de inicio, bio, enlaces y la ruta de su foto). Quien todavía no llenó su ficha los trae en null: el RPC hace
   left join.
 
   Este servicio vuelve a recortar del lado del cliente: arma cada registro
@@ -18,6 +18,10 @@
 // Mismo formato que el check `perfiles_slug_formato` de la 0038. El slug
 // termina en la URL (#/slug), así que una fila que no lo cumpla se descarta.
 const PATRON_SLUG_COLABORADOR = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+// Misma forma que el CHECK `fichas_colaborador_foto_path_valida` de la 0050:
+// <uuid>/<uuid>.webp, dentro del bucket público `colaboradores-fotos`.
+const PATRON_RUTA_FOTO_COLABORADOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
+const BUCKET_FOTOS_COLABORADORES = "colaboradores-fotos";
 const MENSAJE_ERROR_COLABORADORES = "No se pudo cargar la lista de colaboradores.";
 
 function registrarErrorColaboradores(contexto, error) {
@@ -34,6 +38,23 @@ function clienteSupabaseColaboradores() {
   try {
     return typeof supabaseClient === "object" && supabaseClient !== null ? supabaseClient : null;
   } catch {
+    return null;
+  }
+}
+
+/*
+  URL pública de la foto de un colaborador, o null si no hay foto, la ruta no
+  tiene la forma esperada (lo que llegue acá termina en un `src`) o no hay
+  cliente. El bucket es público: la URL se arma sin pedir nada a la red.
+*/
+function urlDeFotoDeColaborador(ruta) {
+  if (typeof ruta !== "string" || !PATRON_RUTA_FOTO_COLABORADOR.test(ruta)) return null;
+  const cliente = clienteSupabaseColaboradores();
+  if (!cliente) return null;
+  try {
+    return cliente.storage.from(BUCKET_FOTOS_COLABORADORES).getPublicUrl(ruta).data?.publicUrl ?? null;
+  } catch (error) {
+    registrarErrorColaboradores("url-foto", error);
     return null;
   }
 }
@@ -70,6 +91,9 @@ function campoDeFichaColaborador(valor) {
   Los campos de la ficha conservan los nombres de la base. Ojo: `puesto` es el
   puesto que la persona escribe en su ficha; `perfiles.rol` (usuario/admin) es
   otra columna, de otra tabla, y no pasa por acá.
+
+  `foto` NO es una columna: es la URL pública ya armada de `foto_path`, o null
+  si la persona no subió foto (o su ruta no es válida).
 */
 function aColaborador(fila) {
   const nombre = textoDeColaborador(fila.nombre);
@@ -92,6 +116,7 @@ function aColaborador(fila) {
     linkedin: campoDeFichaColaborador(fila.linkedin),
     github: campoDeFichaColaborador(fila.github),
     correo: campoDeFichaColaborador(fila.correo),
+    foto: urlDeFotoDeColaborador(fila.foto_path),
   };
 }
 
@@ -117,5 +142,5 @@ async function listarColaboradores() {
 }
 
 if (typeof module === "object" && module.exports) {
-  module.exports = Object.freeze({ listarColaboradores });
+  module.exports = Object.freeze({ listarColaboradores, urlDeFotoDeColaborador });
 }
