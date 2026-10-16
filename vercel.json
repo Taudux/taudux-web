@@ -4,9 +4,9 @@
   "cleanUrls": true,
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/:path(.*)",
       "has": [{ "type": "host", "value": "www.taudux.com" }],
-      "destination": "https://taudux.com/:path*",
+      "destination": "https://taudux.com/:path",
       "permanent": true
     },
     { "source": "/src/:path*/", "destination": "/:path*/", "permanent": true },

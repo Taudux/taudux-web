@@ -25,8 +25,11 @@ test("www.taudux.com redirects permanently to the same path on taudux.com", () =
     (r.has || []).some((h) => h.type === "host" && h.value === "www.taudux.com")
   );
   assert.ok(regla, "falta la redirección de www.taudux.com");
-  assert.equal(regla.source, "/:path*", "debe cubrir todas las rutas");
-  assert.equal(regla.destination, "https://taudux.com/:path*", "debe conservar la ruta");
+  // `(.*)` y no `/:path*`: el segundo no captura la barra final, así que "/" y
+  // las páginas de carpeta (`/app/features/auth/login/`, justo la del login)
+  // se seguían sirviendo desde www. Pasó en producción el 2026-10-16.
+  assert.equal(regla.source, "/:path(.*)", "debe cubrir todas las rutas, con barra final incluida");
+  assert.equal(regla.destination, "https://taudux.com/:path", "debe conservar la ruta");
   assert.equal(regla.permanent, true);
 });
 
