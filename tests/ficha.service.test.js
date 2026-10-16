@@ -570,6 +570,37 @@ test("subirFotoDeMiFicha reads the current path, uploads a new webp, hangs it on
   assert.equal(logs.length, 0);
 });
 
+test("subirFotoDeMiFicha uploads a JPEG blob (Safari) as <uuid>.jpg with contentType image/jpeg", async () => {
+  const RUTA_JPG = `${USUARIO}/${UUID_FOTO}.jpg`;
+  const jpeg = { size: 300000, type: "image/jpeg" };
+  const { almacen, logs, subirFotoDeMiFicha } = createHarness([
+    { data: { foto_path: RUTA_VIEJA } },
+    { data: { foto_path: RUTA_JPG } },
+  ], { carpeta: [`${UUID_FOTO}.jpg`] });
+  const result = await subirFotoDeMiFicha(USUARIO, jpeg);
+
+  assert.deepEqual(plano(result), {
+    ok: true,
+    data: { foto_path: RUTA_JPG, url: `${URL_BASE}/colaboradores-fotos/${RUTA_JPG}` },
+  });
+  const [subida] = almacen.subidas;
+  assert.equal(subida.ruta, RUTA_JPG);
+  assert.deepEqual(plano(subida.opciones), { contentType: "image/jpeg", upsert: false });
+  assert.equal(logs.length, 0);
+});
+
+test("subirFotoDeMiFicha rejects a blob that is neither WebP nor JPEG before touching the network", async () => {
+  for (const tipo of ["image/png", "", undefined, "image/gif"]) {
+    const { almacen, consultas, logs, subirFotoDeMiFicha } = createHarness([]);
+    const result = await subirFotoDeMiFicha(USUARIO, { size: 1234, type: tipo });
+
+    assert.deepEqual(plano(result), { ok: false, mensaje: MENSAJE_FOTO });
+    assert.equal(almacen.subidas.length, 0, String(tipo));
+    assert.equal(consultas.length, 0, String(tipo));
+    assert.equal(logs.length, 1, String(tipo));
+  }
+});
+
 test("subirFotoDeMiFicha with no previous photo removes nothing", async () => {
   const { almacen, subirFotoDeMiFicha } = createHarness([
     { data: { foto_path: null } },
@@ -785,8 +816,12 @@ test("urlDeFotoDeMiFicha builds the public URL only for a well-formed route", ()
   const { urlDeFotoDeMiFicha, almacen } = createHarness([]);
 
   assert.equal(urlDeFotoDeMiFicha(RUTA_NUEVA), `${URL_BASE}/colaboradores-fotos/${RUTA_NUEVA}`);
-  for (const mala of [null, undefined, "", 7, "foto.webp", `${USUARIO}/${UUID_FOTO}.png`, `${USUARIO}/x/${UUID_FOTO}.webp`]) {
+  for (const mala of [null, undefined, "", 7, "foto.webp", `${USUARIO}/${UUID_FOTO}.png`, `${USUARIO}/${UUID_FOTO}.jpeg`, `${USUARIO}/x/${UUID_FOTO}.webp`]) {
     assert.equal(urlDeFotoDeMiFicha(mala), null, JSON.stringify(mala));
   }
-  assert.equal(almacen.urls.length, 1);
+  assert.equal(
+    urlDeFotoDeMiFicha(`${USUARIO}/${UUID_FOTO}.jpg`),
+    `${URL_BASE}/colaboradores-fotos/${USUARIO}/${UUID_FOTO}.jpg`,
+  );
+  assert.equal(almacen.urls.length, 2);
 });

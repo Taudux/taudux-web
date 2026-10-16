@@ -24,6 +24,7 @@ const {
   LADO_MAXIMO_DE_FOTO_PX,
   LADO_MAXIMO_DE_SALIDA_PX,
   CALIDAD_WEBP_DE_FOTO,
+  CALIDAD_JPEG_DE_FOTO,
   MENSAJES_DE_FOTO,
   validarArchivoDeFoto,
   validarDimensionesDeFoto,
@@ -291,7 +292,14 @@ test("the crop side in source pixels shrinks as the zoom grows, and feeds the ou
 
 test("the export quality is WebP at 0.92", () => {
   assert.equal(CALIDAD_WEBP_DE_FOTO, 0.92);
-  assert.match(FOTO_JS, /toBlob\(resolver, "image\/webp", CALIDAD_WEBP_DE_FOTO\)/);
+  assert.match(FOTO_JS, /\}, "image\/webp", CALIDAD_WEBP_DE_FOTO\);/);
+});
+
+test("when toBlob does not hand back a WebP (Safari) the export falls back to JPEG at 0.88", () => {
+  assert.equal(CALIDAD_JPEG_DE_FOTO, 0.88);
+  assert.match(FOTO_JS, /webp && webp\.type === "image\/webp"/);
+  assert.match(FOTO_JS, /"image\/jpeg",\s+CALIDAD_JPEG_DE_FOTO/);
+  assert.match(FOTO_JS, /jpeg && jpeg\.type === "image\/jpeg" \? jpeg : null/);
 });
 
 /* ---------- Fuentes ---------- */
@@ -479,6 +487,10 @@ const MIGRACION = read("supabase/migrations/0050_foto_colaborador.sql");
 const SQL_0050 = MIGRACION.replace(/--.*$/gm, "");
 const UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const RUTA_RE = `^${UUID_RE}/${UUID_RE}\\.webp$`;
+// La 0051 amplía la extensión: el SQL la escribe con grupo de captura y los
+// servicios JS con grupo sin captura.
+const RUTA_RE_0051 = `^${UUID_RE}/${UUID_RE}\\.(webp|jpg)$`;
+const RUTA_RE_0051_SERVICIO = `^${UUID_RE}/${UUID_RE}\\.(?:webp|jpg)$`;
 
 test("0050 adds a nullable foto_path column, idempotently", () => {
   assert.match(SQL_0050, /alter table public\.fichas_colaborador\s+add column if not exists foto_path text;/);
@@ -569,14 +581,46 @@ test("0050 explains why a photo gets a new name every time and that the bucket i
   assert.match(MIGRACION, /<user_id>\/<uuid>\.webp/);
 });
 
-test("the 0050 route regex, the CHECK and both services agree on the same shape", () => {
-  const re = new RegExp(RUTA_RE);
-  const buena = "5f1a7c2e-90b4-4d6e-b3a8-2e7d41c9f0a6/9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b.webp";
-  assert.ok(re.test(buena));
+test("the 0051 route regex, the CHECK and both services agree on the same shape", () => {
+  const re = new RegExp(RUTA_RE_0051);
+  const base = "5f1a7c2e-90b4-4d6e-b3a8-2e7d41c9f0a6/9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b";
+  assert.ok(re.test(`${base}.webp`));
+  assert.ok(re.test(`${base}.jpg`));
+  assert.ok(!re.test(`${base}.png`));
+  assert.ok(!re.test(`${base}.jpeg`));
   for (const archivo of ["src/app/core/colaboradores/colaboradores.service.js", "src/app/core/colaboradores/ficha.service.js"]) {
     const fuente = read(archivo);
     const patron = fuente.match(/const PATRON_RUTA_FOTO_\w+ = \/(.+)\/;/);
     assert.ok(patron, `${archivo}: falta el patrón`);
-    assert.equal(patron[1].replace(/\\\//g, "/").replace(/\\\./g, "\\."), RUTA_RE, archivo);
+    assert.equal(patron[1].replace(/\\\//g, "/").replace(/\\\./g, "\\."), RUTA_RE_0051_SERVICIO, archivo);
   }
+});
+
+/* ---------- Migración 0051 ---------- */
+
+const MIGRACION_0051 = read("supabase/migrations/0051_foto_colaborador_jpeg.sql");
+const SQL_0051 = MIGRACION_0051.replace(/--.*$/gm, "");
+
+test("0051 widens the foto_path CHECK to .webp or .jpg and keeps the folder rule", () => {
+  assert.match(SQL_0051, /drop constraint if exists fichas_colaborador_foto_path_valida/);
+  const check = SQL_0051.match(/add constraint fichas_colaborador_foto_path_valida check \(([\s\S]*?)\n  \);/);
+  assert.ok(check, "falta el CHECK");
+  assert.ok(check[1].includes(`foto_path ~ '${RUTA_RE_0051}'`), "la regex del CHECK");
+  assert.match(check[1], /split_part\(foto_path, '\/', 1\) = id::text/);
+  assert.match(MIGRACION_0051, /<user_id>\/<uuid>\.jpg/);
+});
+
+test("0051 lets the bucket take webp and jpeg at the same 1 MB, idempotently", () => {
+  assert.match(SQL_0051, /values \(\s+'colaboradores-fotos',\s+'colaboradores-fotos',\s+true,\s+1048576,\s+array\['image\/webp', 'image\/jpeg'\]\s+\)/);
+  assert.match(SQL_0051, /on conflict \(id\) do update set\s+public = true,\s+file_size_limit = 1048576,\s+allowed_mime_types = array\['image\/webp', 'image\/jpeg'\];/);
+});
+
+test("0051 recreates the insert and delete policies with the wider extension and leaves select alone", () => {
+  for (const nombre of ["insert", "delete"]) {
+    assert.match(SQL_0051, new RegExp(`drop policy if exists colaboradores_fotos_${nombre} on storage\\.objects;\\s+create policy colaboradores_fotos_${nombre}`));
+  }
+  assert.equal(SQL_0051.split(`name ~ '${RUTA_RE_0051}'`).length - 1, 2, "insert y delete");
+  assert.doesNotMatch(SQL_0051, /colaboradores_fotos_select/);
+  assert.match(SQL_0051, /split_part\(name, '\/', 1\) = auth\.uid\(\)::text\s+and public\.es_colaborador\(\)/);
+  assert.match(SQL_0051, /commit;\s*$/);
 });

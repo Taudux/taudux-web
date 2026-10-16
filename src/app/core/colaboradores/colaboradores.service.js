@@ -18,9 +18,10 @@
 // Mismo formato que el check `perfiles_slug_formato` de la 0038. El slug
 // termina en la URL (#/slug), así que una fila que no lo cumpla se descarta.
 const PATRON_SLUG_COLABORADOR = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-// Misma forma que el CHECK `fichas_colaborador_foto_path_valida` de la 0050:
-// <uuid>/<uuid>.webp, dentro del bucket público `colaboradores-fotos`.
-const PATRON_RUTA_FOTO_COLABORADOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
+// Misma forma que el CHECK `fichas_colaborador_foto_path_valida` (0050, ampliado
+// en la 0051): <uuid>/<uuid>.webp o .jpg (Safari no codifica WebP), dentro del
+// bucket público `colaboradores-fotos`.
+const PATRON_RUTA_FOTO_COLABORADOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:webp|jpg)$/;
 const BUCKET_FOTOS_COLABORADORES = "colaboradores-fotos";
 const MENSAJE_ERROR_COLABORADORES = "No se pudo cargar la lista de colaboradores.";
 

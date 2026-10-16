@@ -52,8 +52,14 @@ const COLUMNAS_MI_FICHA = Object.freeze([
 const SELECT_MI_FICHA = [...COLUMNAS_MI_FICHA, "foto_path"].join(", ");
 
 const BUCKET_FOTOS_MI_FICHA = "colaboradores-fotos";
-// Misma forma que el CHECK de la 0050: <uuid>/<uuid>.webp.
-const PATRON_RUTA_FOTO_MI_FICHA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/;
+// Misma forma que el CHECK de la 0050 (ampliado en la 0051): <uuid>/<uuid>.webp
+// o <uuid>/<uuid>.jpg. Safari no codifica WebP y el editor cae a JPEG.
+const PATRON_RUTA_FOTO_MI_FICHA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:webp|jpg)$/;
+// Tipos de blob que admite el bucket (0051) y la extensión de cada uno.
+const FORMATOS_DE_FOTO_MI_FICHA = Object.freeze({
+  "image/webp": Object.freeze({ extension: "webp", contentType: "image/webp" }),
+  "image/jpeg": Object.freeze({ extension: "jpg", contentType: "image/jpeg" }),
+});
 
 const MENSAJE_CARGAR_MI_FICHA = "No se pudo cargar tu ficha. Intenta de nuevo.";
 const MENSAJE_GUARDAR_MI_FICHA = "No se pudo guardar tu ficha. Intenta de nuevo.";
@@ -261,7 +267,7 @@ async function retirarFotosDelBucket(cliente, rutas, contexto) {
 
   Listar la carpeta propia es posible por la policy de SELECT de la 0050, que
   sólo deja ver la de uno. Sólo se tocan nombres con la forma de una foto
-  (<uuid>.webp): el marcador de carpeta vacía de Supabase u otra cosa rara se
+  (<uuid>.webp o <uuid>.jpg): el marcador de carpeta vacía de Supabase u otra cosa rara se
   deja en paz. Si listar falla, se cae al retiro puntual de `respaldo` —la ruta
   que se sabía vieja—, que es lo que se hacía antes de esta limpieza.
 
@@ -291,7 +297,7 @@ async function limpiarCarpetaDeFoto(cliente, userId, conservar, respaldo, contex
 }
 
 /*
-  Sube la foto (un Blob WebP) y la cuelga de la ficha propia en el acto.
+  Sube la foto (un Blob WebP o JPEG; JPEG en Safari, que no codifica WebP) y la cuelga de la ficha propia en el acto.
 
   Orden: 1) lee el `foto_path` actual —así se sabe qué archivo retirar sin
   fiarse de lo que la pestaña recuerde, y si la ficha todavía no existe se
@@ -303,6 +309,14 @@ async function limpiarCarpetaDeFoto(cliente, userId, conservar, respaldo, contex
 async function subirFotoDeMiFicha(userId, blob) {
   if (!esUsuarioDeMiFicha(userId) || !blob) {
     registrarErrorMiFicha("subir-foto-sin-datos", null);
+    return { ok: false, mensaje: MENSAJE_SUBIR_FOTO_MI_FICHA };
+  }
+
+  // La extensión y el contentType salen del tipo REAL del blob, no de lo que se
+  // pidió al exportar: el bucket sólo admite WebP y JPEG (0051).
+  const formato = FORMATOS_DE_FOTO_MI_FICHA[blob.type];
+  if (!formato) {
+    registrarErrorMiFicha("subir-foto-formato", { tipo: blob.type ?? null });
     return { ok: false, mensaje: MENSAJE_SUBIR_FOTO_MI_FICHA };
   }
 
@@ -325,10 +339,10 @@ async function subirFotoDeMiFicha(userId, blob) {
     if (!actual.data) return { ok: false, mensaje: MENSAJE_FOTO_SIN_FICHA };
     const anterior = actual.data.foto_path ?? null;
 
-    const ruta = `${userId}/${crypto.randomUUID()}.webp`;
+    const ruta = `${userId}/${crypto.randomUUID()}.${formato.extension}`;
     const subida = await cliente.storage
       .from(BUCKET_FOTOS_MI_FICHA)
-      .upload(ruta, blob, { contentType: "image/webp", upsert: false });
+      .upload(ruta, blob, { contentType: formato.contentType, upsert: false });
     if (subida.error) {
       registrarErrorMiFicha("subir-foto-archivo", subida.error);
       return { ok: false, mensaje: MENSAJE_SUBIR_FOTO_MI_FICHA };

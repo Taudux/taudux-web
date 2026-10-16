@@ -422,7 +422,21 @@ test("a collaborator without a photo gets foto null and the bucket is never aske
   assert.equal(urlsPedidas.length, 1);
 });
 
-test("urlDeFotoDeColaborador only accepts <uuid>/<uuid>.webp; anything else is null", () => {
+test("urlDeFotoDeColaborador also accepts <uuid>/<uuid>.jpg and not .jpeg, .JPG or a query string", () => {
+  const { urlDeFotoDeColaborador, urlsPedidas } = createHarness();
+  const OTRO = "9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b";
+
+  assert.equal(
+    urlDeFotoDeColaborador(`${CUENTA}/${OTRO}.jpg`),
+    `${URL_BASE}/colaboradores-fotos/${CUENTA}/${OTRO}.jpg`,
+  );
+  for (const mala of [`${CUENTA}/${OTRO}.jpeg`, `${CUENTA}/${OTRO}.JPG`, `${CUENTA}/${OTRO}.jpg?x=1`]) {
+    assert.equal(urlDeFotoDeColaborador(mala), null, mala);
+  }
+  assert.equal(urlsPedidas.length, 1);
+});
+
+test("urlDeFotoDeColaborador only accepts <uuid>/<uuid>.webp or .jpg; anything else is null", () => {
   const { urlDeFotoDeColaborador, urlsPedidas } = createHarness();
   const OTRO = "9b2c1f60-5d3a-4e8b-8a47-0c6f1d2e3a4b";
 

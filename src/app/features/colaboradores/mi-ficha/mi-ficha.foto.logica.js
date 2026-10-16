@@ -38,6 +38,8 @@ const PESO_MAXIMO_DE_FOTO_BYTES = 20 * 1024 * 1024;
 const LADO_MAXIMO_DE_FOTO_PX = 8000;
 const LADO_MAXIMO_DE_SALIDA_PX = 1024;
 const CALIDAD_WEBP_DE_FOTO = 0.92;
+// Safari no codifica WebP: si toBlob no entrega WebP, se exporta JPEG.
+const CALIDAD_JPEG_DE_FOTO = 0.88;
 
 const ZOOM_MINIMO_DE_FOTO = 1;
 const ZOOM_MAXIMO_DE_FOTO = 3;
@@ -221,6 +223,7 @@ if (typeof module === "object" && module.exports) {
     LADO_MAXIMO_DE_FOTO_PX,
     LADO_MAXIMO_DE_SALIDA_PX,
     CALIDAD_WEBP_DE_FOTO,
+    CALIDAD_JPEG_DE_FOTO,
     ZOOM_MINIMO_DE_FOTO,
     ZOOM_MAXIMO_DE_FOTO,
     ZOOM_PASO_DE_FOTO,

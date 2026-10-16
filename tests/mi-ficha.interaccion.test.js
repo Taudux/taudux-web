@@ -408,12 +408,18 @@ function abrirPagina({
   const alCargar = [];
   const documento = {
     activeElement: null,
+    llamadasToBlob: [],
     createElement: (etiqueta) => {
       const nodo = new Nodo(documento, etiqueta);
       // El canvas con el que el editor de foto exporta el recorte.
       if (etiqueta === "canvas") {
         nodo.getContext = () => contextoDeDibujo();
-        nodo.toBlob = (alTerminar) => alTerminar(structuredClone(BLOB_EXPORTADO));
+        // `documento.paraToBlob` (opcional) simula un navegador que no codifica
+        // WebP (Safari): decide qué blob entrega cada petición.
+        nodo.toBlob = (alTerminar, tipo, calidad) => {
+          documento.llamadasToBlob.push([tipo, calidad]);
+          alTerminar(documento.paraToBlob ? documento.paraToBlob(tipo, calidad) : structuredClone(BLOB_EXPORTADO));
+        };
       }
       // `animate` sólo existe si un test lo pide (documento.animar): sin él,
       // el nodo es como en un navegador sin Web Animations.
@@ -2071,6 +2077,29 @@ test("Guardar cambios uploads the cropped WebP, shows the public URL, closes the
   assertFocoEn(pagina, "miFichaFotoCambiar");
   assert.equal(pagina.porId("editorFotoGuardar").disabled, false);
   assert.equal(pagina.porId("editorFotoGuardar").textContent, "Guardar cambios");
+});
+
+test("when the browser cannot encode WebP (Safari) Guardar cambios exports JPEG and hands that blob to subir", async () => {
+  const pagina = await paginaConFoto();
+  const png = { type: "image/png", size: 2500000 };
+  const jpeg = { type: "image/jpeg", size: 300000 };
+  pagina.documento.paraToBlob = (tipo) => (tipo === "image/jpeg" ? jpeg : png);
+  await abrirYElegirFoto(pagina, "miFichaFotoCambiar");
+
+  await guardarFoto(pagina);
+
+  assert.deepEqual(pagina.documento.llamadasToBlob, [["image/webp", 0.92], ["image/jpeg", 0.88]]);
+  assert.deepEqual(pagina.subirFotoDeMiFicha.llamadas, [["u-1", jpeg]]);
+});
+
+test("if neither WebP nor JPEG can be exported, nothing is uploaded", async () => {
+  const pagina = await paginaConFoto();
+  pagina.documento.paraToBlob = () => null;
+  await abrirYElegirFoto(pagina, "miFichaFotoCambiar");
+
+  await guardarFoto(pagina);
+
+  assert.equal(pagina.subirFotoDeMiFicha.llamadas.length, 0);
 });
 
 test("a first photo, from Subir foto, swaps the group to Cambiar and Quitar", async () => {

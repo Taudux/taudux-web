@@ -4,7 +4,7 @@
   previa redonda.
 
   LA FOTO SE PUBLICA EN EL ACTO. «Guardar cambios» exporta el recorte (un Blob
-  WebP; la ENTRADA es sólo JPG o PNG) y se lo entrega a `subir`, y «Quitar»
+  WebP, o JPEG en Safari; la ENTRADA es sólo JPG o PNG) y se lo entrega a `subir`, y «Quitar»
   llama a `quitar`: las dos funciones las pone mi-ficha.js (que conoce la
   sesión) y salen de core/colaboradores/ficha.service.js. Este archivo no tiene
   código de red: sólo sabe qué hacer con lo que esas funciones contesten. Es
@@ -390,7 +390,22 @@ function crearEditorDeFoto({ subir, quitar }) {
     fuera.width = lado;
     fuera.height = lado;
     dibujarEncuadre(fuera.getContext("2d"), lado);
-    return new Promise((resolver) => fuera.toBlob(resolver, "image/webp", CALIDAD_WEBP_DE_FOTO));
+    // Safari (y todo navegador de iPhone) no codifica WebP: toBlob ignora el
+    // tipo pedido y devuelve un PNG pesado que el bucket rechaza. Se detecta por
+    // el tipo del blob que vuelve y se reexporta como JPEG.
+    return new Promise((resolver) => {
+      fuera.toBlob((webp) => {
+        if (webp && webp.type === "image/webp") {
+          resolver(webp);
+          return;
+        }
+        fuera.toBlob(
+          (jpeg) => resolver(jpeg && jpeg.type === "image/jpeg" ? jpeg : null),
+          "image/jpeg",
+          CALIDAD_JPEG_DE_FOTO,
+        );
+      }, "image/webp", CALIDAD_WEBP_DE_FOTO);
+    });
   }
 
   // El error de subir lo muestra el propio diálogo (mostrarAviso); éste es
